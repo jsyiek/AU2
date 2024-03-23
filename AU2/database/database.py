@@ -12,21 +12,23 @@ if not os.path.exists(BASE_WRITE_LOCATION):
     os.makedirs(BASE_WRITE_LOCATION, exist_ok=True)
 
 if os.path.exists(ASSASSINS_WRITE_LOCATION):
-    with open(ASSASSINS_WRITE_LOCATION) as A:
-        assassins = A.read()
-    ASSASSINS_DATABASE = AssassinsDatabase.from_json(assassins)
+    ASSASSINS_DATABASE = AssassinsDatabase.load()
 
 if os.path.exists(EVENTS_WRITE_LOCATION):
-    with open(EVENTS_WRITE_LOCATION) as E:
-        events = E.read()
-    EVENTS_DATABASE = EventsDatabase.from_json(events)
+    EVENTS_DATABASE = EventsDatabase.load()
 
 if os.path.exists(GENERIC_STATE_WRITE_LOCATION):
-    with open(GENERIC_STATE_WRITE_LOCATION) as G:
-        state = G.read()
-    GENERIC_STATE_DATABASE = GenericStateDatabase.from_json(state)
+    GENERIC_STATE_DATABASE = GenericStateDatabase.load()
+
+
+def save_database():
+    ASSASSINS_DATABASE.save()
+    GENERIC_STATE_DATABASE.save()
+    EVENTS_DATABASE.save()
+
 
 if __name__ == "__main__":
+    # Testing code
     assassin = Assassin(["Vendetta"], "Ben", "bms53@cam.ac.uk", "Homerton", "No water", "Homerton", "No attacking in a suit", False)
     ASSASSINS_DATABASE.add(assassin)
     print(ASSASSINS_DATABASE)

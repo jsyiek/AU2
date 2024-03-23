@@ -1,8 +1,9 @@
+import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import Dict, List
 
-from AU2.database import ASSASSINS_WRITE_LOCATION
+from AU2.database import ASSASSINS_WRITE_LOCATION, BASE_WRITE_LOCATION
 from AU2.database.database import GENERIC_STATE_DATABASE
 from AU2.database.model.PersistentFile import PersistentFile
 
@@ -40,6 +41,7 @@ class Assassin(PersistentFile):
 @dataclass_json
 @dataclass
 class AssassinsDatabase(PersistentFile):
+    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "AssassinsDatabase.json")
     assassins: Dict[str, Assassin]
 
     def add(self, assassin: Assassin):
@@ -49,3 +51,11 @@ class AssassinsDatabase(PersistentFile):
         :param assassin:  Assassin to add
         """
         self.assassins[assassin.identifier] = assassin
+
+    def delete(self, assassin: Assassin):
+        """
+        Removes an assassin from the database.
+
+        :param assassin: Assassin to delete (uses ID)
+        """
+        del self.assassins[assassin.identifier]
