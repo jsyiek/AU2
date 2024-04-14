@@ -1,0 +1,19 @@
+import os
+from dataclasses import dataclass
+from typing import Dict
+
+from dataclasses_json import dataclass_json
+
+from AU2.database import BASE_WRITE_LOCATION
+from AU2.database.model import PersistentFile, Event
+
+
+@dataclass_json
+@dataclass
+class EventsDatabase(PersistentFile):
+    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "EventsSummary.json")
+
+    # map from identifier to event
+    events: Dict[str, Event]
+
+EVENTS_DATABASE = EventsDatabase.load()

@@ -1,11 +1,9 @@
-import os
-from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Dict, List
+from typing import List
 
-from AU2.database import ASSASSINS_WRITE_LOCATION, BASE_WRITE_LOCATION
-from AU2.database.database import GENERIC_STATE_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model.PersistentFile import PersistentFile
+from dataclasses import dataclass
 
 
 @dataclass_json
@@ -26,36 +24,12 @@ class Assassin(PersistentFile):
     def __post_init__(self):
         if len(self.pseudonyms) == 0:
             raise ValueError(f"Tried to initialize {self}, but no pseudonyms were provided!")
-        self._secret_id = GENERIC_STATE_DATABASE.get_unique_str()
+        self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()
         # Don't move this out of __post_init__
         if not self.identifier:
-
-            self.identifier = f"{self.real_name} ({self.pseudonyms[0]}) ID: {self._secret_id}"
+            self.identifier = f"{self.real_name} ({self.pseudonyms[0]}) ID: {self.__secret_id}"
 
     def get_pseudonym(self, i: int) -> str:
         if i >= len(self.pseudonyms):
             return self.pseudonyms[-1]
         return self.pseudonyms[i]
-
-
-@dataclass_json
-@dataclass
-class AssassinsDatabase(PersistentFile):
-    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "AssassinsDatabase.json")
-    assassins: Dict[str, Assassin]
-
-    def add(self, assassin: Assassin):
-        """
-        Adds an assassin to the database.
-
-        :param assassin:  Assassin to add
-        """
-        self.assassins[assassin.identifier] = assassin
-
-    def delete(self, assassin: Assassin):
-        """
-        Removes an assassin from the database.
-
-        :param assassin: Assassin to delete (uses ID)
-        """
-        del self.assassins[assassin.identifier]

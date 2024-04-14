@@ -1,11 +1,9 @@
-import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import Any, Dict, List
 
-from AU2.database import BASE_WRITE_LOCATION
-from AU2.database.database import GENERIC_STATE_DATABASE
-from AU2.database.model import Assassin, PersistentFile
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.model import PersistentFile
 
 
 @dataclass_json
@@ -38,12 +36,3 @@ class Event(PersistentFile):
     def __post_init__(self):
         if not self.identifier:
             identifier = GENERIC_STATE_DATABASE.get_unique_str()
-
-
-@dataclass_json
-@dataclass
-class EventsDatabase(PersistentFile):
-    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "EventsSummary.json")
-
-    # map from identifier to event
-    events: Dict[str, Event]

@@ -1,5 +1,5 @@
+import os
 from dataclasses import dataclass
-from typing import Dict, Tuple
 
 from dataclasses_json import dataclass_json
 
@@ -11,7 +11,18 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin
 @dataclass
 class Config:
     # map from plugin name to plugin string and whether it's enabled
-    plugins: Dict[str, Tuple[str, bool]]
+    plugins: dict[str, bool]
+
+    @classmethod
+    def load_json(cls, location: str):
+        if os.path.exists(location):
+            with open(location, "r") as F:
+                config = F.read()
+            return cls.from_json(config)
+        return Config({})
+
+
+ENABLED_PLUGINS = Config.load_json(CONFIG_WRITE_LOCATION)
 
 
 class __PluginMap:
@@ -21,7 +32,16 @@ class __PluginMap:
     """
 
     def __init__(self, plugins):
-        self.plugins: Dict[str, AbstractPlugin] = plugins
+
+        for (name, plugin) in plugins.items():
+            enabled = ENABLED_PLUGINS.plugins.get(name, True)
+            if not enabled:
+                del plugins[name]
+                continue
+            # when we add new plugins, update config to default to enabled
+            ENABLED_PLUGINS.plugins[name] = True
+
+        self.plugins: dict[str, AbstractPlugin] = plugins
 
     def __iter__(self):
         """
@@ -34,16 +54,4 @@ class __PluginMap:
         If there is a particular plugin you want and you know the ID, you can do
         `pluginMap["police"]`
         """
-        return self.plugins[item.lower()]
-
-
-__config = Config.load_json(CONFIG_WRITE_LOCATION)
-__plugin_dict = {}
-for (identifier, (path, enabled)) in __config.plugins:
-    __plugin_dict[identifier.lower()] = __import__(path).EXPORT_PLUGIN
-    if enabled:
-        __plugin_dict[identifier.lower()].enable()
-    else:
-        __plugin_dict[identifier.lower()].disable()
-
-PLUGINS = __PluginMap(__plugin_dict)
+        return self.plugins[item]
