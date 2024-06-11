@@ -146,7 +146,7 @@ class CorePlugin(AbstractPlugin):
     def on_assassin_request_update(self, assassin):
         html = [
             HiddenTextbox(CorePlugin.HTML_SECRET_ID, assassin.identifier),
-            ArbitraryList(self.html_ids["Pseudonym"], "Initial Pseudonym", assassin.pseudonyms),
+            ArbitraryList(self.html_ids["Pseudonym"], "Pseudonyms", assassin.pseudonyms),
             DefaultNamedSmallTextbox(self.html_ids["Real Name"], "Real Name", assassin.real_name),
             DefaultNamedSmallTextbox(self.html_ids["Email"], "Email", assassin.email, type_="email"),
             DefaultNamedSmallTextbox(self.html_ids["Address"], "Address", assassin.address),
@@ -164,21 +164,6 @@ class CorePlugin(AbstractPlugin):
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
         assassin.is_police = htmlResponse[self.html_ids["Police"]]
-        # for p in self.html_ids:
-        #     match p:
-        #         case "Pseudonym":
-        #             assassin.pseudonyms = htmlResponse[self.html_ids["Pseudonym"]]
-        #         case "Real Name":
-        #             assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
-        #         case "Address":
-        #             assassin.address = htmlResponse[self.html_ids["Address"]]
-        #         case "College":
-        #             assassin.college = htmlResponse[self.html_ids["College"]]
-        #         case "Notes":
-        #             assassin.notes = htmlResponse[self.html_ids["Notes"]]
-        #         case "Police":
-        #             assassin.is_police = htmlResponse[self.html_ids["Police"]]
-
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
@@ -235,6 +220,7 @@ class CorePlugin(AbstractPlugin):
         params = {}
         for p in self.params:
             params[self.params[p]] = html_response_args[p]
+        params["pseudonyms"] = [params["pseudonyms"]]
         assassin = Assassin(**params)
         return_components = []
         for p in PLUGINS:
