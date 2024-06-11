@@ -30,4 +30,8 @@ class AssassinsDatabase(PersistentFile):
         """
         del self.assassins[assassin.identifier]
 
+    def get(self, identifier: str):
+        return self.assassins[identifier]
+
+
 ASSASSINS_DATABASE = AssassinsDatabase.load()

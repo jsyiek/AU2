@@ -16,4 +16,16 @@ class EventsDatabase(PersistentFile):
     # map from identifier to event
     events: Dict[str, Event]
 
+    def add(self, event: Event):
+        """
+        Adds an event to the database
+        """
+        self.events[event.identifier] = event
+
+    def get(self, identifier: str):
+        """
+        Fetches an event given an identifier
+        """
+        return self.events[identifier]
+
 EVENTS_DATABASE = EventsDatabase.load()

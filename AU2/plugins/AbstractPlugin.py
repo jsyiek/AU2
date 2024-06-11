@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
@@ -18,17 +18,19 @@ class Export:
     Represents an HTML callback
     """
 
-    def __init__(self, identifier: str, display_name: str, ask, answer):
+    def __init__(self, identifier: str, display_name: str, ask, answer, options_functions: Tuple = tuple()):
         """
         :param identifier: internal identifier for the callback
         :param display_name: html-visible display name
         :param ask: function that generates a list of HTML components
-        :param answer: function that takes a dictionary of arg -> str and actions the output.
+        :param answer: function that takes a dictionary of arg -> str and actions the output
+        :param options: list of options to include alongside the export (will result in a string being passed as an arg)
         """
         self.identifier = identifier
         self.display_name = display_name
         self.ask = ask
         self.answer = answer
+        self.options_functions = options_functions
 
 
 # You must define and export this variable
@@ -65,7 +67,15 @@ class AbstractPlugin:
         return []
 
     @only_when_enabled
+    def on_event_request_create(self) -> List[HTMLComponent]:
+        return []
+
+    @only_when_enabled
     def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
+        return []
+
+    @only_when_enabled
+    def on_event_request_update(self, _: Event) -> List[HTMLComponent]:
         return []
 
     @only_when_enabled
@@ -77,14 +87,17 @@ class AbstractPlugin:
         return []
 
     @only_when_enabled
-    def on_assassin_update(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
+    def on_assassin_create(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []
 
     @only_when_enabled
-    def on_assassin_create(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
+    def on_assassin_request_update(self, _: Assassin) -> List[HTMLComponent]:
+        return []
+
+    @only_when_enabled
+    def on_assassin_update(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []
 
     @only_when_enabled
     def on_assassin_delete(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []
-

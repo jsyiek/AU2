@@ -1,6 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+import datetime
 from dataclasses_json import dataclass_json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
@@ -16,23 +18,27 @@ class Event(PersistentFile):
     # map from assassin ID to index of pseudonym in their pseudonym list
     assassins: Dict[str, int]
 
+    # time the event occurred
+    datetime: datetime.datetime
+
+    # headline of the event
     headline: str
 
-    # from assassin to their report
-    reports: List[Dict[str, str]]
+    # from assassin ID and their pseudonym ID to their report
+    reports: Dict[Tuple[str, int], str]
 
     # Map from victim to killer
-    kills: List[Dict[str, str]]
-
-    # Coloring of name in headline, specified as hex
-    assassin_colors: Dict[str, hex]
+    kills: List[Tuple[str, str]]
 
     # to allow plugins to make notes on the event
-    pluginState: Dict[str, Any]
+    pluginState: Dict[str, Any] = field(default_factory=dict)
+
+    # Coloring of name in headline, specified as hex
+    assassin_colors: Dict[str, hex] = field(default_factory=dict)
 
     # Human-readable identifier for the event
     identifier: str = ""
 
     def __post_init__(self):
         if not self.identifier:
-            identifier = GENERIC_STATE_DATABASE.get_unique_str()
+            self.identifier = "(" + GENERIC_STATE_DATABASE.get_unique_str() + ") " + self.headline[0:40]
