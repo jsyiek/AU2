@@ -52,7 +52,7 @@ def render(html_component, dependency_context={}):
         return out
     elif isinstance(html_component, AssassinPseudonymPair):
         assassins = [a[0] for a in html_component.assassins]
-        q = [inquirer.List(
+        q = [inquirer.Checkbox(
             name="q",
             message="Choose which assassins are in this event",
             choices=assassins,
@@ -63,7 +63,7 @@ def render(html_component, dependency_context={}):
             choices = [a[1] for a in html_component.assassins if a[0] == player][0]
             q = [inquirer.List(
                 name="q",
-                message="Choose which pseudonym to report under (multiple pseudonyms in reports not supported yet)",
+                message=f"{player}: Choose pseudonym",
                 choices=choices,
                 default=html_component.default.get(player, "")
             )]
@@ -77,23 +77,26 @@ def render(html_component, dependency_context={}):
         dependent = html_component.pseudonym_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
-        q = [inquirer.List(
+        q = [inquirer.Checkbox(
             name="q",
             message="Reports (select players with reports)",
             choices=list(assassins_mapping.keys()),
-            default=list(a[0] for a in html_component.default.keys()) # default: Dict[Tuple[str, int], str]
+            default=list(a[0] for a in html_component.default) # default: List[Tuple[str, int, str]]
         )]
         reporters = inquirer.prompt(q)["q"]
-        results = {}
+        results = []
+        default_mapping = {
+            a[:2]: a[2] for a in html_component.default
+        }
         for r in reporters:
             key = (r, assassins_mapping[r])
             q = [inquirer.Editor(
                 name="report",
-                message="Report (WARNING: NO HTML SANITIZATION CHECKS PERFORMED YET): {r}",
-                default=html_component.default.get(key, "")
+                message=f"Report: {r}",
+                default=default_mapping.get(key)
             )]
             report = inquirer.prompt(q)["report"]
-            results[key] = report
+            results.append((r, assassins_mapping[r], report))
         return {html_component.identifier: results}
 
     # dependent component
@@ -118,7 +121,7 @@ def render(html_component, dependency_context={}):
         )]
         # TODO: Confirm what happens if option in default isn't in choices
         a = inquirer.prompt(q)["q"]
-        a = [potential_kills[k] for k in a]
+        a = tuple(potential_kills[k] for k in a)
         return {html_component.identifier: a}
 
     elif isinstance(html_component, DatetimeEntry):
@@ -210,10 +213,10 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
             if d1.dependentOn == d2.dependentOn:
                 d1.htmlComponents += d2.htmlComponents
             else:
-                final.append(d1)
+                final.insert(0, d1)
                 move_dependent_to_front(d1)
                 d1 = d2
-        final.append(d1)
+        final.insert(0, d1)
         move_dependent_to_front(d1)
     return final
 
@@ -251,6 +254,7 @@ if __name__ == "__main__":
         for component in components:
             result = render(component)
             inp.update(result)
+        print(inp)
         components = exp.answer(inp)
         for component in components:
             render(component)
