@@ -1,3 +1,5 @@
+import os
+
 COLLEGES = [
     "Christ's College",
     "Churchill College",
@@ -30,7 +32,8 @@ COLLEGES = [
     "Trinity College",
     "Trinity Hall",
     "Wolfson College",
-    "Other (see notes)"
+    "Other (see notes)",
+    "Casual"
 ]
 
 WATER_STATUSES = [
@@ -38,3 +41,8 @@ WATER_STATUSES = [
     "Water with care (small water weapons only)",
     "Full water"
 ]
+
+WEBPAGE_WRITE_LOCATION = os.path.expanduser("~/pages")
+
+if not os.path.exists(WEBPAGE_WRITE_LOCATION):
+    os.makedirs(WEBPAGE_WRITE_LOCATION)

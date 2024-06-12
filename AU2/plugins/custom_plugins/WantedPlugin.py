@@ -12,6 +12,7 @@ from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCri
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 
 PLAYER_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
 <tr><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
@@ -40,12 +41,8 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 
 
 class WantedPlugin(AbstractPlugin):
-
-    WRITE_LOCATION = os.path.expanduser("~/pages")
-    if not os.path.exists(WRITE_LOCATION):
-        os.makedirs(WRITE_LOCATION)
     FILENAME = "wanted.html"
-    WRITE_PATH = os.path.join(WRITE_LOCATION, FILENAME)
+    WRITE_PATH = os.path.join(WEBPAGE_WRITE_LOCATION, FILENAME)
 
     def __init__(self):
         super().__init__("WantedPlugin")
