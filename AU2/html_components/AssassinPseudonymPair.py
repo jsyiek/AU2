@@ -8,8 +8,8 @@ class AssassinPseudonymPair(HTMLComponent):
     name: str = "AssassinPseudonymPair"
 
     def __init__(self, identifier: str, title: str, assassins: List[Tuple[str, List[str]]], default: Dict[str, int]={}):
-        self.title = escape(title)
-        self.identifier = escape(identifier)
+        self.title = title
+        self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.assassins = assassins
         self.default = default

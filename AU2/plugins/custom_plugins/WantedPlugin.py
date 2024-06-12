@@ -1,5 +1,6 @@
 import datetime
 import os
+from html import escape
 from typing import List, Tuple, Dict
 
 from AU2 import ROOT_DIR
@@ -36,6 +37,7 @@ DEAD_PLAYER_TABLE_ROW_TEMPLATE = """<tr><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td
 WANTED_PAGE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r") as F:
     WANTED_PAGE = F.read()
+
 
 class WantedPlugin(AbstractPlugin):
 
@@ -164,14 +166,14 @@ class WantedPlugin(AbstractPlugin):
             (_, crime, redemption) = wanted_players[playerID]
             player_rows.append(
                 PLAYER_TABLE_ROW_TEMPLATE.format(
-                    REAL_NAME=player.real_name,
-                    PSEUDONYMS=player.all_pseudonyms(),
-                    ADDRESS=player.address,
-                    COLLEGE=player.college,
-                    WATER_STATUS=player.water_status,
-                    CRIME=crime,
-                    REDEMPTION=redemption,
-                    NOTES=player.notes
+                    REAL_NAME=escape(player.real_name),
+                    PSEUDONYMS=escape(player.all_pseudonyms()),
+                    ADDRESS=escape(player.address),
+                    COLLEGE=escape(player.college),
+                    WATER_STATUS=escape(player.water_status),
+                    CRIME=escape(crime),
+                    REDEMPTION=escape(redemption),
+                    NOTES=escape(player.notes)
                 )
             )
 
@@ -181,14 +183,14 @@ class WantedPlugin(AbstractPlugin):
             police_rows.append(
                 POLICE_TABLE_ROW_TEMPLATE.format(
                     RANK="Police", # TODO: update when police rank plugin implemented
-                    REAL_NAME=player.real_name,
-                    PSEUDONYMS=player.all_pseudonyms(),
-                    ADDRESS=player.address,
-                    COLLEGE=player.college,
-                    WATER_STATUS=player.water_status,
-                    CRIME=crime,
-                    REDEMPTION=redemption,
-                    NOTES=player.notes
+                    REAL_NAME=escape(player.real_name),
+                    PSEUDONYMS=escape(player.all_pseudonyms()),
+                    ADDRESS=escape(player.address),
+                    COLLEGE=escape(player.college),
+                    WATER_STATUS=escape(player.water_status),
+                    CRIME=escape(crime),
+                    REDEMPTION=escape(redemption),
+                    NOTES=escape(player.notes)
                 )
             )
 
@@ -197,9 +199,9 @@ class WantedPlugin(AbstractPlugin):
             (_, crime, _) = dead_players[playerID]
             dead_player_rows.append(
                 DEAD_PLAYER_TABLE_ROW_TEMPLATE.format(
-                    REAL_NAME=player.real_name,
-                    PSEUDONYMS=player.all_pseudonyms(),
-                    CRIME=crime
+                    REAL_NAME=escape(player.real_name),
+                    PSEUDONYMS=escape(player.all_pseudonyms()),
+                    CRIME=escape(crime)
                 )
             )
 

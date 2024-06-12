@@ -7,7 +7,7 @@ class HiddenTextbox(HTMLComponent):
     name: str = "HiddenTextbox"
 
     def __init__(self, identifier: str, default: str):
-        self.identifier = escape(identifier)
+        self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.default = default
         super().__init__()

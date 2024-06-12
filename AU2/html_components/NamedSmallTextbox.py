@@ -7,8 +7,8 @@ class NamedSmallTextbox(HTMLComponent):
     name: str = "NamedSmallTextbox"
 
     def __init__(self, identifier: str, title: str, type_="text"):
-        self.title = escape(title)
-        self.identifier = escape(identifier)
+        self.title = title
+        self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.type_ = type_
         super().__init__()

@@ -22,6 +22,7 @@ from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.custom_plugins.BackupPlugin import BackupPlugin
 from AU2.plugins.custom_plugins.MafiaPlugin import MafiaPlugin
+from AU2.plugins.custom_plugins.PlayerImporterPlugin import PlayerImporterPlugin
 from AU2.plugins.custom_plugins.WantedPlugin import WantedPlugin
 
 # Add plugins here
@@ -271,10 +272,12 @@ class CorePlugin(AbstractPlugin):
 
 
 # Add new plugins to this dictionary
+# TODO: This is a hack. Make it a config file (or better yet, write a plugin to manage this).
 AVAILABLE_PLUGINS["CorePlugin"] = CorePlugin()
 AVAILABLE_PLUGINS["WantedPlugin"] = WantedPlugin()
 AVAILABLE_PLUGINS["MafiaPlugin"] = MafiaPlugin()
 AVAILABLE_PLUGINS["BackupPlugin"] = BackupPlugin()
+AVAILABLE_PLUGINS["PlayerImporterPlugin"] = PlayerImporterPlugin()
 PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
 
 

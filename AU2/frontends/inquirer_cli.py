@@ -22,6 +22,7 @@ from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.Label import Label
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
+from AU2.html_components.PathEntry import PathEntry
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS
 
@@ -225,6 +226,14 @@ def render(html_component, dependency_context={}):
         )]
         datetime_str = inquirer.prompt(q)["dt"]
         return {html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT)}
+
+    elif isinstance(html_component, PathEntry):
+        q = [inquirer.Path(
+            name=html_component.identifier,
+            message=html_component.title,
+            default=html_component.default
+        )]
+        return inquirer.prompt(q)
 
     elif isinstance(html_component, Label):
         print(html_component.title)

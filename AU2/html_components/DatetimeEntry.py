@@ -8,8 +8,8 @@ class DatetimeEntry(HTMLComponent):
     name: str = "DatetimeEntry"
 
     def __init__(self, identifier: str, title: str, default: datetime.datetime=datetime.datetime.now()):
-        self.title = escape(title)
-        self.identifier = escape(identifier)
+        self.title = title
+        self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.default = default
         super().__init__()

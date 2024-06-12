@@ -7,8 +7,8 @@ class DefaultNamedSmallTextbox(HTMLComponent):
     name: str = "DefaultNamedSmallTextbox"
 
     def __init__(self, identifier: str, title: str, default: str, type_="text"):
-        self.title = escape(title)
-        self.identifier = escape(identifier)
+        self.title = title
+        self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.type_ = type_
         self.default = default

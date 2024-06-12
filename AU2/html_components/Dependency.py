@@ -16,7 +16,7 @@ class Dependency(HTMLComponent):
     name: str = "Dependency"
 
     def __init__(self, dependentOn: str, htmlComponents: List[HTMLComponent]):
-        self.dependentOn = escape(dependentOn)
+        self.dependentOn = dependentOn
         self.uniqueStr = self.get_unique_str()
         self.htmlComponents = htmlComponents
         super().__init__()

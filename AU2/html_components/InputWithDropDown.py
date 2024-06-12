@@ -10,9 +10,9 @@ class InputWithDropDown(HTMLComponent):
 
     def __init__(self, identifier: str, title: str, options: List[str], selected: str=""):
         self.title = title
-        self.identifier = escape(identifier)
+        self.identifier = identifier
         self.options = options
-        self.selected = escape(selected)
+        self.selected = selected
         super().__init__()
 
     def _representation(self) -> str:

@@ -7,8 +7,8 @@ class Checkbox(HTMLComponent):
     name: str = "Checkbox"
 
     def __init__(self, identifier: str, title: str, checked: bool=False):
-        self.title = escape(title)
-        self.identifier = escape(identifier)
+        self.title = title
+        self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.checked = checked
         super().__init__()

@@ -9,8 +9,8 @@ class AssassinDependentKillEntry(HTMLComponent):
 
     def __init__(self, assassins_list_identifier: str, identifier: str, title: str, default: List[Tuple[str, str]]=[]):
         self.assassins_list_identifier = escape(assassins_list_identifier)
-        self.title = escape(title)
-        self.identifier = escape(identifier)
+        self.title = title
+        self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.default = default
         super().__init__()
