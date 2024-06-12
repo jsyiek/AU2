@@ -28,4 +28,10 @@ class EventsDatabase(PersistentFile):
         """
         return self.events[identifier]
 
+    def _refresh(self):
+        """
+        Forces a refresh of the underlying database
+        """
+        self.events = self.load().events
+
 EVENTS_DATABASE = EventsDatabase.load()

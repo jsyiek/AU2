@@ -31,5 +31,11 @@ class GenericStateDatabase(PersistentFile):
         self.uniqueId += 1
         return str(t)
 
+    def _refresh(self):
+        """
+        Forces a refresh of underlying state
+        """
+        self.uniqueId = self.load().uniqueId
+
 
 GENERIC_STATE_DATABASE = GenericStateDatabase.load()

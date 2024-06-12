@@ -33,5 +33,11 @@ class AssassinsDatabase(PersistentFile):
     def get(self, identifier: str):
         return self.assassins[identifier]
 
+    def _refresh(self):
+        """
+        Forces a refresh of the underlying database
+        """
+        self.assassins = self.load().assassins
+
 
 ASSASSINS_DATABASE = AssassinsDatabase.load()
