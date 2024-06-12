@@ -12,6 +12,7 @@ class Assassin(PersistentFile):
     """ Class for keeping track of an assassin """
     pseudonyms: List[str]
     real_name: str
+    pronouns: str
     email: str
     address: str
     water_status: str
@@ -28,7 +29,8 @@ class Assassin(PersistentFile):
     def __post_init__(self):
         if len(self.pseudonyms) == 0:
             raise ValueError(f"Tried to initialize {self}, but no pseudonyms were provided!")
-        self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()
+        if not self.__secret_id:
+            self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()
         # Don't move this out of __post_init__
         if not self.identifier:
             self.identifier = f"{self.real_name} ({self.pseudonyms[0]}) ID: {self.__secret_id}"

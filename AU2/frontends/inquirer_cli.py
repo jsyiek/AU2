@@ -5,6 +5,7 @@ import inquirer
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.ArbitraryList import ArbitraryList
 from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
@@ -309,6 +310,7 @@ if __name__ == "__main__":
         for component in components:
             render(component)
 
-        print("Saving database...")
+        print("Saving databases...")
         ASSASSINS_DATABASE.save()
         EVENTS_DATABASE.save()
+        GENERIC_STATE_DATABASE.save() # utility database

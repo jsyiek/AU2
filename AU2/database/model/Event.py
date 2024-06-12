@@ -38,9 +38,12 @@ class Event(PersistentFile):
 
     # Human-readable identifier for the event
     identifier: str = ""
+    __secret_id: str = ""
 
     def __post_init__(self):
+        if not self.__secret_id:
+            self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()
         if not self.identifier:
-            self.identifier = "(" + GENERIC_STATE_DATABASE.get_unique_str() + ") " + self.headline[0:40]
+            self.identifier = "(" + self.__secret_id + ") " + self.headline[0:40]
 
         self.datetime = self.datetime.replace(tzinfo=None)

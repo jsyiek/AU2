@@ -37,6 +37,7 @@ class CorePlugin(AbstractPlugin):
         self.html_ids_list = [
             "Pseudonym",
             "Real Name",
+            "Pronouns"
             "Email",
             "Address",
             "Water Status",
@@ -48,6 +49,7 @@ class CorePlugin(AbstractPlugin):
         self.html_ids = {
             "Pseudonym": self.identifier + "_pseudonym",
             "Real Name": self.identifier + "_real_name",
+            "Pronouns": self.identifier + "_pronouns",
             "Email": self.identifier + "_email",
             "Address": self.identifier + "_address",
             "Water Status": self.identifier + "_water_status",
@@ -59,6 +61,7 @@ class CorePlugin(AbstractPlugin):
         self.params = {
             self.html_ids["Pseudonym"]: "pseudonyms",
             self.html_ids["Real Name"]: "real_name",
+            self.html_ids["Pronouns"]: "pronouns",
             self.html_ids["Address"]: "address",
             self.html_ids["Email"]: "email",
             self.html_ids["Water Status"]: "water_status",
@@ -116,6 +119,7 @@ class CorePlugin(AbstractPlugin):
         html = [
             NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
+            NamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns"),
             NamedSmallTextbox(self.html_ids["Email"], "Email", type_="email"),
             NamedSmallTextbox(self.html_ids["Address"], "Address"),
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
@@ -133,6 +137,7 @@ class CorePlugin(AbstractPlugin):
             HiddenTextbox(CorePlugin.HTML_SECRET_ID, assassin.identifier),
             ArbitraryList(self.html_ids["Pseudonym"], "Pseudonyms", assassin.pseudonyms),
             DefaultNamedSmallTextbox(self.html_ids["Real Name"], "Real Name", assassin.real_name),
+            DefaultNamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns", assassin.pronouns),
             DefaultNamedSmallTextbox(self.html_ids["Email"], "Email", assassin.email, type_="email"),
             DefaultNamedSmallTextbox(self.html_ids["Address"], "Address", assassin.address),
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
@@ -145,6 +150,7 @@ class CorePlugin(AbstractPlugin):
     def on_assassin_update(self, assassin: Assassin, htmlResponse: Dict) -> List[HTMLComponent]:
         assassin.pseudonyms = htmlResponse[self.html_ids["Pseudonym"]]
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
+        assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
         assassin.address = htmlResponse[self.html_ids["Address"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
