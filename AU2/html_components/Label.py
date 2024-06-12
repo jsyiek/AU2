@@ -8,6 +8,7 @@ class Label(HTMLComponent):
     name = "Label"
 
     def __init__(self, title: str):
+        self.identifier = "Label" # needed for compatibility but not strictly relevant
         self.title = title
         super().__init__()
 

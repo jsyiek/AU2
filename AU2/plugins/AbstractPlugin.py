@@ -4,15 +4,6 @@ from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 
 
-def only_when_enabled(func):
-    def decorator(self, *args, **kwargs):
-        if self.enabled:
-            return func(self, *args, **kwargs)
-        return []
-
-    return decorator
-
-
 class Export:
     """
     Represents an HTML callback
@@ -58,46 +49,35 @@ class AbstractPlugin:
     def disable(self):
         self.enabled = False
 
-    @only_when_enabled
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_event_update(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_event_request_create(self) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_event_request_update(self, _: Event) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_assassin_create(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_assassin_request_update(self, _: Assassin) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_assassin_update(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []
 
-    @only_when_enabled
     def on_assassin_delete(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []

@@ -20,6 +20,7 @@ from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
+from AU2.plugins.custom_plugins.MafiaPlugin import MafiaPlugin
 from AU2.plugins.custom_plugins.WantedPlugin import WantedPlugin
 
 # Add plugins here
@@ -271,6 +272,7 @@ class CorePlugin(AbstractPlugin):
 # Add new plugins to this dictionary
 AVAILABLE_PLUGINS["CorePlugin"] = CorePlugin()
 AVAILABLE_PLUGINS["WantedPlugin"] = WantedPlugin()
+AVAILABLE_PLUGINS["MafiaPlugin"] = MafiaPlugin()
 PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
 
 

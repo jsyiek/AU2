@@ -9,7 +9,9 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.ArbitraryList import ArbitraryList
 from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
+from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.AssassinDependentReportEntry import AssassinDependentReportEntry
+from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.Checkbox import Checkbox
 from AU2.html_components.DatetimeEntry import DatetimeEntry
@@ -175,6 +177,44 @@ def render(html_component, dependency_context={}):
             if int(value["duration"]) >= 0:
                 results[a] = (int(value["duration"]), value.get("crime", ""), value.get("redemption", ""))
         return {html_component.identifier: results}
+
+    # dependent component
+    elif isinstance(html_component, AssassinDependentSelector):
+        dependent = html_component.pseudonym_list_identifier
+        assert(dependent in dependency_context)
+        assassins_mapping = dependency_context[dependent]
+        assassins = [a for a in assassins_mapping]
+        q = [inquirer.Checkbox(
+            name=html_component.identifier,
+            message=html_component.title,
+            choices=assassins,
+            default=html_component.default
+        )]
+        return inquirer.prompt(q)
+
+    # dependent component
+    elif isinstance(html_component, AssassinDependentIntegerEntry):
+        dependent = html_component.pseudonym_list_identifier
+        assert(dependent in dependency_context)
+        assassins_mapping = dependency_context[dependent]
+        assassins = [a for a in assassins_mapping]
+        q = [inquirer.Checkbox(
+            name="assassins",
+            message=html_component.title,
+            choices=assassins,
+            default=list(html_component.default.keys())
+        )]
+        selected_assassins = inquirer.prompt(q)["assassins"]
+        q = []
+        for a in selected_assassins:
+            q.append(inquirer.Text(
+                name=a,
+                message=f"Value for {a}",
+                default=html_component.default.get(a, None),
+                validate=integer_validator
+            ))
+        points = inquirer.prompt(q)
+        return {html_component.identifier: {k: int(v) for (k, v) in points.items()}}
 
     elif isinstance(html_component, DatetimeEntry):
         q = [inquirer.Text(
