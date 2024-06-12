@@ -317,7 +317,7 @@ if __name__ == "__main__":
     for p in PLUGINS:
         exports += p.exports
     while True:
-        q = [inquirer.List(name="mode", message="Select mode.", choices=[e.display_name for e in exports] + ["Exit"])]
+        q = [inquirer.List(name="mode", message="Select mode.", choices=sorted([e.display_name for e in exports]) + ["Exit"])]
         a = inquirer.prompt(q)["mode"]
         if a == "Exit":
             print("Have a good day!")
@@ -333,10 +333,12 @@ if __name__ == "__main__":
         qs = []
         i = 0
         for f in exp.options_functions:
-            qs.append(inquirer.List(name=i, choices=f()))
+            qs.append(inquirer.List(name=i, choices=["*EXIT*"] + f(), ignore=lambda x: any(a[j] == "*EXIT*" for j in range(i))))
             i += 1
         if qs:
             a = inquirer.prompt(qs)
+            if any(a[k] == "*EXIT*" for k in range(i)):
+                continue
             for k in range(i):
                 params.append(a[k])
 

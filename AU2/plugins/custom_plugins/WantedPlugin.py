@@ -55,7 +55,7 @@ class WantedPlugin(AbstractPlugin):
         self.exports = [
             Export(
                 "generate_page_wanted",
-                "Generate page: Wanted",
+                "Generate page -> Wanted",
                 self.ask_generate_page,
                 self.answer_generate_page
             ),
