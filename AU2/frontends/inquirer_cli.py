@@ -347,7 +347,7 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
         move_dependent_to_front(d1)
     return final
 
-if __name__ == "__main__":
+def main():
     exports = []
     for p in PLUGINS:
         exports += p.exports
@@ -391,3 +391,7 @@ if __name__ == "__main__":
         ASSASSINS_DATABASE.save()
         EVENTS_DATABASE.save()
         GENERIC_STATE_DATABASE.save() # utility database
+
+
+if __name__ == "__main__":
+    main()
