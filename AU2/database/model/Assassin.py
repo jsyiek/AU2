@@ -1,9 +1,9 @@
 from dataclasses_json import dataclass_json
-from typing import List
+from typing import List, Dict, Any
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model.PersistentFile import PersistentFile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass_json
@@ -18,6 +18,10 @@ class Assassin(PersistentFile):
     college: str
     notes: str
     is_police: bool
+    # almost everything that is stateful is probably best placed in an event
+    # but for a few plugins, it might make sense to place the information directly onto the assassin
+    # make sure you know what you're doing (modifications here can't be undone with a later event state change)
+    plugin_state: Dict[str, Any] = field(default_factory=dict)
     identifier: str = ""   # human-readable unique identifier
     __secret_id: str = ""  # unique identifier
 
@@ -33,3 +37,6 @@ class Assassin(PersistentFile):
         if i >= len(self.pseudonyms):
             return self.pseudonyms[-1]
         return self.pseudonyms[i]
+
+    def all_pseudonyms(self) -> str:
+        return " AKA ".join(self.pseudonyms)

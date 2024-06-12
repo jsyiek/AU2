@@ -7,6 +7,7 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.ArbitraryList import ArbitraryList
+from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.Checkbox import Checkbox
@@ -15,7 +16,7 @@ from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbo
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.HiddenTextbox import HiddenTextbox
 from AU2.html_components.InputWithDropDown import InputWithDropDown
-from AU2.html_components.KillAdd import KillAdd
+from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.Label import Label
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import Export
@@ -24,9 +25,18 @@ from AU2.plugins.CorePlugin import PLUGINS
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
+
 def datetime_validator(_, current):
     try:
         s = datetime.datetime.strptime(current, DATETIME_FORMAT)
+    except ValueError:
+        return False
+    return True
+
+
+def integer_validator(_, current):
+    try:
+        s = int(current)
     except ValueError:
         return False
     return True
@@ -43,7 +53,8 @@ def render(html_component, dependency_context={}):
     if isinstance(html_component, Dependency):
         # we can guarantee the necessary context is at front of Dependency
         needed = html_component.htmlComponents[0]
-        assert(needed.identifier == html_component.dependentOn, "Check the sorting function (merge_dependency)")
+        # if this fails check the sorting function (merge_dependency)
+        assert(needed.identifier == html_component.dependentOn)
         out = render(needed, dependency_context)
         new_dependency = dependency_context.copy()
         new_dependency.update(out)
@@ -100,11 +111,13 @@ def render(html_component, dependency_context={}):
         return {html_component.identifier: results}
 
     # dependent component
-    elif isinstance(html_component, KillAdd):
+    elif isinstance(html_component, AssassinDependentKillEntry):
         dependent = html_component.assassins_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         assassins = list(assassins_mapping.keys())
+        if len(assassins) <= 1:
+            return {html_component.identifier: tuple()}
         potential_kills = {}
         defaults = []
         for a1 in assassins:
@@ -123,6 +136,44 @@ def render(html_component, dependency_context={}):
         a = inquirer.prompt(q)["q"]
         a = tuple(potential_kills[k] for k in a)
         return {html_component.identifier: a}
+
+    # dependent component
+    elif isinstance(html_component, AssassinDependentCrimeEntry):
+        dependent = html_component.pseudonym_list_identifier
+        assert(dependent in dependency_context)
+        assassins_mapping = dependency_context[dependent]
+        q = [inquirer.Checkbox(
+            name="q",
+            message=html_component.title,
+            choices=list(assassins_mapping.keys()),
+            default=list(html_component.default.keys()) # default: Dict[str, int]
+        )]
+        assassins = inquirer.prompt(q)["q"]
+        results = {}
+        for a in assassins:
+            q = [
+                inquirer.Text(
+                    name="duration",
+                    message=f"WANTED DURATION (from now) for: {a} "
+                            f"(setting -1 will wipe the Wanted override from this event. "
+                            f"setting 0 will set them as not Wanted.)",
+                    default=html_component.default.get(a, (None, None, None))[0],
+                    validate=integer_validator
+                ), inquirer.Text(
+                    name="crime",
+                    message=f"CRIME for: {a}",
+                    default=html_component.default.get(a, (None, None, None))[1],
+                    ignore=lambda x: int(x["duration"]) <= 0
+                ), inquirer.Text(
+                    name="redemption",
+                    message=f"REDEMPTION for: {a}",
+                    default=html_component.default.get(a, (None, None, None))[2],
+                    ignore=lambda x: int(x["duration"]) <= 0
+                )]
+            value = inquirer.prompt(q)
+            if int(value["duration"]) >= 0:
+                results[a] = (int(value["duration"]), value.get("crime", ""), value.get("redemption", ""))
+        return {html_component.identifier: results}
 
     elif isinstance(html_component, DatetimeEntry):
         q = [inquirer.Text(
@@ -254,7 +305,6 @@ if __name__ == "__main__":
         for component in components:
             result = render(component)
             inp.update(result)
-        print(inp)
         components = exp.answer(inp)
         for component in components:
             render(component)

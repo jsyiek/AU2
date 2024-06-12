@@ -14,12 +14,13 @@ from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbo
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.HiddenTextbox import HiddenTextbox
 from AU2.html_components.InputWithDropDown import InputWithDropDown
-from AU2.html_components.KillAdd import KillAdd
+from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.Label import Label
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
+from AU2.plugins.custom_plugins.WantedPlugin import WantedPlugin
 
 # Add plugins here
 # Note that importing this dictionary and adding to it will NOT necessarily
@@ -74,22 +75,6 @@ class CorePlugin(AbstractPlugin):
             "Kills": self.identifier + "_kills"
         }
 
-        """
-        # map from assassin ID to index of pseudonym in their pseudonym list
-        assassins: Dict[str, int]
-    
-        # time the event occurred
-        datetime: datetime.datetime
-    
-        # headline of the event
-        headline: str
-    
-        # from assassin to their report
-        reports: Dict[str, str]
-    
-        # Map from victim to killer
-        kills: Dict[str, str]
-        """
         self.event_params = {
             self.event_html_ids["Assassin Pseudonym"]: "assassins",
             self.event_html_ids["Datetime"]: "datetime",
@@ -174,7 +159,7 @@ class CorePlugin(AbstractPlugin):
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
-                    KillAdd(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
+                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Date/time of event"),
@@ -194,11 +179,11 @@ class CorePlugin(AbstractPlugin):
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
-                    KillAdd(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Date/time of event", e.datetime),
-            NamedSmallTextbox(self.event_html_ids["Headline"], "Headline", e.headline),
+            DefaultNamedSmallTextbox(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
         return html
 
@@ -254,6 +239,7 @@ class CorePlugin(AbstractPlugin):
         for p in self.event_params:
             params[self.event_params[p]] = html_response_args[p]
         event = Event(**params)
+        print(event)
         return_components = []
         for p in PLUGINS:
             return_components += p.on_event_create(event, html_response_args)
@@ -275,8 +261,10 @@ class CorePlugin(AbstractPlugin):
             components += p.on_event_update(event, html_response_args)
         return components
 
+
 # Add new plugins to this dictionary
 AVAILABLE_PLUGINS["CorePlugin"] = CorePlugin()
+AVAILABLE_PLUGINS["WantedPlugin"] = WantedPlugin()
 PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
 
 
@@ -284,7 +272,7 @@ if __name__ == "__main__":
     print(PLUGINS["CorePlugin"].exports[0].ask())
 
     html_response_args = {
-        PLUGINS["CorePlugin"].html_ids["Pseudonym"]: ["Vendetta"],
+        PLUGINS["CorePlugin"].html_ids["Pseudonym"]: "Vendetta",
         PLUGINS["CorePlugin"].html_ids["Real Name"]: "Ben",
         PLUGINS["CorePlugin"].html_ids["Email"]: "e@ma.il",
         PLUGINS["CorePlugin"].html_ids["Address"]: "Whitehouse",
@@ -339,4 +327,5 @@ if __name__ == "__main__":
     }
     print(core.exports[3].ask("(1) [P1] has submitted an event!"))
     print(core.exports[3].answer(html_response_args))
-    print(EVENTS_DATABASE )
+    print(EVENTS_DATABASE)
+    EVENTS_DATABASE.save()

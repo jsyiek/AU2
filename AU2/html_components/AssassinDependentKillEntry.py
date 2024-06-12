@@ -4,7 +4,7 @@ from typing import List, Tuple
 from AU2.html_components import HTMLComponent
 
 
-class KillAdd(HTMLComponent):
+class AssassinDependentKillEntry(HTMLComponent):
     name: str = "KillAdd"
 
     def __init__(self, assassins_list_identifier: str, identifier: str, title: str, default: List[Tuple[str, str]]=[]):

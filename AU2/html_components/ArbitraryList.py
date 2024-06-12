@@ -11,7 +11,7 @@ class ArbitraryList(HTMLComponent):
         self.title = escape(title)
         self.identifier = escape(identifier)
         self.uniqueStr = self.get_unique_str()
-        self.values = [escape(a) for a in values]
+        self.values = [a for a in values]
         super().__init__()
 
     def _representation(self) -> str:
