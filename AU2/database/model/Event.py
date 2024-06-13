@@ -33,9 +33,6 @@ class Event(PersistentFile):
     # to allow plugins to make notes on the event
     pluginState: Dict[str, Any] = field(default_factory=dict)
 
-    # Coloring of name in headline, specified as hex
-    assassin_colors: Dict[str, hex] = field(default_factory=dict)
-
     # Human-readable identifier for the event
     identifier: str = ""
     __secret_id: str = ""

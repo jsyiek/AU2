@@ -11,6 +11,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.AssassinDependentTextEntry import AssassinDependentTextEntry
+from AU2.html_components.Checkbox import Checkbox
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
@@ -34,13 +35,56 @@ MAFIA_HEX = {
 TRAITOR_TEMPLATE = 'bordercolor="#FF0000"'
 MAFIA_TEMPLATE = 'bgcolor="{HEX}"'
 
-PLAYER_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{REAL_NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
+PLAYER_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{RANK}</td><td>{REAL_NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
 PSEUDONYM_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{PERMANENT_POINTS}</td><td>{OPEN_BOUNTIES}</td><td>{CLAIMED_BOUNTIES}</td><td>{TITLE}</td></tr>"
 
+CHAPTERS = {
+    -1: "Prelude",
+    0: "Chapter 1: L'Incontro (<i>The Meeting</i>)",
+    1: "Chapter 2: La Scorta (<i>The Escort</i>)",
+    2: "Chapter 3: Mercenaria (<i>Mercenaries</i>)",
+    3: "Chapter 4: Lo Strappo (<i>Taken</i>)",
+    4: "Chapter 5: Per Orgoglio (<i>For Pride</i>)",
+    5: "Chapter 6: Quand E Troppo E Troppo (<i>What's Done is Done</i>)",
+    6: "Chapter 7: Il Sicario (<i>The Duel</i>)",
+    7: "Epilogue"
+}
+
+HEX_COLS = [
+    '#B1AB8A', '#75C49C', '#7BA5A2', '#B0B477', '#B6CDBC',
+    '#EC7DD2', '#B964EB', '#758FAC', '#EEABF2', '#6892B0',
+    '#D9FBBF', '#D4A66A', '#8E7CE6', '#7CCC64', '#95B7F5',
+    '#FF81EA', '#EB82D4', '#E89F6E', '#98A0CD', '#ACC6D0'
+]
+
+DEAD_COLS = [
+    '#9756C', '#A688BF', '#A34595'
+]
+
+
+DAY_EVENTS_TEMPLATE = """
+<center><h3>{CHAPTER}</h3></center>
+<br>
+{EVENTS}
+<br>
+"""
+
+EVENT_TEMPLATE = """
+<p>{HEADLINE}</p>
+{REPORTS}
+"""
+
+REPORT_TEMPLATE = """
+<p style="margin-left:10%"><i>{TEXT}</i></p>
+"""
+
+PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
 
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "may_week_mafia.html"), "r") as F:
     SCORE_PAGE_TEMPLATE = F.read()
 
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "may_week_mafia_story.html"), "r") as F:
+    THE_STORY_TEMPLATE = F.read()
 
 CAPODECINA_MULTIPLIER = 1.25
 
@@ -55,7 +99,8 @@ class MafiaPlugin(AbstractPlugin):
             "Capodecina": self.identifier + "_capodecina",
             "Points": self.identifier + "_points",
             "Bounty": self.identifier + "_bounty",
-            "Permanent Points": self.identifier + "_permanent_points"
+            "Permanent Points": self.identifier + "_permanent_points",
+            "Hidden": self.identifier + "_hidden"
         }
 
         self.plugin_state = {
@@ -63,15 +108,22 @@ class MafiaPlugin(AbstractPlugin):
             "CAPODECINA": "capodecina",
             "POINTS": "points",
             "BOUNTY": "bounties",
-            "PERMANENT POINTS": "permanent_points"
+            "PERMANENT POINTS": "permanent_points",
+            "HIDDEN": "hidden_event"
         }
 
         self.exports = [
             Export(
                 "create_mafia_score_page",
-                "Generate page -> [MafiaPlugin] Scoring and player list",
+                "Generate page -> Scoring and player list",
                 self.ask_generate_score_page,
                 self.answer_generate_score_page
+            ),
+            Export(
+                "create_mafia_the_story",
+                "Generate page -> The Story",
+                self.ask_generate_the_story,
+                self.answer_generate_the_story
             )
         ]
 
@@ -106,6 +158,7 @@ class MafiaPlugin(AbstractPlugin):
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
+            Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=False),
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
@@ -142,6 +195,7 @@ class MafiaPlugin(AbstractPlugin):
             htmlResponse[self.html_ids["Points"]]
         e.pluginState[self.identifier][self.plugin_state["BOUNTY"]] = htmlResponse[self.html_ids["Bounty"]]
         e.pluginState[self.identifier][self.plugin_state["PERMANENT POINTS"]] = htmlResponse[self.html_ids["Permanent Points"]]
+        e.pluginState[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
 
         return [Label("[MAFIA] Success!")]
 
@@ -150,7 +204,9 @@ class MafiaPlugin(AbstractPlugin):
         points = e.pluginState.get(self.identifier, {}).get(self.plugin_state["POINTS"], None)
         permanent_points = e.pluginState.get(self.identifier, {}).get(self.plugin_state["PERMANENT POINTS"], None)
         bounty = e.pluginState.get(self.identifier, {}).get(self.plugin_state["BOUNTY"], None)
+        hidden = e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False)
         return [
+            Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=hidden),
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
@@ -189,14 +245,116 @@ class MafiaPlugin(AbstractPlugin):
             htmlResponse[self.html_ids["Points"]]
         e.pluginState[self.identifier][self.plugin_state["BOUNTY"]] = htmlResponse[self.html_ids["Bounty"]]
         e.pluginState[self.identifier][self.plugin_state["PERMANENT POINTS"]] = htmlResponse[self.html_ids["Permanent Points"]]
+        e.pluginState[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
 
         return [Label("[MAFIA] Success!")]
+
+    def get_color(self, pseudonym: str, dead: bool=False) -> str:
+        if "Vendetta" in pseudonym:
+            return MAFIA_HEX["The Vengeance Pact"]
+        elif "Don O'Hare" in pseudonym:
+            return MAFIA_HEX["The Family"]
+        elif "O-Ren Ishii" in pseudonym:
+            return MAFIA_HEX["The Crazy 88"]
+
+        ind = hash(pseudonym)
+        if dead:
+            return DEAD_COLS[ind % len(DEAD_COLS)]
+        return HEX_COLS[ind % len(HEX_COLS)]
+
+    def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str) -> str:
+        id_ = assassin._secret_id
+        string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(main_pseudonym)))
+        for i in range(len(assassin.pseudonyms)):
+            string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(assassin.pseudonyms[i])))
+        string = string.replace(f"[D{id_}]",
+                                    " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(p)) for p in assassin.pseudonyms))
+        string = string.replace(f"[N{id_}]",
+                                    PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(assassin.real_name)))
+        return string
+
+
+    def ask_generate_the_story(self) -> List[HTMLComponent]:
+        return [Label("[MAFIA] Preparing...")]
+
+    def answer_generate_the_story(self, _) -> List[HTMLComponent]:
+        events = list(EVENTS_DATABASE.events.values())
+        events.sort(key=lambda e: e.datetime)
+        events_for_chapter = {}
+        start_date: datetime.datetime = None
+        for e in events:
+            if e.headline.startswith("GAME START") and e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
+                start_date = e.datetime.date()
+                break
+        else:
+            return [Label(
+                "[MAFIA] Could not determine game start. Create an event with headline GAME START and make it hidden.")]
+
+        for e in events:
+            # skip hidden events
+            if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
+                continue
+
+            days_since_start = (e.datetime.date() - start_date).days
+            if days_since_start < 0:
+                days_since_start = -1
+            elif days_since_start > max(CHAPTERS):
+                days_since_start = max(CHAPTERS)
+            events_for_chapter.setdefault(days_since_start, [])
+
+            is_dead: List[str] = []
+            for (_, victim) in e.kills:
+                is_dead.append(victim)
+
+            headline = e.headline
+
+            reports = {(playerID, pseudonymID): report for (playerID, pseudonymID, report) in e.reports}
+
+            for (assassin, pseudonym_index) in e.assassins.items():
+                assassin_model = ASSASSINS_DATABASE.get(assassin)
+                pseudonym = assassin_model.pseudonyms[pseudonym_index]
+                color = self.get_color(pseudonym, assassin in is_dead)
+                headline = self.substitute_pseudonyms(headline, pseudonym, assassin_model, color)
+
+                for (k, r) in reports.items():
+                    reports[k] = self.substitute_pseudonyms(r, pseudonym, assassin_model, color)
+
+            # For his May Week, Thomas O'Hare wants the reports to render *without* the pseudonym/real_name
+            report_list = []
+            for (_, r) in reports.items():
+                report_list.append(
+                    # not escaping r so we can have HTML in the reports
+                    # I hope you know what you're doing, Thomas!
+                    REPORT_TEMPLATE.format(TEXT=r)
+                )
+            report_text = "<br><br>".join(report_list)
+            event_text = EVENT_TEMPLATE.format(HEADLINE=headline, REPORTS=report_text)
+            events_for_chapter[days_since_start].append(event_text)
+
+        all_chapters = []
+        for (day, event_list) in events_for_chapter.items():
+            all_event_text = "<br>".join(event_list)
+            chapter_text = DAY_EVENTS_TEMPLATE.format(
+                # again not escaping for same reason
+                CHAPTER=CHAPTERS[day],
+                EVENTS=all_event_text
+            )
+            all_chapters.append(chapter_text)
+
+        all_chapter_text = """<hr style="width:30%;text-align:center"></hr>""".join(all_chapters)
+        webpage_text = THE_STORY_TEMPLATE.format(DAYS=all_chapter_text)
+
+        path = os.path.join(WEBPAGE_WRITE_LOCATION, "the_story.html")
+
+        with open(path, "w+") as F:
+            F.write(webpage_text)
+
+        return [Label("[MAFIA] Successfully generated the story!")]
 
     def ask_generate_score_page(self) -> List[HTMLComponent]:
         return [Label("[MAFIA] Preparing...")]
 
-    def answer_generate_score_page(self, _) \
-            -> List[HTMLComponent]:
+    def answer_generate_score_page(self, _) -> List[HTMLComponent]:
         """
         Takes in a list of events and calculates the points each player has and the earned bounties
         """
@@ -310,11 +468,6 @@ class MafiaPlugin(AbstractPlugin):
 
         wanted = {p: d for (p, d) in wanted.items() if d >= datetime.datetime.now()}
 
-        """
-        PLAYER_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{REAL_NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
-PSEUDONYM_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{PERMANENT_POINTS}</td><td>{OPEN_BOUNTIES}</td><td>{CLAIMED_BOUNTIES}</td><td>{TITLE}</td></tr>"
-        """
-
         player_rows: List[str] = []
         # tuple of total points and row
         pseudonym_rows: List[Tuple[float, str]] = []
@@ -335,6 +488,7 @@ PSEUDONYM_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{PSEUDONYM}</td><td>{POINTS}
             )
 
             pseudonym_row = PSEUDONYM_ROW_TEMPLATE.format(
+                RANK="{RANK}",
                 MAFIA=MAFIA_TEMPLATE.format(HEX=MAFIA_HEX[mafia]),
                 TRAITOR=TRAITOR_TEMPLATE if a.identifier in wanted else "",
                 PSEUDONYM=escape(a.all_pseudonyms()),

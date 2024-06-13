@@ -33,6 +33,8 @@ COLLEGES = [
     "Trinity Hall",
     "Wolfson College",
     "Other (see notes)",
+    "The Real World (no college)",
+    "Anglia Ruskin",
     "Casual"
 ]
 

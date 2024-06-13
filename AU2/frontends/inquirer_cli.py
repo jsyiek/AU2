@@ -77,13 +77,16 @@ def render(html_component, dependency_context={}):
         mappings = {}
         for player in chosen_assassins:
             choices = [a[1] for a in html_component.assassins if a[0] == player][0]
-            q = [inquirer.List(
-                name="q",
-                message=f"{player}: Choose pseudonym",
-                choices=choices,
-                default=html_component.default.get(player, "")
-            )]
-            pseudonym = inquirer.prompt(q)["q"]
+            if len(choices) != 1:
+                q = [inquirer.List(
+                    name="q",
+                    message=f"{player}: Choose pseudonym",
+                    choices=choices,
+                    default=html_component.default.get(player, "")
+                )]
+                pseudonym = inquirer.prompt(q)["q"]
+            else:
+                pseudonym = choices[0]
             mappings[player] = choices.index(pseudonym)
             print(f"Using {player}: {pseudonym}")
         return {html_component.identifier: mappings}
@@ -93,6 +96,8 @@ def render(html_component, dependency_context={}):
         dependent = html_component.pseudonym_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: []}
         q = [inquirer.Checkbox(
             name="q",
             message="Reports (select players with reports)",
@@ -104,6 +109,15 @@ def render(html_component, dependency_context={}):
         default_mapping = {
             a[:2]: a[2] for a in html_component.default
         }
+        print("FORMATTING ADVICE")
+        print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
+        print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
+        print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
+        print("    [NX] Renders real name of assassin with ID X (if in the event)")
+        print("ASSASSIN IDENTIFIERS")
+        for a in assassins_mapping:
+            assassin_model = ASSASSINS_DATABASE.get(a)
+            print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
         for r in reporters:
             key = (r, assassins_mapping[r])
             q = [inquirer.Editor(
@@ -120,6 +134,8 @@ def render(html_component, dependency_context={}):
         dependent = html_component.assassins_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: []}
         assassins = list(assassins_mapping.keys())
         if len(assassins) <= 1:
             return {html_component.identifier: tuple()}
@@ -147,6 +163,8 @@ def render(html_component, dependency_context={}):
         dependent = html_component.pseudonym_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: {}}
         q = [inquirer.Checkbox(
             name="q",
             message=html_component.title,
@@ -185,6 +203,8 @@ def render(html_component, dependency_context={}):
         dependent = html_component.pseudonym_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: []}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name=html_component.identifier,
@@ -199,6 +219,8 @@ def render(html_component, dependency_context={}):
         dependent = html_component.pseudonym_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: {}}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -223,6 +245,8 @@ def render(html_component, dependency_context={}):
         dependent = html_component.pseudonym_list_identifier
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: {}}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -346,6 +370,7 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
         final.insert(0, d1)
         move_dependent_to_front(d1)
     return final
+
 
 def main():
     exports = []
