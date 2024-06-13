@@ -1,5 +1,5 @@
 import datetime
-from typing import List
+from typing import List, Any
 
 import inquirer
 
@@ -48,6 +48,16 @@ def integer_validator(_, current):
     return True
 
 
+def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
+    """
+    Catches implicit keyboard interrupts in user code (i.e., inquirer output = None)
+    """
+    output = inquirer.prompt(*args, **kwargs)
+    if output is None:
+        raise KeyboardInterrupt
+    return output
+
+
 def render(html_component, dependency_context={}):
     """
     dependency context is a MUTABLE DEFAULT ARGUMENT
@@ -57,35 +67,49 @@ def render(html_component, dependency_context={}):
     (but it's idiomatically FP and not idiomatically Python)
     """
     if isinstance(html_component, Dependency):
-        # we can guarantee the necessary context is at front of Dependency
-        needed = html_component.htmlComponents[0]
-        # if this fails check the sorting function (merge_dependency)
-        assert(needed.identifier == html_component.dependentOn)
-        out = render(needed, dependency_context)
-        new_dependency = dependency_context.copy()
-        new_dependency.update(out)
-        for h in html_component.htmlComponents[1:]:
-            out.update(render(h, new_dependency))
+
+        iteration = 0
+        while iteration < len(html_component.htmlComponents):
+            if iteration == -1:
+                raise KeyboardInterrupt
+            try:
+                if iteration == 0:
+                    # we can guarantee the necessary context is at front of Dependency
+                    needed = html_component.htmlComponents[0]
+                    # if this fails check the sorting function (merge_dependency)
+                    assert(needed.identifier == html_component.dependentOn)
+                    out = render(needed, dependency_context)
+                    new_dependency = dependency_context.copy()
+                    new_dependency.update(out)
+                elif iteration > 0:
+                    h = html_component.htmlComponents[iteration]
+                    out.update(render(h, new_dependency))
+                iteration += 1
+            except KeyboardInterrupt:
+                iteration -= 1
         return out
     elif isinstance(html_component, AssassinPseudonymPair):
         assassins = [a[0] for a in html_component.assassins]
-        q = [inquirer.Checkbox(
-            name="q",
-            message="Choose which assassins are in this event",
-            choices=assassins,
-            default=list(html_component.default.keys()))]
-        chosen_assassins = inquirer.prompt(q)["q"]
+        q = [
+            inquirer.Checkbox(
+                name="q",
+                message="Choose which assassins are in this event",
+                choices=assassins,
+                default=list(html_component.default.keys())
+            )]
+        chosen_assassins = inquirer_prompt_with_abort(q)["q"]
         mappings = {}
         for player in chosen_assassins:
             choices = [a[1] for a in html_component.assassins if a[0] == player][0]
             if len(choices) != 1:
-                q = [inquirer.List(
-                    name="q",
-                    message=f"{player}: Choose pseudonym",
-                    choices=choices,
-                    default=html_component.default.get(player, "")
+                q = [
+                    inquirer.List(
+                        name="q",
+                        message=f"{player}: Choose pseudonym",
+                        choices=choices,
+                        default=html_component.default.get(player, "")
                 )]
-                pseudonym = inquirer.prompt(q)["q"]
+                pseudonym = inquirer_prompt_with_abort(q)["q"]
             else:
                 pseudonym = choices[0]
             mappings[player] = choices.index(pseudonym)
@@ -105,20 +129,21 @@ def render(html_component, dependency_context={}):
             choices=list(assassins_mapping.keys()),
             default=list(a[0] for a in html_component.default) # default: List[Tuple[str, int, str]]
         )]
-        reporters = inquirer.prompt(q)["q"]
+        reporters = inquirer_prompt_with_abort(q)["q"]
         results = []
         default_mapping = {
             a[:2]: a[2] for a in html_component.default
         }
-        print("FORMATTING ADVICE")
-        print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
-        print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
-        print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
-        print("    [NX] Renders real name of assassin with ID X (if in the event)")
-        print("ASSASSIN IDENTIFIERS")
-        for a in assassins_mapping:
-            assassin_model = ASSASSINS_DATABASE.get(a)
-            print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
+        if reporters:
+            print("FORMATTING ADVICE")
+            print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
+            print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
+            print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
+            print("    [NX] Renders real name of assassin with ID X (if in the event)")
+            print("ASSASSIN IDENTIFIERS")
+            for a in assassins_mapping:
+                assassin_model = ASSASSINS_DATABASE.get(a)
+                print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
         for r in reporters:
             key = (r, assassins_mapping[r])
             q = [inquirer.Editor(
@@ -126,7 +151,7 @@ def render(html_component, dependency_context={}):
                 message=f"Report: {r}",
                 default=default_mapping.get(key)
             )]
-            report = inquirer.prompt(q)["report"]
+            report = inquirer_prompt_with_abort(q)["report"]
             results.append((r, assassins_mapping[r], report))
         return {html_component.identifier: results}
 
@@ -155,7 +180,7 @@ def render(html_component, dependency_context={}):
             default=defaults
         )]
         # TODO: Confirm what happens if option in default isn't in choices
-        a = inquirer.prompt(q)["q"]
+        a = inquirer_prompt_with_abort(q)["q"]
         a = tuple(potential_kills[k] for k in a)
         return {html_component.identifier: a}
 
@@ -172,7 +197,7 @@ def render(html_component, dependency_context={}):
             choices=list(assassins_mapping.keys()),
             default=list(html_component.default.keys()) # default: Dict[str, int]
         )]
-        assassins = inquirer.prompt(q)["q"]
+        assassins = inquirer_prompt_with_abort(q)["q"]
         results = {}
         for a in assassins:
             q = [
@@ -194,7 +219,7 @@ def render(html_component, dependency_context={}):
                     default=html_component.default.get(a, (None, None, None))[2],
                     ignore=lambda x: int(x["duration"]) <= 0
                 )]
-            value = inquirer.prompt(q)
+            value = inquirer_prompt_with_abort(q)
             if int(value["duration"]) >= 0:
                 results[a] = (int(value["duration"]), value.get("crime", ""), value.get("redemption", ""))
         return {html_component.identifier: results}
@@ -213,7 +238,7 @@ def render(html_component, dependency_context={}):
             choices=assassins,
             default=html_component.default
         )]
-        return inquirer.prompt(q)
+        return inquirer_prompt_with_abort(q)
 
     # dependent component
     elif isinstance(html_component, AssassinDependentIntegerEntry):
@@ -229,7 +254,7 @@ def render(html_component, dependency_context={}):
             choices=assassins,
             default=list(html_component.default.keys())
         )]
-        selected_assassins = inquirer.prompt(q)["assassins"]
+        selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
         q = []
         for a in selected_assassins:
             q.append(inquirer.Text(
@@ -238,7 +263,7 @@ def render(html_component, dependency_context={}):
                 default=html_component.default.get(a, None),
                 validate=integer_validator
             ))
-        points = inquirer.prompt(q)
+        points = inquirer_prompt_with_abort(q)
         return {html_component.identifier: {k: int(v) for (k, v) in points.items()}}
 
     # dependent component
@@ -255,7 +280,7 @@ def render(html_component, dependency_context={}):
             choices=assassins,
             default=list(html_component.default.keys())
         )]
-        selected_assassins = inquirer.prompt(q)["assassins"]
+        selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
         q = []
         for a in selected_assassins:
             q.append(inquirer.Text(
@@ -265,7 +290,7 @@ def render(html_component, dependency_context={}):
             ))
         points = {}
         if q:
-            points = inquirer.prompt(q)
+            points = inquirer_prompt_with_abort(q)
         return {html_component.identifier: points}
 
     elif isinstance(html_component, DatetimeEntry):
@@ -275,7 +300,7 @@ def render(html_component, dependency_context={}):
             default=html_component.default.strftime(DATETIME_FORMAT),
             validate=datetime_validator
         )]
-        datetime_str = inquirer.prompt(q)["dt"]
+        datetime_str = inquirer_prompt_with_abort(q)["dt"]
         return {html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT)}
 
     elif isinstance(html_component, PathEntry):
@@ -284,15 +309,21 @@ def render(html_component, dependency_context={}):
             message=html_component.title,
             default=html_component.default
         )]
-        return inquirer.prompt(q)
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, Label):
         print(html_component.title)
         return {}
 
     elif isinstance(html_component, Checkbox):
-        q = [inquirer.List(name="q", message=html_component.title, choices=["No", "Yes"], default="Yes" if html_component.checked else "No")]
-        a = inquirer.prompt(q)
+        q = [
+            inquirer.List(
+                name="q",
+                message=html_component.title,
+                choices=["No", "Yes"],
+                default="Yes" if html_component.checked else "No"
+            )]
+        a = inquirer_prompt_with_abort(q)
         return {html_component.identifier: a["q"] == "Yes"}
 
     elif isinstance(html_component, HiddenTextbox):
@@ -300,11 +331,11 @@ def render(html_component, dependency_context={}):
 
     elif isinstance(html_component, NamedSmallTextbox):
         q = [inquirer.Text(name=html_component.identifier, message=html_component.title)]
-        return inquirer.prompt(q)
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, LargeTextEntry):
         q = [inquirer.Editor(name=html_component.identifier, message=html_component.title, default=html_component.default)]
-        return inquirer.prompt(q)
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
         q = [inquirer.List(
@@ -312,11 +343,11 @@ def render(html_component, dependency_context={}):
                 message=html_component.title,
                 choices=html_component.options,
                 default=html_component.selected)]
-        return inquirer.prompt(q)
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, DefaultNamedSmallTextbox):
         q = [inquirer.Text(name=html_component.identifier, message=html_component.title, default=html_component.default)]
-        return inquirer.prompt(q)
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, ArbitraryList):
         q = [inquirer.Checkbox(
@@ -325,7 +356,7 @@ def render(html_component, dependency_context={}):
             choices=html_component.values + ["*Other*"],
             default=html_component.values
         )]
-        a = inquirer.prompt(q)
+        a = inquirer_prompt_with_abort(q)
         if "*Other*" in a[html_component.identifier]:
             a[html_component.identifier].remove("*Other*")
             print("Adding new pseudonyms.")
@@ -338,7 +369,7 @@ def render(html_component, dependency_context={}):
                 name="newpseudonyms",
                 message="Enter new pseudonyms",
             )]
-            out = inquirer.prompt(q)["newpseudonyms"]
+            out = inquirer_prompt_with_abort(q)["newpseudonyms"]
             if out:
                 out = out.split(",")
                 print("New pseudonyms:", out)
@@ -384,7 +415,10 @@ def main():
         exports += p.exports
     while True:
         q = [inquirer.List(name="mode", message="Select mode", choices=["Exit"] + sorted([e.display_name for e in exports]))]
-        a = inquirer.prompt(q)["mode"]
+        try:
+            a = inquirer_prompt_with_abort(q)["mode"]
+        except KeyboardInterrupt:
+            a = "Exit"
         if a == "Exit":
             print("Have a good day!")
             exit()
@@ -402,7 +436,7 @@ def main():
             qs.append(inquirer.List(name=i, choices=["*EXIT*"] + f(), ignore=lambda x: any(a[j] == "*EXIT*" for j in range(i))))
             i += 1
         if qs:
-            a = inquirer.prompt(qs)
+            a = inquirer_prompt_with_abort(qs)
             if any(a[k] == "*EXIT*" for k in range(i)):
                 continue
             for k in range(i):
@@ -411,17 +445,25 @@ def main():
         inp = {}
         components = exp.ask(*params)
         components = merge_dependency(components)
-        for component in components:
-            result = render(component)
-            inp.update(result)
-        components = exp.answer(inp)
-        for component in components:
-            render(component)
+        iteration = 0
+        while iteration < len(components):
+            try:
+                if iteration == -1:
+                    break
+                result = render(components[iteration])
+                inp.update(result)
+                iteration += 1
+            except KeyboardInterrupt:
+                iteration -= 1
+        if iteration != -1:
+            components = exp.answer(inp)
+            for component in components:
+                render(component)
 
-        print("Saving databases...")
-        ASSASSINS_DATABASE.save()
-        EVENTS_DATABASE.save()
-        GENERIC_STATE_DATABASE.save() # utility database
+            print("Saving databases...")
+            ASSASSINS_DATABASE.save()
+            EVENTS_DATABASE.save()
+            GENERIC_STATE_DATABASE.save() # utility database
 
 
 if __name__ == "__main__":
