@@ -377,7 +377,7 @@ def main():
     for p in PLUGINS:
         exports += p.exports
     while True:
-        q = [inquirer.List(name="mode", message="Select mode.", choices=sorted([e.display_name for e in exports]) + ["Exit"])]
+        q = [inquirer.List(name="mode", message="Select mode.", choices=["Exit"] + sorted([e.display_name for e in exports]))]
         a = inquirer.prompt(q)["mode"]
         if a == "Exit":
             print("Have a good day!")

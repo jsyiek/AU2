@@ -35,8 +35,8 @@ MAFIA_HEX = {
 TRAITOR_TEMPLATE = 'bordercolor="#FF0000"'
 MAFIA_TEMPLATE = 'bgcolor="{HEX}"'
 
-PLAYER_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{RANK}</td><td>{REAL_NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
-PSEUDONYM_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{PERMANENT_POINTS}</td><td>{OPEN_BOUNTIES}</td><td>{CLAIMED_BOUNTIES}</td><td>{TITLE}</td></tr>"
+PLAYER_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{REAL_NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
+PSEUDONYM_ROW_TEMPLATE = "<tr {MAFIA} {TRAITOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{PERMANENT_POINTS}</td><td>{OPEN_BOUNTIES}</td><td>{CLAIMED_BOUNTIES}</td><td>{TITLE}</td></tr>"
 
 CHAPTERS = {
     -1: "Prelude",
@@ -487,8 +487,14 @@ class MafiaPlugin(AbstractPlugin):
                 )
             )
 
+        assassins_with_points = [(a, points[a.identifier] + permanent_points[a.identifier]) for a in all_assassins]
+        assassins_with_points.sort(key=lambda t: -t[1])
+
+        for (i, (a, p)) in enumerate(assassins_with_points):
+            mafia = a.plugin_state.get(self.identifier, {}).get(self.plugin_state["MAFIA"], "Casual")
+            i = i + 1
             pseudonym_row = PSEUDONYM_ROW_TEMPLATE.format(
-                RANK="{RANK}",
+                RANK=str(i),
                 MAFIA=MAFIA_TEMPLATE.format(HEX=MAFIA_HEX[mafia]),
                 TRAITOR=TRAITOR_TEMPLATE if a.identifier in wanted else "",
                 PSEUDONYM=escape(a.all_pseudonyms()),
@@ -500,8 +506,6 @@ class MafiaPlugin(AbstractPlugin):
             )
             total_points = round(points[a.identifier] + permanent_points[a.identifier], 2)
             pseudonym_rows.append((total_points, pseudonym_row))
-
-        pseudonym_rows.sort(key=lambda t: -t[0])
 
         all_pseud_rows = [p for (_, p) in pseudonym_rows]
 
