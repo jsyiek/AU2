@@ -398,7 +398,7 @@ class MafiaPlugin(AbstractPlugin):
         quote = self.get_current_quote()
         webpage_text = THE_STORY_TEMPLATE.format(QUOTE=quote, DAYS=all_chapter_text)
 
-        path = os.path.join(WEBPAGE_WRITE_LOCATION, "the_story.html")
+        path = os.path.join(WEBPAGE_WRITE_LOCATION, "head.html")
 
         with open(path, "w+") as F:
             F.write(webpage_text)
