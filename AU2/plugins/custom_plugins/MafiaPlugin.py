@@ -34,6 +34,13 @@ MAFIA_HEX = {
     "Casual": "#BABABA"
 }
 
+LIGHT_MAFIA_HEX = {
+    "The Crazy 88": "#FFD485",
+    "The Vengeance Pact": "#F1B5FF",
+    "The Family": "#DE9BA0",
+    "Casual": "#BABABA"
+}
+
 TRAITOR_TEMPLATE = 'bordercolor="#FF0000"'
 MAFIA_TEMPLATE = 'bgcolor="{HEX}"'
 
@@ -531,7 +538,7 @@ class MafiaPlugin(AbstractPlugin):
             mafia = a.plugin_state.get(self.identifier, {}).get(self.plugin_state["MAFIA"], "Casual")
             player_rows.append(
                 PLAYER_ROW_TEMPLATE.format(
-                    MAFIA=MAFIA_TEMPLATE.format(HEX=MAFIA_HEX[mafia]),
+                    MAFIA=MAFIA_TEMPLATE.format(HEX=LIGHT_MAFIA_HEX[mafia]),
                     TRAITOR=TRAITOR_TEMPLATE if a.identifier in wanted else "",
                     REAL_NAME=escape(a.real_name),
                     ADDRESS=escape(a.address),
@@ -549,7 +556,7 @@ class MafiaPlugin(AbstractPlugin):
             i = i + 1
             pseudonym_row = PSEUDONYM_ROW_TEMPLATE.format(
                 RANK=str(i),
-                MAFIA=MAFIA_TEMPLATE.format(HEX=MAFIA_HEX[mafia]),
+                MAFIA=MAFIA_TEMPLATE.format(HEX=LIGHT_MAFIA_HEX[mafia]),
                 TRAITOR=TRAITOR_TEMPLATE if a.identifier in wanted else "",
                 PSEUDONYM=escape(a.all_pseudonyms()),
                 POINTS=escape(str(round(points[a.identifier] + permanent_points[a.identifier], 2))),
