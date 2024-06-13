@@ -249,7 +249,6 @@ class CorePlugin(AbstractPlugin):
         for p in self.event_params:
             params[self.event_params[p]] = html_response_args[p]
         event = Event(**params)
-        print(event)
         return_components = []
         for p in PLUGINS:
             return_components += p.on_event_create(event, html_response_args)
