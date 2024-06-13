@@ -1,7 +1,7 @@
 import datetime
 import os
 from html import escape
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Optional
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -16,6 +16,7 @@ from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbo
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
+from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 
@@ -126,19 +127,29 @@ class MafiaPlugin(AbstractPlugin):
                 "Generate page -> The Story",
                 self.ask_generate_the_story,
                 self.answer_generate_the_story
+            ),
+            Export(
+                "set_quote",
+                "Set quote [MafiaPlugin]",
+                self.ask_set_quote,
+                self.answer_set_quote
             )
         ]
 
-    def ask_set_quote(self) -> List[HTMLComponent]:
-        events = [EVENTS_DATABASE.events.values()]
+    def get_current_quote(self) -> Optional[str]:
+        default = "No quote defined."
+        events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda e: e.datetime)
-        default = None
         for e in events:
             if e.headline.startswith(f"[{self.identifier}] QUOTE: "):
-                default = e.headline.replace("[{self.identifier}] QUOTE: ", 0)
+                default = e.headline.replace(f"[{self.identifier}] QUOTE: ", "")
                 break
+        return default
+
+    def ask_set_quote(self) -> List[HTMLComponent]:
+        default = self.get_current_quote()
         return [
-            DefaultNamedSmallTextbox(
+            LargeTextEntry(
                 identifier=self.html_ids["Quote"],
                 title="Enter quote",
                 default=default,
@@ -146,9 +157,11 @@ class MafiaPlugin(AbstractPlugin):
         ]
 
     def answer_set_quote(self, htmlResponse: Dict) -> List[HTMLComponent]:
-        events = [EVENTS_DATABASE.events.values()]
+        events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda e: e.datetime)
+        quote = htmlResponse[self.html_ids["Quote"]]
         quote_event = None
+        response = [Label("[MAFIA] Success!")]
         for e in events:
             if e.headline.startswith(f"[{self.identifier}] QUOTE: "):
                 quote_event = e
@@ -157,13 +170,15 @@ class MafiaPlugin(AbstractPlugin):
             quote_event = Event(
                 assassins={},
                 datetime=datetime.datetime(year=1000, month=1, day=1, hour=13),
-                headline="",
+                headline=f"[{self.identifier}] QUOTE: {quote}",
                 reports={},
                 kills=[],
                 pluginState={self.identifier: {self.plugin_state["HIDDEN"]: True}}
             )
-        quote = htmlResponse[self.html_ids["Quote"]]
-        return [Label("[MAFIA] Success!")]
+            EVENTS_DATABASE.add(quote_event)
+            return response
+        quote_event.headline = f"[{self.identifier}] QUOTE: {quote}"
+        return response
 
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return [
@@ -380,7 +395,8 @@ class MafiaPlugin(AbstractPlugin):
             all_chapters.append(chapter_text)
 
         all_chapter_text = """<hr style="width:30%;text-align:center"></hr>""".join(all_chapters)
-        webpage_text = THE_STORY_TEMPLATE.format(DAYS=all_chapter_text)
+        quote = self.get_current_quote()
+        webpage_text = THE_STORY_TEMPLATE.format(QUOTE=quote, DAYS=all_chapter_text)
 
         path = os.path.join(WEBPAGE_WRITE_LOCATION, "the_story.html")
 
