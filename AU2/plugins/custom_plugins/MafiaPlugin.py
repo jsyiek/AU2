@@ -176,7 +176,7 @@ class MafiaPlugin(AbstractPlugin):
         else:
             quote_event = Event(
                 assassins={},
-                datetime=datetime.datetime(year=1000, month=1, day=1, hour=13),
+                datetime=datetime.datetime(year=2010, month=1, day=1, hour=13),
                 headline=f"[{self.identifier}] QUOTE: {quote}",
                 reports={},
                 kills=[],
