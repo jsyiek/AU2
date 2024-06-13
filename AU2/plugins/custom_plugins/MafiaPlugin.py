@@ -12,6 +12,7 @@ from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentI
 from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.AssassinDependentTextEntry import AssassinDependentTextEntry
 from AU2.html_components.Checkbox import Checkbox
+from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
@@ -100,7 +101,8 @@ class MafiaPlugin(AbstractPlugin):
             "Points": self.identifier + "_points",
             "Bounty": self.identifier + "_bounty",
             "Permanent Points": self.identifier + "_permanent_points",
-            "Hidden": self.identifier + "_hidden"
+            "Hidden": self.identifier + "_hidden",
+            "Quote": self.identifier + "_quote"
         }
 
         self.plugin_state = {
@@ -126,6 +128,42 @@ class MafiaPlugin(AbstractPlugin):
                 self.answer_generate_the_story
             )
         ]
+
+    def ask_set_quote(self) -> List[HTMLComponent]:
+        events = [EVENTS_DATABASE.events.values()]
+        events.sort(key=lambda e: e.datetime)
+        default = None
+        for e in events:
+            if e.headline.startswith(f"[{self.identifier}] QUOTE: "):
+                default = e.headline.replace("[{self.identifier}] QUOTE: ", 0)
+                break
+        return [
+            DefaultNamedSmallTextbox(
+                identifier=self.html_ids["Quote"],
+                title="Enter quote",
+                default=default,
+            )
+        ]
+
+    def answer_set_quote(self, htmlResponse: Dict) -> List[HTMLComponent]:
+        events = [EVENTS_DATABASE.events.values()]
+        events.sort(key=lambda e: e.datetime)
+        quote_event = None
+        for e in events:
+            if e.headline.startswith(f"[{self.identifier}] QUOTE: "):
+                quote_event = e
+                break
+        else:
+            quote_event = Event(
+                assassins={},
+                datetime=datetime.datetime(year=1000, month=1, day=1, hour=13),
+                headline="",
+                reports={},
+                kills=[],
+                pluginState={self.identifier: {self.plugin_state["HIDDEN"]: True}}
+            )
+        quote = htmlResponse[self.html_ids["Quote"]]
+        return [Label("[MAFIA] Success!")]
 
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return [

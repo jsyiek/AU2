@@ -16,6 +16,7 @@ from AU2.html_components.HiddenTextbox import HiddenTextbox
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.Label import Label
+from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.AvailablePlugins import __PluginMap
@@ -172,7 +173,7 @@ class CorePlugin(AbstractPlugin):
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Date/time of event"),
-            NamedSmallTextbox(self.event_html_ids["Headline"], "Headline"),
+            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
         ]
         return html
 
@@ -192,7 +193,7 @@ class CorePlugin(AbstractPlugin):
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Date/time of event", e.datetime),
-            DefaultNamedSmallTextbox(self.event_html_ids["Headline"], "Headline", e.headline),
+            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
         return html
 

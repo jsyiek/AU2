@@ -22,6 +22,7 @@ from AU2.html_components.HiddenTextbox import HiddenTextbox
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.Label import Label
+from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.PathEntry import PathEntry
 from AU2.plugins.AbstractPlugin import Export
@@ -301,6 +302,10 @@ def render(html_component, dependency_context={}):
         q = [inquirer.Text(name=html_component.identifier, message=html_component.title)]
         return inquirer.prompt(q)
 
+    elif isinstance(html_component, LargeTextEntry):
+        q = [inquirer.Editor(name=html_component.identifier, message=html_component.title, default=html_component.default)]
+        return inquirer.prompt(q)
+
     elif isinstance(html_component, InputWithDropDown):
         q = [inquirer.List(
                 name=html_component.identifier,
@@ -349,6 +354,7 @@ def move_dependent_to_front(dependency: Dependency) -> None:
     dependency.htmlComponents.sort(key=lambda h: h.identifier != dependency.dependentOn)
     assert(dependency.htmlComponents[0].identifier == dependency.dependentOn)
 
+
 def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]:
     final = []
     deps: List[Dependency] = []
@@ -377,7 +383,7 @@ def main():
     for p in PLUGINS:
         exports += p.exports
     while True:
-        q = [inquirer.List(name="mode", message="Select mode.", choices=["Exit"] + sorted([e.display_name for e in exports]))]
+        q = [inquirer.List(name="mode", message="Select mode", choices=["Exit"] + sorted([e.display_name for e in exports]))]
         a = inquirer.prompt(q)["mode"]
         if a == "Exit":
             print("Have a good day!")
