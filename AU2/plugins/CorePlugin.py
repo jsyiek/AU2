@@ -1,3 +1,7 @@
+import glob
+import os.path
+import sys, inspect
+
 from datetime import datetime
 from typing import Dict, List
 
@@ -18,13 +22,10 @@ from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKill
 from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
+from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
-from AU2.plugins.custom_plugins.BackupPlugin import BackupPlugin
-from AU2.plugins.custom_plugins.MafiaPlugin import MafiaPlugin
-from AU2.plugins.custom_plugins.PlayerImporterPlugin import PlayerImporterPlugin
-from AU2.plugins.custom_plugins.WantedPlugin import WantedPlugin
 
 # Add plugins here
 # Note that importing this dictionary and adding to it will NOT necessarily
@@ -32,6 +33,12 @@ from AU2.plugins.custom_plugins.WantedPlugin import WantedPlugin
 AVAILABLE_PLUGINS = {}
 
 
+def register_plugin(plugin_class):
+    plugin = plugin_class()
+    AVAILABLE_PLUGINS[plugin.identifier] = plugin
+
+
+@register_plugin
 class CorePlugin(AbstractPlugin):
     HTML_SECRET_ID: str = "CorePlugin_identifier"
 
@@ -271,74 +278,9 @@ class CorePlugin(AbstractPlugin):
         return components
 
 
-# Add new plugins to this dictionary
-# TODO: This is a hack. Make it a config file (or better yet, write a plugin to manage this).
-AVAILABLE_PLUGINS["CorePlugin"] = CorePlugin()
-AVAILABLE_PLUGINS["WantedPlugin"] = WantedPlugin()
-AVAILABLE_PLUGINS["MafiaPlugin"] = MafiaPlugin()
-AVAILABLE_PLUGINS["BackupPlugin"] = BackupPlugin()
-AVAILABLE_PLUGINS["PlayerImporterPlugin"] = PlayerImporterPlugin()
+for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):
+    name = os.path.splitext(os.path.basename(file))[0]
+    module = __import__(f"AU2.plugins.custom_plugins.{name}")
+
+
 PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
-
-
-if __name__ == "__main__":
-    print(PLUGINS["CorePlugin"].exports[0].ask())
-
-    html_response_args = {
-        PLUGINS["CorePlugin"].html_ids["Pseudonym"]: "Vendetta",
-        PLUGINS["CorePlugin"].html_ids["Real Name"]: "Ben",
-        PLUGINS["CorePlugin"].html_ids["Email"]: "e@ma.il",
-        PLUGINS["CorePlugin"].html_ids["Address"]: "Whitehouse",
-        PLUGINS["CorePlugin"].html_ids["Water Status"]: "No Water",
-        PLUGINS["CorePlugin"].html_ids["College"]: "Yes",
-        PLUGINS["CorePlugin"].html_ids["Notes"]: "Some",
-        PLUGINS["CorePlugin"].html_ids["Police"]: False
-    }
-
-    print(PLUGINS["CorePlugin"].exports[0].answer(html_response_args))
-    print(ASSASSINS_DATABASE)
-    exp1 = PLUGINS["CorePlugin"].exports[1]
-    args = [f() for f in exp1.options_functions]
-    print(args)
-    print(exp1.ask(args[0][0]))
-
-    html_response_args = {
-        PLUGINS["CorePlugin"].HTML_SECRET_ID: "Ben (Vendetta) ID: 0",
-        PLUGINS["CorePlugin"].html_ids["Pseudonym"]: ["Vendetta"],
-        PLUGINS["CorePlugin"].html_ids["Real Name"]: "Ben Syiek",
-        PLUGINS["CorePlugin"].html_ids["Email"]: "e@ma.il",
-        PLUGINS["CorePlugin"].html_ids["Address"]: "10 Downing Street",
-        PLUGINS["CorePlugin"].html_ids["Water Status"]: "No Water",
-        PLUGINS["CorePlugin"].html_ids["College"]: "Homerton College",
-        PLUGINS["CorePlugin"].html_ids["Notes"]: "Some",
-        PLUGINS["CorePlugin"].html_ids["Police"]: False
-    }
-    print(exp1.answer(html_response_args))
-    print(ASSASSINS_DATABASE)
-
-    print(PLUGINS["CorePlugin"].exports[2].ask())
-
-    core = PLUGINS["CorePlugin"]
-    html_response_args = {
-        core.event_html_ids["Assassin Pseudonym"]: {"jamie": 0, "thomas": 0},
-        core.event_html_ids["Datetime"]: datetime(year=2024, month=6, day=11, hour=17, minute=30),
-        core.event_html_ids["Headline"]: "[P1] has submitted an event!",
-        core.event_html_ids["Reports"]: {("jamie", 0): "a report"},
-        core.event_html_ids["Kills"]: [("jamie", "thomas")]
-    }
-    print(core.event_html_ids["Assassin Pseudonym"])
-    print(PLUGINS["CorePlugin"].exports[2].answer(html_response_args))
-    print(EVENTS_DATABASE)
-
-    html_response_args = {
-        core.HTML_SECRET_ID: "(1) [P1] has submitted an event!",
-        core.event_html_ids["Assassin Pseudonym"]: {"doug": 0, "thomas": 0},
-        core.event_html_ids["Datetime"]: datetime(year=2023, month=6, day=11, hour=17, minute=30),
-        core.event_html_ids["Headline"]: "[P1] has submitted an event! AGAIN!",
-        core.event_html_ids["Reports"]: {("doug", 0): "a report"},
-        core.event_html_ids["Kills"]: [("doug", "thomas")]
-    }
-    print(core.exports[3].ask("(1) [P1] has submitted an event!"))
-    print(core.exports[3].answer(html_response_args))
-    print(EVENTS_DATABASE)
-    EVENTS_DATABASE.save()

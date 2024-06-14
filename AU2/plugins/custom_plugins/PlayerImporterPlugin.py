@@ -9,8 +9,10 @@ from AU2.html_components.Label import Label
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.PathEntry import PathEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.CorePlugin import register_plugin
 
 
+@register_plugin
 class PlayerImporterPlugin(AbstractPlugin):
 
     def __init__(self):

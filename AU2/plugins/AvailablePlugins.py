@@ -1,10 +1,13 @@
 import os
-from dataclasses import dataclass
 
+from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
-from AU2.plugins import CONFIG_WRITE_LOCATION
 from AU2.plugins.AbstractPlugin import AbstractPlugin
+
+
+BASE_CONFIG_WRITE_LOCATION = os.path.expanduser("~/au_config")
+CONFIG_WRITE_LOCATION = os.path.join(BASE_CONFIG_WRITE_LOCATION, "plugin_config.json")
 
 
 @dataclass_json

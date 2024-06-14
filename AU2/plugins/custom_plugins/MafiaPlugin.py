@@ -18,6 +18,7 @@ from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.CorePlugin import register_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 
 MAFIAS = [
@@ -98,6 +99,7 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 CAPODECINA_MULTIPLIER = 1.25
 
 
+@register_plugin
 class MafiaPlugin(AbstractPlugin):
 
     def __init__(self):

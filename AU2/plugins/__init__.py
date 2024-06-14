@@ -1,5 +1,5 @@
 import os
 
+from AU2 import ROOT_DIR
 
-BASE_CONFIG_WRITE_LOCATION = os.path.expanduser("~/au_config")
-CONFIG_WRITE_LOCATION = os.path.join(BASE_CONFIG_WRITE_LOCATION, "plugin_config.json")
+CUSTOM_PLUGINS_DIR = os.path.join(ROOT_DIR, "plugins", "custom_plugins")

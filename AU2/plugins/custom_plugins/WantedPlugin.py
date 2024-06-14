@@ -12,6 +12,7 @@ from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCri
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.CorePlugin import register_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 
 PLAYER_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
@@ -40,6 +41,7 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
     WANTED_PAGE = F.read()
 
 
+@register_plugin
 class WantedPlugin(AbstractPlugin):
     FILENAME = "wanted.html"
     WRITE_PATH = os.path.join(WEBPAGE_WRITE_LOCATION, FILENAME)
