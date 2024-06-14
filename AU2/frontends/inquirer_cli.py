@@ -73,8 +73,8 @@ def render(html_component, dependency_context={}):
     if isinstance(html_component, Dependency):
 
         iteration = 0
+        last_step = 1
         while iteration < len(html_component.htmlComponents):
-            print("HELP ME", iteration)
             if iteration == -1:
                 raise KeyboardInterrupt
             try:
@@ -88,13 +88,27 @@ def render(html_component, dependency_context={}):
                     new_dependency.update(out)
                 elif iteration > 0:
                     h = html_component.htmlComponents[iteration]
-                    out.update(render(h, new_dependency))
+                    if isinstance(h, Label) and last_step == -1:
+                        iteration -= 1
+                        continue
+                    value = render(h, new_dependency)
+                    if value.get("skip", False) and last_step == -1:
+                        iteration -= 1
+                        continue
+                    out.update(value)
                 iteration += 1
+                last_step = 1
             except KeyboardInterrupt:
                 iteration -= 1
+                last_step = -1
+
+        if "skip" in out:
+            del out["skip"]
         return out
     elif isinstance(html_component, AssassinPseudonymPair):
         assassins = [a[0] for a in html_component.assassins]
+        if not assassins:
+            return {html_component.identifier: {}, "skip": True}
         q = [
             inquirer.Checkbox(
                 name="q",
@@ -127,7 +141,7 @@ def render(html_component, dependency_context={}):
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: []}
+            return {html_component.identifier: [], "skip": True}
         q = [inquirer.Checkbox(
             name="q",
             message="Reports (select players with reports)",
@@ -166,10 +180,10 @@ def render(html_component, dependency_context={}):
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: []}
+            return {html_component.identifier: [], "skip": True}
         assassins = list(assassins_mapping.keys())
         if len(assassins) <= 1:
-            return {html_component.identifier: tuple()}
+            return {html_component.identifier: tuple(), "skip": True}
         potential_kills = {}
         defaults = []
         for a1 in assassins:
@@ -195,7 +209,7 @@ def render(html_component, dependency_context={}):
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}}
+            return {html_component.identifier: {}, "skip": True}
         q = [inquirer.Checkbox(
             name="q",
             message=html_component.title,
@@ -238,7 +252,7 @@ def render(html_component, dependency_context={}):
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: []}
+            return {html_component.identifier: [], "skip": True}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name=html_component.identifier,
@@ -254,7 +268,7 @@ def render(html_component, dependency_context={}):
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}}
+            return {html_component.identifier: {}, "skip": True}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -280,7 +294,7 @@ def render(html_component, dependency_context={}):
         assert(dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}}
+            return {html_component.identifier: {}, "skip": True}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -454,15 +468,21 @@ def main():
         components = exp.ask(*params)
         components = merge_dependency(components)
         iteration = 0
+        last_step = 1
         while iteration < len(components):
             try:
                 if iteration == -1:
                     break
                 result = render(components[iteration])
+                if result.get("skip", False) and last_step == -1:
+                    iteration -= 1
+                    continue
                 inp.update(result)
                 iteration += 1
+                last_step = 1
             except KeyboardInterrupt:
                 iteration -= 1
+                last_step = -1
         if iteration != -1:
             components = exp.answer(inp)
             for component in components:
