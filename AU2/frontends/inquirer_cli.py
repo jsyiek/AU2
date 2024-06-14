@@ -34,6 +34,8 @@ DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 def datetime_validator(_, current):
     try:
+        if current is None:
+            raise KeyboardInterrupt
         s = datetime.datetime.strptime(current, DATETIME_FORMAT)
     except ValueError:
         return False
@@ -42,6 +44,8 @@ def datetime_validator(_, current):
 
 def integer_validator(_, current):
     try:
+        if current is None:
+            raise KeyboardInterrupt
         s = int(current)
     except ValueError:
         return False
