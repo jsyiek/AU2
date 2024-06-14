@@ -74,6 +74,7 @@ def render(html_component, dependency_context={}):
 
         iteration = 0
         while iteration < len(html_component.htmlComponents):
+            print("HELP ME", iteration)
             if iteration == -1:
                 raise KeyboardInterrupt
             try:
@@ -203,13 +204,16 @@ def render(html_component, dependency_context={}):
         )]
         assassins = inquirer_prompt_with_abort(q)["q"]
         results = {}
+        if assassins:
+            print("Duration is specified in days:")
+            print("    >0 sets them as WANTED")
+            print("    =0 sets them as NOT WANTED")
+            print("    <0 removes any mention of wantedness from this event")
         for a in assassins:
             q = [
                 inquirer.Text(
                     name="duration",
-                    message=f"WANTED DURATION (from now) for: {a} "
-                            f"(setting -1 will wipe the Wanted override from this event. "
-                            f"setting 0 will set them as not Wanted.)",
+                    message=f"WANTED DURATION for: {a} ",
                     default=html_component.default.get(a, (None, None, None))[0],
                     validate=integer_validator
                 ), inquirer.Text(

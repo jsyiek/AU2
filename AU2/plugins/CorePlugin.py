@@ -128,7 +128,7 @@ class CorePlugin(AbstractPlugin):
             NamedSmallTextbox(self.html_ids["Address"], "Address"),
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
-            NamedSmallTextbox(self.html_ids["Notes"], "Notes"),
+            LargeTextEntry(self.html_ids["Notes"], "Notes"),
             Checkbox(self.html_ids["Police"], "Police? (y/n)")
         ]
         return html
@@ -146,7 +146,7 @@ class CorePlugin(AbstractPlugin):
             DefaultNamedSmallTextbox(self.html_ids["Address"], "Address", assassin.address),
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
-            DefaultNamedSmallTextbox(self.html_ids["Notes"], "Notes", assassin.notes),
+            LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
             Checkbox(self.html_ids["Police"], "Police? (y/n)", checked=assassin.is_police)
         ]
         return html
