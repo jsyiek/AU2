@@ -12,13 +12,15 @@ from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCri
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
-from AU2.plugins.CorePlugin import register_plugin
+from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+
 
 PLAYER_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
 <tr><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
 {ROWS}
 </table>"""
+
 
 POLICE_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
 <tr><th>Rank</th><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
@@ -34,14 +36,16 @@ DEAD_PLAYER_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
 {ROWS}
 </table>"""
 
+
 DEAD_PLAYER_TABLE_ROW_TEMPLATE = """<tr><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{CRIME}</td></tr>"""
+
 
 WANTED_PAGE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r") as F:
     WANTED_PAGE = F.read()
 
 
-@register_plugin
+@registered_plugin
 class WantedPlugin(AbstractPlugin):
     FILENAME = "wanted.html"
     WRITE_PATH = os.path.join(WEBPAGE_WRITE_LOCATION, FILENAME)

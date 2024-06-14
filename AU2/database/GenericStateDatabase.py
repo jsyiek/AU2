@@ -1,5 +1,6 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Dict
 
 from dataclasses_json import dataclass_json
 
@@ -15,6 +16,10 @@ class GenericStateDatabase(PersistentFile):
     Not much should go here, but you may find the utility methods useful.
     """
     uniqueId: int = 0  # see get_unique_str
+
+    # map from plugin identifier to whether it is enabled
+    plugin_map: Dict[str, bool] = field(default_factory=dict)
+
     WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "GenericState.json")
 
     def __post_init__(self):

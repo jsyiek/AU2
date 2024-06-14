@@ -13,10 +13,10 @@ from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
-from AU2.plugins.CorePlugin import register_plugin
+from AU2.plugins.CorePlugin import registered_plugin
 
 
-@register_plugin
+@registered_plugin
 class BackupPlugin(AbstractPlugin):
 
     BACKUP_LOCATION = os.path.join(BASE_WRITE_LOCATION, "backup")

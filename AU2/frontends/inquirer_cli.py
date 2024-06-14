@@ -25,6 +25,7 @@ from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.PathEntry import PathEntry
+from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS
 
@@ -398,6 +399,17 @@ def render(html_component, dependency_context={}):
                 a[html_component.identifier] = a[html_component.identifier] + out
         return a
 
+    elif isinstance(html_component, SelectorList):
+        q = [
+            inquirer.Checkbox(
+                name=html_component.identifier,
+                message=html_component.title,
+                choices=html_component.options,
+                default=html_component.defaults
+            )
+        ]
+        return inquirer_prompt_with_abort(q)
+
     else:
         raise Exception("Unknown component type:", type(html_component))
 
@@ -432,10 +444,10 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
 
 
 def main():
-    exports = []
-    for p in PLUGINS:
-        exports += p.exports
     while True:
+        exports = []
+        for p in PLUGINS:
+            exports += p.exports
         q = [inquirer.List(name="mode", message="Select mode", choices=["Exit"] + sorted([e.display_name for e in exports]))]
         try:
             a = inquirer_prompt_with_abort(q)["mode"]

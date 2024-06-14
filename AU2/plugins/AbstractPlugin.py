@@ -78,6 +78,3 @@ class AbstractPlugin:
 
     def on_assassin_update(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []
-
-    def on_assassin_delete(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
-        return []

@@ -7,6 +7,7 @@ from typing import Dict, List
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.ArbitraryList import ArbitraryList
@@ -22,6 +23,7 @@ from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKill
 from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
+from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.AvailablePlugins import __PluginMap
@@ -33,12 +35,12 @@ from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 AVAILABLE_PLUGINS = {}
 
 
-def register_plugin(plugin_class):
+def registered_plugin(plugin_class):
     plugin = plugin_class()
     AVAILABLE_PLUGINS[plugin.identifier] = plugin
 
 
-@register_plugin
+@registered_plugin
 class CorePlugin(AbstractPlugin):
     HTML_SECRET_ID: str = "CorePlugin_identifier"
 
@@ -123,6 +125,12 @@ class CorePlugin(AbstractPlugin):
                 self.ask_core_plugin_update_event,
                 self.answer_core_plugin_update_event,
                 (lambda: [v for v in EVENTS_DATABASE.events],)
+            ),
+            Export(
+                "core_plugin_config_update",
+                "Plugin config -> Enable/disable plugins",
+                self.ask_core_plugin_update_config,
+                self.answer_core_plugin_update_config
             )
         ]
 
@@ -276,6 +284,27 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             components += p.on_event_update(event, html_response_args)
         return components
+
+    def ask_core_plugin_update_config(self):
+        plugins = [p for p in GENERIC_STATE_DATABASE.plugin_map]
+        plugins.remove("CorePlugin")
+        return [
+            SelectorList(
+                self.identifier + "_config",
+                title="Enable or disable plugins",
+                options=plugins,
+                defaults=[p for p in plugins if GENERIC_STATE_DATABASE.plugin_map[p]]
+            )
+        ]
+
+    def answer_core_plugin_update_config(self, htmlResponse):
+        enabled_plugins = htmlResponse[self.identifier + "_config"]
+        enabled_plugins.append("CorePlugin")
+        for p in GENERIC_STATE_DATABASE.plugin_map:
+            GENERIC_STATE_DATABASE.plugin_map[p] = (p in enabled_plugins)
+        return [
+            Label("[CORE] Plugin change success!")
+        ]
 
 
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):
