@@ -556,7 +556,7 @@ class MafiaPlugin(AbstractPlugin):
             )
 
         assassins_with_points = [(a, points[a.identifier] + permanent_points[a.identifier]) for a in all_assassins]
-        assassins_with_points.sort(key=lambda t: -t[1])
+        assassins_with_points.sort(key=lambda t: (-t[1], t[0]._secret_id))
 
         for (i, (a, p)) in enumerate(assassins_with_points):
             mafia = a.plugin_state.get(self.identifier, {}).get(self.plugin_state["MAFIA"], "Casual")
