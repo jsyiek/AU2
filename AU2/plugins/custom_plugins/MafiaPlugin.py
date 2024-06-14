@@ -202,18 +202,25 @@ class MafiaPlugin(AbstractPlugin):
         return [Label(f"[MAFIA] Mafia set to {mafia}!")]
 
     def on_assassin_request_update(self, a: Assassin) -> List[HTMLComponent]:
+        hidden = a.plugin_state.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False)
         return [
             InputWithDropDown(
                 self.html_ids["Mafia"],
                 options=MAFIAS,
                 title="Mafia",
                 selected=a.plugin_state.get("MafiaPlugin", {}).get(self.plugin_state["MAFIA"], None)
+            ),
+            Checkbox(
+                self.html_ids["Hidden"],
+                title="Hidden: If 'Yes', not displayed on website",
+                checked=hidden
             )
         ]
 
     def on_assassin_update(self, a: Assassin, htmlResponse) -> List[HTMLComponent]:
         mafia = htmlResponse[self.html_ids["Mafia"]]
         a.plugin_state.setdefault(self.identifier, {})[self.plugin_state["MAFIA"]] = mafia
+        a.plugin_state[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
         return [Label(f"[MAFIA] Mafia set to {mafia}!")]
 
     def on_event_request_create(self) -> List[HTMLComponent]:
@@ -532,7 +539,7 @@ class MafiaPlugin(AbstractPlugin):
         player_rows: List[str] = []
         # tuple of total points and row
         pseudonym_rows: List[Tuple[float, str]] = []
-        all_assassins = list(ASSASSINS_DATABASE.assassins.values())
+        all_assassins = list(a for a in ASSASSINS_DATABASE.assassins.values() if not a.plugin_state.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False))
         all_assassins.sort(key=lambda a: (a.college if a.college != "Casual" else "ZZZZZZZ", a.real_name))
         for a in all_assassins:
             mafia = a.plugin_state.get(self.identifier, {}).get(self.plugin_state["MAFIA"], "Casual")
