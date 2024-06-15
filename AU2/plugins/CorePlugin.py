@@ -42,10 +42,10 @@ def registered_plugin(plugin_class):
 
 @registered_plugin
 class CorePlugin(AbstractPlugin):
-    HTML_SECRET_ID: str = "CorePlugin_identifier"
 
     def __init__(self):
         super().__init__("CorePlugin")
+        self.HTML_SECRET_ID = "CorePlugin_identifier"
 
         self.html_ids_list = [
             "Pseudonym",
@@ -153,7 +153,7 @@ class CorePlugin(AbstractPlugin):
 
     def on_assassin_request_update(self, assassin):
         html = [
-            HiddenTextbox(CorePlugin.HTML_SECRET_ID, assassin.identifier),
+            HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
             ArbitraryList(self.html_ids["Pseudonym"], "Pseudonyms", assassin.pseudonyms),
             DefaultNamedSmallTextbox(self.html_ids["Real Name"], "Real Name", assassin.real_name),
             DefaultNamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns", assassin.pronouns),
@@ -198,7 +198,7 @@ class CorePlugin(AbstractPlugin):
     def on_event_request_update(self, e: Event):
         assassins = [(a.identifier, a.pseudonyms) for a in ASSASSINS_DATABASE.assassins.values()]
         html = [
-            HiddenTextbox(CorePlugin.HTML_SECRET_ID, e.identifier),
+            HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
@@ -246,7 +246,7 @@ class CorePlugin(AbstractPlugin):
         return components
 
     def answer_core_plugin_update_assassin(self, html_response_args: Dict):
-        ident = html_response_args[CorePlugin.HTML_SECRET_ID]
+        ident = html_response_args[self.HTML_SECRET_ID]
         assassin = ASSASSINS_DATABASE.get(ident)
         return_components = []
         for p in PLUGINS:
@@ -278,7 +278,7 @@ class CorePlugin(AbstractPlugin):
         return components
 
     def answer_core_plugin_update_event(self, html_response_args: Dict):
-        ident = html_response_args[CorePlugin.HTML_SECRET_ID]
+        ident = html_response_args[self.HTML_SECRET_ID]
         event = EVENTS_DATABASE.get(ident)
         components = []
         for p in PLUGINS:
