@@ -515,7 +515,7 @@ class MafiaPlugin(AbstractPlugin):
 
                 deaths.append(victim)
                 point_gains.setdefault(killer, 0)
-                point_gains[killer] += (1 + points[victim]) * multiplier
+                point_gains[killer] += (1 + points[victim]/2) * multiplier
 
             # add BS points
             if e.pluginState.get(self.identifier, {}).get(self.plugin_state["POINTS"], {}):
