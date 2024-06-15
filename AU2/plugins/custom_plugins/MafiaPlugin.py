@@ -567,13 +567,13 @@ class MafiaPlugin(AbstractPlugin):
                 MAFIA=MAFIA_TEMPLATE.format(HEX=LIGHT_MAFIA_HEX[mafia]),
                 TRAITOR=TRAITOR_TEMPLATE if a.identifier in wanted else "",
                 PSEUDONYM=escape(a.all_pseudonyms()),
-                POINTS=escape(str(round(points[a.identifier] + permanent_points[a.identifier], 3))),
-                PERMANENT_POINTS=escape(str(round(permanent_points[a.identifier], 3))),
+                POINTS=escape(str(round(points[a.identifier] + permanent_points[a.identifier], 2))),
+                PERMANENT_POINTS=escape(str(round(permanent_points[a.identifier], 2))),
                 OPEN_BOUNTIES=escape(", ".join(open_bounties[a.identifier])),
                 CLAIMED_BOUNTIES=escape(", ".join(earned_bounties[a.identifier])),
                 TITLE="Capodecina" if a.identifier in current_capos else ""
             )
-            total_points = round(points[a.identifier] + permanent_points[a.identifier], 3)
+            total_points = round(points[a.identifier] + permanent_points[a.identifier], 2)
             pseudonym_rows.append((total_points, pseudonym_row))
 
         all_pseud_rows = [p for (_, p) in pseudonym_rows]
