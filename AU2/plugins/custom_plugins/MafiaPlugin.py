@@ -533,7 +533,7 @@ class MafiaPlugin(AbstractPlugin):
                 points[killer] += gain
 
             for victim in deaths:
-                points[victim] /= 2
+                points[victim] = max(points[victim]/2, 1)
 
         wanted = {p: d for (p, d) in wanted.items() if d >= datetime.datetime.now()}
 
