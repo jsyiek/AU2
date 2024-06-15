@@ -8,6 +8,7 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
+from AU2.html_components.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.AssassinDependentTextEntry import AssassinDependentTextEntry
@@ -237,12 +238,12 @@ class MafiaPlugin(AbstractPlugin):
                         title="Set Capodecina (only need to do this once per day)",
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym"
                     ),
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         identifier=self.html_ids["Points"],
                         title="Points: select players to manually adjust",
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym"
                     ),
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         identifier=self.html_ids["Permanent Points"],
                         title="Permanent Points: select players to convert points to permanent",
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
@@ -284,13 +285,13 @@ class MafiaPlugin(AbstractPlugin):
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         default=capodecina
                     ),
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         identifier=self.html_ids["Points"],
                         title="Points: select players to manually adjust",
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         default=points
                     ),
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         identifier=self.html_ids["Permanent Points"],
                         title="Permanent Points: select players to convert points to permanent",
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",

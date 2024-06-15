@@ -9,6 +9,7 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.ArbitraryList import ArbitraryList
 from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
+from AU2.html_components.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
@@ -43,11 +44,23 @@ def datetime_validator(_, current):
     return True
 
 
+# TODO: Create a generic type validator
+
 def integer_validator(_, current):
     try:
         if current is None:
             raise KeyboardInterrupt
         s = int(current)
+    except ValueError:
+        return False
+    return True
+
+
+def float_validator(_, current):
+    try:
+        if current is None:
+            raise KeyboardInterrupt
+        s = float(current)
     except ValueError:
         return False
     return True
@@ -264,6 +277,32 @@ def render(html_component, dependency_context={}):
         return inquirer_prompt_with_abort(q)
 
     # dependent component
+    elif isinstance(html_component, AssassinDependentFloatEntry):
+        dependent = html_component.pseudonym_list_identifier
+        assert(dependent in dependency_context)
+        assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: {}, "skip": True}
+        assassins = [a for a in assassins_mapping]
+        q = [inquirer.Checkbox(
+            name="assassins",
+            message=html_component.title,
+            choices=assassins,
+            default=list(html_component.default.keys())
+        )]
+        selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
+        q = []
+        for a in selected_assassins:
+            q.append(inquirer.Text(
+                name=a,
+                message=f"Value for {a}",
+                default=html_component.default.get(a, None),
+                validate=float_validator
+            ))
+        points = inquirer_prompt_with_abort(q)
+        return {html_component.identifier: {k: float(v) for (k, v) in points.items()}}
+
+    # dependent component
     elif isinstance(html_component, AssassinDependentIntegerEntry):
         dependent = html_component.pseudonym_list_identifier
         assert(dependent in dependency_context)
@@ -470,7 +509,10 @@ def main():
             qs.append(inquirer.List(name=i, choices=["*EXIT*"] + f(), ignore=lambda x: any(a[j] == "*EXIT*" for j in range(i))))
             i += 1
         if qs:
-            a = inquirer_prompt_with_abort(qs)
+            try:
+                a = inquirer_prompt_with_abort(qs)
+            except KeyboardInterrupt:
+                continue
             if any(a[k] == "*EXIT*" for k in range(i)):
                 continue
             for k in range(i):
