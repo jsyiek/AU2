@@ -1,5 +1,6 @@
 import datetime
 import os
+import zlib
 from html import escape
 from typing import List, Dict, Tuple, Set, Optional
 
@@ -326,7 +327,7 @@ class MafiaPlugin(AbstractPlugin):
         elif "O-Ren Ishii" in pseudonym:
             return MAFIA_HEX["The Crazy 88"]
 
-        ind = hash(pseudonym)
+        ind = zlib.adler32(pseudonym.encode(encoding="utf-32"))
         if dead:
             return DEAD_COLS[ind % len(DEAD_COLS)]
         return HEX_COLS[ind % len(HEX_COLS)]
