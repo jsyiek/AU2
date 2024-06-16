@@ -121,6 +121,7 @@ def render(html_component, dependency_context={}):
         return out
     elif isinstance(html_component, AssassinPseudonymPair):
         assassins = [a[0] for a in html_component.assassins]
+        assassins.sort()
         if not assassins:
             return {html_component.identifier: {}, "skip": True}
         q = [
