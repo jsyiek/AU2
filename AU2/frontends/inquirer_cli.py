@@ -167,7 +167,7 @@ def render(html_component, dependency_context={}):
         default_mapping = {
             a[:2]: a[2] for a in html_component.default
         }
-        if reporters:
+        if assassins_mapping:
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
             print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
