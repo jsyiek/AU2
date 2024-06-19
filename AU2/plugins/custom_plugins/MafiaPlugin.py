@@ -86,7 +86,7 @@ EVENT_TEMPLATE = """
 """
 
 REPORT_TEMPLATE = """
-<p style="margin-left:10%"><i>{TEXT}</i></p>
+<div style="margin-left:10%"><i>{TEXT}</i></div>
 """
 
 PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
