@@ -343,7 +343,6 @@ class MafiaPlugin(AbstractPlugin):
                                     PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(assassin.real_name)))
         return string
 
-
     def ask_generate_the_story(self) -> List[HTMLComponent]:
         return [Label("[MAFIA] Preparing...")]
 
