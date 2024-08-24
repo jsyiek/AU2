@@ -1,4 +1,11 @@
-*.idea
+# User-specific stuff:
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries
+.idea/vcs.xml
+.idea/jsLibraryMappings.xml
+.idea/misc.xml
+.idea/AU2.xml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
