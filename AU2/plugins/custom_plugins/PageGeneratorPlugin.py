@@ -1,33 +1,45 @@
 import datetime
+import os
 import zlib
 from html import escape
 from typing import List, Tuple
 
+from AU2 import ROOT_DIR
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.AssassinDependentFloatEntry import AssassinDependentFloatEntry
-from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.Checkbox import Checkbox
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
 
-EVENT_TEMPLATE = """    <div xmlns="" class="event"><hr/><span id="{ID}">
+
+EVENT_TEMPLATE = """<div xmlns="" class="event"><hr/><span id="{ID}">
   [{TIME}]
    <span class="headline">{HEADLINE}</span></span><hr/>
    {REPORTS}
     </div>
 """
 
+
 REPORT_TEMPLATE = """<div class="report">{PSEUDONYM} reports: <br/>
-<div class="indent"><div class="colourunknown"><p>{REPORT}</p></div></div></div>
+<div class="indent"><div style="color:{REPORT_COLOR}"><p>{REPORT}</p></div></div></div>
 """
 
+
 PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
+
+
+NEWS_TEMPLATE: str
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r") as F:
+    NEWS_TEMPLATE = F.read()
+
 
 HEX_COLS = [
     '#B1AB8A', '#75C49C', '#7BA5A2', '#B0B477', '#B6CDBC',
@@ -36,9 +48,49 @@ HEX_COLS = [
     '#FF81EA', '#EB82D4', '#E89F6E', '#98A0CD', '#ACC6D0'
 ]
 
+
 DEAD_COLS = [
     '#A9756C', '#A688BF', '#A34595'
 ]
+
+HARDCODED_COLORS = {
+    "The Dragon Queen": "#19268A",
+    "Water Ghost": "#606060",
+    "Valheru": "#03FCEC",
+    "Vendetta": "#B920DB"
+}
+
+
+def weeks_and_days_to_str(start: datetime.datetime, week: int, day: int) -> str:
+    """
+    Converts a 1-indexed week and a 0-indexed day into a string for news webpage
+
+    It might seem counterintuitive to make the days and weeks different indexing.
+    This is because week 0 news takes place the week before the game starts.
+    This is usually rendered as a bounty.
+    """
+    return (start + datetime.timedelta(days=day, weeks=week-1)).strftime("%A, %d %B")
+
+
+def datetime_to_time_str(event_time: datetime.datetime) -> str:
+    """
+    Returns a formatted timestamp suitable for the news.
+    """
+    return event_time.strftime("%I:%M %p")
+
+
+def soft_escape(string: str) -> str:
+    """
+    Escapes only if not prefixed by <!--HTML-->
+    """
+
+    # umpires may regret allowing this
+    # supposing you are a clever player who has found this and the umpire does not know...
+    # please spare the umpire any headaches
+    # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
+    if not string.startswith("<!--HTML-->"):
+        return escape(string)
+    return string
 
 
 @registered_plugin
@@ -47,6 +99,23 @@ class PageGeneratorPlugin(AbstractPlugin):
         # unique identifier for the plugin
         self.identifier = "PageGeneratorPlugin"
         super().__init__(self.identifier)
+
+        self.html_ids = {
+            "Hidden": self.identifier + "_hidden",
+        }
+
+        self.plugin_state = {
+            "HIDDEN": "hidden_event"
+        }
+
+        self.exports = [
+            Export(
+                "create_news_page",
+                "Generate page -> All news",
+                self.ask_generate_the_story,
+                self.answer_generate_the_story
+            )
+        ]
 
     def enable(self):
         self.enabled = True
@@ -60,58 +129,37 @@ class PageGeneratorPlugin(AbstractPlugin):
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=False),
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentFloatEntry(
-                        identifier=self.html_ids["Points"],
-                        title="Points: select players to manually adjust",
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym"
-                    )
-                ]
-            )
         ]
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        e.pluginState[self.identifier][self.plugin_state["POINTS"]] = \
-            htmlResponse[self.html_ids["Points"]]
+        e.pluginState.setdefault(self.identifier, {})
         e.pluginState[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
 
         return [Label("[PAGE GENERATOR] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
-        points = e.pluginState.get(self.identifier, {}).get(self.plugin_state["POINTS"], None)
         hidden = e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False)
         return [
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=hidden),
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentFloatEntry(
-                        identifier=self.html_ids["Points"],
-                        title="Points: select players to manually adjust",
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        default=points
-                    )
-                ]
-            )
         ]
 
     def get_color(self, pseudonym: str, dead: bool=False) -> str:
         ind = zlib.adler32(pseudonym.encode(encoding="utf-32"))
+        if pseudonym in HARDCODED_COLORS:
+            return HARDCODED_COLORS[pseudonym]
         if dead:
             return DEAD_COLS[ind % len(DEAD_COLS)]
         return HEX_COLS[ind % len(HEX_COLS)]
 
     def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str) -> str:
         id_ = assassin._secret_id
-        string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(main_pseudonym)))
+        string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
         for i in range(len(assassin.pseudonyms)):
-            string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(assassin.pseudonyms[i])))
+            string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.pseudonyms[i])))
         string = string.replace(f"[D{id_}]",
-                                    " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(p)) for p in assassin.pseudonyms))
+                                    " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms))
         string = string.replace(f"[N{id_}]",
-                                    PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=escape(assassin.real_name)))
+                                    PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
         return string
 
     def ask_generate_the_story(self) -> List[HTMLComponent]:
@@ -119,9 +167,9 @@ class PageGeneratorPlugin(AbstractPlugin):
 
     def answer_generate_the_story(self, _) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
-        events.sort(key=lambda e: e.datetime)
+        events.sort(key=lambda event: event.datetime)
         events_for_chapter = {}
-        start_date: datetime.datetime = None
+        start_date: datetime.datetime
         for e in events:
             if e.headline.startswith("GAME START") and e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 start_date = e.datetime.date()
@@ -134,8 +182,8 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         # maps chapter (news week) to day-of-week to list of reports
         # this is 1-indexed (week 1 is first week of game)
+        # days are 0-indexed (fun, huh?)
         events_for_chapter = {0: {}}
-        week_count = 1
 
         for e in events:
             # skip hidden events
@@ -143,22 +191,13 @@ class PageGeneratorPlugin(AbstractPlugin):
             if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 continue
 
-            days_since_start = (e.datetime.date() - start_date).days
-            week = days_since_start // 7
-            day = days_since_start % 7
-            if days_since_start < 0:
-                days_since_start = -1
-            elif days_since_start > max(CHAPTERS):
-                days_since_start = max(CHAPTERS)
-            events_for_chapter.setdefault(days_since_start, [])
-
             is_dead: List[str] = []
             for (_, victim) in e.kills:
                 is_dead.append(victim)
 
             headline = e.headline
 
-            reports = {(playerID, pseudonymID): report for (playerID, pseudonymID, report) in e.reports}
+            reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in e.reports}
 
             for (assassin, pseudonym_index) in e.assassins.items():
                 assassin_model = ASSASSINS_DATABASE.get(assassin)
@@ -169,42 +208,65 @@ class PageGeneratorPlugin(AbstractPlugin):
                 for (k, r) in reports.items():
                     reports[k] = self.substitute_pseudonyms(r, pseudonym, assassin_model, color)
 
-            # For his May Week, Thomas O'Hare wants the reports to render *without* the pseudonym/real_name
             report_list = []
-            for (_, r) in reports.items():
+            for ((assassin, pseudonym_index), r) in reports.items():
+                # Umpires must tell AU to NOT escape HTML
+                # If they tell it not to, they do so at their own risk. Make sure you know what you want to do!
+                # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
+                assassin_model = ASSASSINS_DATABASE.get(assassin)
+                pseudonym = assassin_model.pseudonyms[pseudonym_index]
+                color = self.get_color(pseudonym, assassin in is_dead)
+
+                painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
+
                 report_list.append(
-                    # not escaping r so we can have HTML in the reports
-                    # I hope you know what you're doing, Thomas!
-                    REPORT_TEMPLATE.format(TEXT=r)
+                    REPORT_TEMPLATE.format(PSEUDONYM=painted_pseudonym, REPORT_COLOR=color, REPORT=r)
                 )
-            report_text = "<br><br>".join(report_list)
-            event_text = EVENT_TEMPLATE.format(HEADLINE=headline, REPORTS=report_text)
-            events_for_chapter[days_since_start].append(event_text)
 
-        all_chapters = []
-        for (day, event_list) in events_for_chapter.items():
-            all_event_text = "<br>".join(event_list)
-            chapter_text = DAY_EVENTS_TEMPLATE.format(
-                # again not escaping for same reason
-                CHAPTER=CHAPTERS[day],
-                EVENTS=all_event_text
+            report_text = "".join(report_list)
+            event_text = EVENT_TEMPLATE.format(
+                ID=e._Event__secret_id,
+                TIME=datetime_to_time_str(e.datetime),
+                HEADLINE=headline,
+                REPORTS=report_text
             )
-            all_chapters.append(chapter_text)
 
-        all_chapter_text = """<hr style="width:30%;text-align:center"></hr>""".join(all_chapters)
-        quote = self.get_current_quote()
-        webpage_text = THE_STORY_TEMPLATE.format(QUOTE=quote, DAYS=all_chapter_text)
+            days_since_start = (e.datetime.date() - start_date).days
+            week = days_since_start // 7 + 1
+            day = days_since_start % 7
+            if week < 0:
+                week = 0
+                day = days_since_start + 7
+            events_for_chapter.setdefault(week, {})
+            events_for_chapter[week].setdefault(day, []).append(event_text)
 
-        path = os.path.join(WEBPAGE_WRITE_LOCATION, "head.html")
+        weeks = {}
+        for (w, d_dict) in events_for_chapter.items():
+            outs = []
+            for (d, events_list) in d_dict.items():
+                all_event_text = "".join(events_list)
+                day_text = DAY_TEMPLATE.format(
+                    # again not escaping for same reason
+                    DATE=weeks_and_days_to_str(start_date, w, d),
+                    EVENTS=all_event_text
+                )
+                outs.append(day_text)
+            weeks[w] = NEWS_TEMPLATE.format(
+                N=w,
+                DAYS="".join(outs),
+                YEAR=str(datetime.datetime.now().year)
+            )
 
-        with open(path, "w+") as F:
-            F.write(webpage_text)
+        for w in weeks:
+            path = os.path.join(WEBPAGE_WRITE_LOCATION, f"news{w:02}.html")
 
-        return [Label("[MAFIA] Successfully generated the story!")]
+            with open(path, "w+") as F:
+                F.write(weeks[w])
+
+        return [Label("[PAGE_GENERATOR] Successfully generated the story!")]
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        e.pluginState[self.identifier][self.plugin_state["POINTS"]] = \
-            htmlResponse[self.html_ids["Points"]]
+        e.pluginState.setdefault(self.identifier, {})
         e.pluginState[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
 
         return [Label("[PAGE GENERATOR] Success!")]
