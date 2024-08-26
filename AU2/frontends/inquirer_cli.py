@@ -24,6 +24,7 @@ from AU2.html_components.Dependency import Dependency
 from AU2.html_components.HiddenTextbox import HiddenTextbox
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
+from AU2.html_components.IntegerEntry import IntegerEntry
 from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
@@ -322,10 +323,11 @@ def render(html_component, dependency_context={}):
         selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
         q = []
         for a in selected_assassins:
+            val_if_exists = html_component.default.get(a, None)
             q.append(inquirer.Text(
                 name=a,
                 message=f"Value for {a}",
-                default=html_component.default.get(a, None),
+                default=val_if_exists if val_if_exists is not None else html_component.global_default,
                 validate=integer_validator
             ))
         points = inquirer_prompt_with_abort(q)
@@ -367,6 +369,16 @@ def render(html_component, dependency_context={}):
         )]
         datetime_str = inquirer_prompt_with_abort(q)["dt"]
         return {html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT)}
+
+    elif isinstance(html_component, IntegerEntry):
+        q = [inquirer.Text(
+            name="int",
+            message=html_component.title,
+            default=html_component.default,
+            validate=integer_validator
+        )]
+        integer = inquirer_prompt_with_abort(q)["int"]
+        return {html_component.identifier: int(integer)}
 
     elif isinstance(html_component, PathEntry):
         q = [inquirer.Path(

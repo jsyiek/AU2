@@ -20,6 +20,11 @@ class GenericStateDatabase(PersistentFile):
     # map from plugin identifier to whether it is enabled
     plugin_map: Dict[str, bool] = field(default_factory=dict)
 
+    # arbitrary state dictionaries
+    # plugins can leave config parameters here
+    arb_str_state: Dict[str, str] = field(default_factory=dict)
+    arb_int_state: Dict[str, int] = field(default_factory=dict)
+
     WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "GenericState.json")
 
     def __post_init__(self):

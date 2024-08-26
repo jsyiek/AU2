@@ -9,13 +9,13 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.Checkbox import Checkbox
-from AU2.html_components.Dependency import Dependency
 from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.CompetencyManager import CompetencyManager
+from AU2.plugins.util.DeathManager import DeathManager
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
 
@@ -51,6 +51,20 @@ HEX_COLS = [
 
 DEAD_COLS = [
     '#A9756C', '#A688BF', '#A34595'
+]
+
+
+INCO_COLORS = [
+    "#FFC0CB",  # Light Pink
+    "#FFB6C1",  # Light Pink 2
+    "#FF69B4",  # Hot Pink
+    "#FF1493",  # Deep Pink
+    "#DB7093",  # Pale Violet Red
+    "#FF5A77",  # Radical Red
+    "#FF6EB4",  # Hot Pink 3
+    "#FF82AB",  # Light Pink 3
+    "#FF007F",  # Bright Pink
+    "#FF85B2"   # Ultra Pink
 ]
 
 HEAD_HEADLINE_TEMPLATE = """
@@ -154,12 +168,14 @@ class PageGeneratorPlugin(AbstractPlugin):
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=hidden),
         ]
 
-    def get_color(self, pseudonym: str, dead: bool=False) -> str:
+    def get_color(self, pseudonym: str, dead: bool=False, incompetent: bool=False) -> str:
         ind = zlib.adler32(pseudonym.encode(encoding="utf-32"))
-        if pseudonym in HARDCODED_COLORS:
-            return HARDCODED_COLORS[pseudonym]
         if dead:
             return DEAD_COLS[ind % len(DEAD_COLS)]
+        if incompetent:
+            return INCO_COLORS[ind % len(INCO_COLORS)]
+        if pseudonym in HARDCODED_COLORS:
+            return HARDCODED_COLORS[pseudonym]
         return HEX_COLS[ind % len(HEX_COLS)]
 
     def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str) -> str:
@@ -179,11 +195,12 @@ class PageGeneratorPlugin(AbstractPlugin):
     def answer_generate_the_story(self, _) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
-        events_for_chapter = {}
-        start_date: datetime.datetime
+        start_date: datetime.date
+        start_datetime: datetime.datetime
         for e in events:
             if e.headline.startswith("GAME START") and e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 start_date = e.datetime.date()
+                start_datetime = e.datetime
                 break
         else:
             return [Label(
@@ -194,6 +211,8 @@ class PageGeneratorPlugin(AbstractPlugin):
         # days are 0-indexed (fun, huh?)
         events_for_chapter = {0: {}}
         headlines_for_day = {}
+        competency_manager = CompetencyManager(start_datetime)
+        death_manager = DeathManager(perma_death=True)
 
         for e in events:
             # skip hidden events
@@ -201,9 +220,8 @@ class PageGeneratorPlugin(AbstractPlugin):
             if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 continue
 
-            is_dead: List[str] = []
-            for (_, victim) in e.kills:
-                is_dead.append(victim)
+            competency_manager.add_event(e)
+            death_manager.add_event(e)
 
             headline = e.headline
 
@@ -216,7 +234,11 @@ class PageGeneratorPlugin(AbstractPlugin):
                 # TODO: Wanted coloring
                 # TODO: Incompetent coloring
                 # TODO: Police coloring
-                color = self.get_color(pseudonym, assassin in is_dead)
+                color = self.get_color(
+                    pseudonym,
+                    dead=death_manager.is_dead(assassin_model),
+                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime)
+                )
                 headline = self.substitute_pseudonyms(headline, pseudonym, assassin_model, color)
 
                 for (k, r) in reports.items():
@@ -229,7 +251,11 @@ class PageGeneratorPlugin(AbstractPlugin):
                 # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
                 assassin_model = ASSASSINS_DATABASE.get(assassin)
                 pseudonym = assassin_model.pseudonyms[pseudonym_index]
-                color = self.get_color(pseudonym, assassin in is_dead)
+                color = self.get_color(
+                    pseudonym,
+                    dead=death_manager.is_dead(assassin_model),
+                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime)
+                )
 
                 painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
 
@@ -261,7 +287,7 @@ class PageGeneratorPlugin(AbstractPlugin):
                 TIME=time_str,
                 HEADLINE=headline
             )
-            headlines_for_day.setdefault(day, []).append(headline_text)
+            headlines_for_day.setdefault(days_since_start, []).append(headline_text)
 
         weeks = {}
         for (w, d_dict) in events_for_chapter.items():
