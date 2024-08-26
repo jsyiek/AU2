@@ -131,6 +131,13 @@ class CorePlugin(AbstractPlugin):
                 "Plugin config -> Enable/disable plugins",
                 self.ask_core_plugin_update_config,
                 self.answer_core_plugin_update_config
+            ),
+            Export(
+                "core_plugin_delete_event",
+                "Event -> Delete",
+                self.ask_core_plugin_delete_event,
+                self.answer_core_plugin_delete_event,
+                (lambda: [v for v in EVENTS_DATABASE.events],)
             )
         ]
 
@@ -220,6 +227,12 @@ class CorePlugin(AbstractPlugin):
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
+    def on_event_request_delete(self, e: Event) -> List[HTMLComponent]:
+        return [HiddenTextbox(self.HTML_SECRET_ID, e.identifier)]
+
+    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
+        return [Label("[CORE] Delete acknowledged.")]
+
     def ask_core_plugin_create_assassin(self):
         components = []
         for p in PLUGINS:
@@ -283,6 +296,22 @@ class CorePlugin(AbstractPlugin):
         components = []
         for p in PLUGINS:
             components += p.on_event_update(event, html_response_args)
+        return components
+
+    def ask_core_plugin_delete_event(self, event_id: str):
+        event = EVENTS_DATABASE.get(event_id)
+        components = []
+        for p in PLUGINS:
+            components += p.on_event_request_delete(event)
+        return components
+
+    def answer_core_plugin_delete_event(self, html_response_args: Dict):
+        ident = html_response_args[self.HTML_SECRET_ID]
+        event = EVENTS_DATABASE.get(ident)
+        components = []
+        for p in PLUGINS:
+            components += p.on_event_delete(event, html_response_args)
+        del EVENTS_DATABASE.events[ident]
         return components
 
     def ask_core_plugin_update_config(self):
