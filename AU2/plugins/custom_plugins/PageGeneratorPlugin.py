@@ -53,6 +53,17 @@ DEAD_COLS = [
     '#A9756C', '#A688BF', '#A34595'
 ]
 
+HEAD_HEADLINE_TEMPLATE = """
+    <div xmlns="" class="event">
+  [<a href="news{NUMBER}.html#{ID}">{TIME}</a>]
+   <span class="headline">{HEADLINE}</span><br/></div>"""
+
+HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
+
+HEAD_TEMPLATE: str
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r") as F:
+    HEAD_TEMPLATE = F.read()
+
 HARDCODED_COLORS = {
     "The Dragon Queen": "#19268A",
     "Water Ghost": "#606060",
@@ -178,12 +189,11 @@ class PageGeneratorPlugin(AbstractPlugin):
             return [Label(
                 "[PAGE GENERATOR] Could not determine game start. Create an event with headline GAME START and make it hidden.")]
 
-        news_week_length = 7
-
         # maps chapter (news week) to day-of-week to list of reports
         # this is 1-indexed (week 1 is first week of game)
         # days are 0-indexed (fun, huh?)
         events_for_chapter = {0: {}}
+        headlines_for_day = {}
 
         for e in events:
             # skip hidden events
@@ -202,6 +212,10 @@ class PageGeneratorPlugin(AbstractPlugin):
             for (assassin, pseudonym_index) in e.assassins.items():
                 assassin_model = ASSASSINS_DATABASE.get(assassin)
                 pseudonym = assassin_model.pseudonyms[pseudonym_index]
+
+                # TODO: Wanted coloring
+                # TODO: Incompetent coloring
+                # TODO: Police coloring
                 color = self.get_color(pseudonym, assassin in is_dead)
                 headline = self.substitute_pseudonyms(headline, pseudonym, assassin_model, color)
 
@@ -222,23 +236,32 @@ class PageGeneratorPlugin(AbstractPlugin):
                 report_list.append(
                     REPORT_TEMPLATE.format(PSEUDONYM=painted_pseudonym, REPORT_COLOR=color, REPORT=r)
                 )
-
-            report_text = "".join(report_list)
-            event_text = EVENT_TEMPLATE.format(
-                ID=e._Event__secret_id,
-                TIME=datetime_to_time_str(e.datetime),
-                HEADLINE=headline,
-                REPORTS=report_text
-            )
-
             days_since_start = (e.datetime.date() - start_date).days
+
             week = days_since_start // 7 + 1
             day = days_since_start % 7
             if week < 0:
                 week = 0
                 day = days_since_start + 7
             events_for_chapter.setdefault(week, {})
+
+            report_text = "".join(report_list)
+            time_str = datetime_to_time_str(e.datetime)
+            event_text = EVENT_TEMPLATE.format(
+                ID=e._Event__secret_id,
+                TIME=time_str,
+                HEADLINE=headline,
+                REPORTS=report_text
+            )
             events_for_chapter[week].setdefault(day, []).append(event_text)
+
+            headline_text = HEAD_HEADLINE_TEMPLATE.format(
+                NUMBER=f"{week:02}",
+                ID=e._Event__secret_id,
+                TIME=time_str,
+                HEADLINE=headline
+            )
+            headlines_for_day.setdefault(day, []).append(headline_text)
 
         weeks = {}
         for (w, d_dict) in events_for_chapter.items():
@@ -262,6 +285,22 @@ class PageGeneratorPlugin(AbstractPlugin):
 
             with open(path, "w+") as F:
                 F.write(weeks[w])
+
+        head_days = []
+        for (d, headlines_list) in headlines_for_day.items():
+            head_days.append(
+                HEAD_DAY_TEMPLATE.format(
+                    DATE=weeks_and_days_to_str(start_date, 1, d),
+                    HEADLINES="".join(headlines_list)
+                )
+            )
+
+        head_page_text = HEAD_TEMPLATE.format(
+            CONTENT="".join(head_days),
+            YEAR=str(datetime.datetime.now().year)
+        )
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+") as F:
+            F.write(head_page_text)
 
         return [Label("[PAGE_GENERATOR] Successfully generated the story!")]
 
