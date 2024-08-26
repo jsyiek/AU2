@@ -363,7 +363,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, DatetimeEntry):
         q = [inquirer.Text(
             name="dt",
-            message="Enter date/time of event (YYYY-MM-DD HH:MM)",
+            message=f"{html_component.title} (YYYY-MM-DD HH:MM)",
             default=html_component.default.strftime(DATETIME_FORMAT),
             validate=datetime_validator
         )]

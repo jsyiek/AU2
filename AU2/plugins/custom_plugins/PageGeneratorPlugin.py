@@ -133,14 +133,7 @@ class PageGeneratorPlugin(AbstractPlugin):
             "HIDDEN": "hidden_event"
         }
 
-        self.exports = [
-            Export(
-                "create_news_page",
-                "Generate page -> All news",
-                self.ask_generate_the_story,
-                self.answer_generate_the_story
-            )
-        ]
+        self.exports = []
 
     def enable(self):
         self.enabled = True
@@ -160,7 +153,7 @@ class PageGeneratorPlugin(AbstractPlugin):
         e.pluginState.setdefault(self.identifier, {})
         e.pluginState[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
 
-        return [Label("[PAGE GENERATOR] Success!")]
+        return [Label("[NEWS PAGE GENERATOR] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
         hidden = e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False)
@@ -189,10 +182,10 @@ class PageGeneratorPlugin(AbstractPlugin):
                                     PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
         return string
 
-    def ask_generate_the_story(self) -> List[HTMLComponent]:
-        return [Label("[PAGE GENERATOR] Preparing...")]
+    def on_page_request_generate(self) -> List[HTMLComponent]:
+        return [Label("[NEWS PAGE GENERATOR] Preparing...")]
 
-    def answer_generate_the_story(self, _) -> List[HTMLComponent]:
+    def on_page_generate(self, _) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_date: datetime.date
@@ -204,7 +197,7 @@ class PageGeneratorPlugin(AbstractPlugin):
                 break
         else:
             return [Label(
-                "[PAGE GENERATOR] Could not determine game start. Create an event with headline GAME START and make it hidden.")]
+                "[NEWS PAGE GENERATOR  ] Could not determine game start. Create an event with headline GAME START and make it hidden.")]
 
         # maps chapter (news week) to day-of-week to list of reports
         # this is 1-indexed (week 1 is first week of game)
@@ -328,13 +321,13 @@ class PageGeneratorPlugin(AbstractPlugin):
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+") as F:
             F.write(head_page_text)
 
-        return [Label("[PAGE_GENERATOR] Successfully generated the story!")]
+        return [Label("[NEWS PAGE GENERATOR] Successfully generated the story!")]
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         e.pluginState.setdefault(self.identifier, {})
         e.pluginState[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
 
-        return [Label("[PAGE GENERATOR] Success!")]
+        return [Label("[NEWS PAGE GENERATOR] Success!")]
 
     def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return []

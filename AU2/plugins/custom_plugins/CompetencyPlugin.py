@@ -83,12 +83,6 @@ class CompetencyPlugin(AbstractPlugin):
                 ask=self.set_default_competency_deadline_ask,
                 answer=self.set_default_competency_deadline_answer
             ),
-            Export(
-                identifier="CompetencyPlugin_generate_competency_page",
-                display_name="Generate Pages -> Competency",
-                ask=self.ask_generate_page,
-                answer=self.answer_generate_page
-            ),
         ]
 
     def set_default_competency_deadline_ask(self):
@@ -152,13 +146,13 @@ class CompetencyPlugin(AbstractPlugin):
         e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[self.html_ids["Competency"]]
         return [Label("[COMPETENCY] Success!")]
 
-    def ask_generate_page(self) -> List[HTMLComponent]:
+    def on_page_request_generate(self) -> List[HTMLComponent]:
         return [DatetimeEntry(
             identifier=self.html_ids["Datetime"],
             title="Enter date to calculate incos from"
         )]
 
-    def answer_generate_page(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime

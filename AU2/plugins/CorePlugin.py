@@ -120,6 +120,13 @@ class CorePlugin(AbstractPlugin):
                 self.answer_core_plugin_create_event
             ),
             Export(
+                "core_plugin_delete_event",
+                "Event -> Delete",
+                self.ask_core_plugin_delete_event,
+                self.answer_core_plugin_delete_event,
+                (lambda: [v for v in EVENTS_DATABASE.events],)
+            ),
+            Export(
                 "core_event_update_event",
                 "Event -> Update",
                 self.ask_core_plugin_update_event,
@@ -133,11 +140,10 @@ class CorePlugin(AbstractPlugin):
                 self.answer_core_plugin_update_config
             ),
             Export(
-                "core_plugin_delete_event",
-                "Event -> Delete",
-                self.ask_core_plugin_delete_event,
-                self.answer_core_plugin_delete_event,
-                (lambda: [v for v in EVENTS_DATABASE.events],)
+                "core_plugin_generate_pages",
+                "Generate pages",
+                self.ask_generate_pages,
+                self.answer_generate_pages
             )
         ]
 
@@ -194,7 +200,7 @@ class CorePlugin(AbstractPlugin):
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
                 ]
             ),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Date/time of event"),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
         ]
         return html
@@ -214,7 +220,7 @@ class CorePlugin(AbstractPlugin):
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
                 ]
             ),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Date/time of event", e.datetime),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
         return html
@@ -325,6 +331,18 @@ class CorePlugin(AbstractPlugin):
                 defaults=[p for p in plugins if GENERIC_STATE_DATABASE.plugin_map[p]]
             )
         ]
+
+    def ask_generate_pages(self):
+        components = []
+        for p in PLUGINS:
+            components += p.on_page_request_generate()
+        return components
+
+    def answer_generate_pages(self, html_response_args: Dict):
+        components = []
+        for p in PLUGINS:
+            components += p.on_page_generate(html_response_args)
+        return components
 
     def answer_core_plugin_update_config(self, htmlResponse):
         enabled_plugins = htmlResponse[self.identifier + "_config"]

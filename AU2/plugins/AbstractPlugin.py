@@ -81,3 +81,9 @@ class AbstractPlugin:
 
     def on_assassin_update(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
         return []
+
+    def on_page_request_generate(self) -> List[HTMLComponent]:
+        return []
+
+    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+        return []
