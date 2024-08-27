@@ -1,3 +1,4 @@
 dataclasses-json
 inquirer
 datetime
+paramiko
