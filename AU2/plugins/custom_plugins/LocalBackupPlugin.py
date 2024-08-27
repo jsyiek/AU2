@@ -17,14 +17,14 @@ from AU2.plugins.CorePlugin import registered_plugin
 
 
 @registered_plugin
-class BackupPlugin(AbstractPlugin):
+class LocalBackupPlugin(AbstractPlugin):
 
     BACKUP_LOCATION = os.path.join(BASE_WRITE_LOCATION, "backup")
     if not os.path.exists(BACKUP_LOCATION):
         os.mkdir(BACKUP_LOCATION)
 
     def __init__(self):
-        super().__init__("BackupPlugin")
+        super().__init__("LocalBackupPlugin")
 
         self.html_ids = {
             "Backup Name": self.identifier + "_backup_name",

@@ -9,11 +9,13 @@ import inquirer
 import paramiko
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
+from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.Checkbox import Checkbox
 from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.HiddenTextbox import HiddenTextbox
+from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
@@ -55,21 +57,33 @@ class SRCFPlugin(AbstractPlugin):
         self.__exports = [
             Export(
                 "SRCFPlugin_publish_pages",
-                "SRCF -> Publish pages",
+                "SRCF -> Upload database and publish pages",
                 self.ask_ignore_lock,
                 self.answer_publish_pages
             ),
             Export(
-                "SRCFPlugin_publish_pages",
+                "SRCFPlugin_request_lock",
                 "SRCF -> Request lock",
                 self.ask_ignore_lock,
                 self.answer_lock
             ),
             Export(
-                "SRCFPlugin_publish_pages",
+                "SRCFPlugin_remote_backup",
                 "SRCF -> Remote backup",
                 self.ask_backup,
                 self.answer_backup
+            ),
+            Export(
+                "SRCFPlugin_restore_backup",
+                "SRCF -> Restore remote backup",
+                self.ask_restore_backup,
+                self.answer_restore_backup
+            ),
+            Export(
+                "SRCFPlugin_manual_sync",
+                "SRCF -> Manual database sync",
+                self.ask_ignore_lock,
+                self.answer_manual_sync
             )
         ]
 
@@ -113,7 +127,7 @@ class SRCFPlugin(AbstractPlugin):
             break
         return self._successful_login()
 
-    def ask_ignore_lock(self):
+    def ask_ignore_lock(self) -> List[HTMLComponent]:
         with self._get_client() as sftp:
             (locked_user, locked_datetime) = self._read_lock_file(sftp)
             if locked_user and locked_user != self.username:
@@ -138,7 +152,7 @@ class SRCFPlugin(AbstractPlugin):
                 )
             ]
 
-    def answer_lock(self, htmlResponse):
+    def answer_lock(self, htmlResponse) -> List[HTMLComponent]:
         """
         Claims a lock.
         """
@@ -148,7 +162,55 @@ class SRCFPlugin(AbstractPlugin):
             self._lock(sftp)
         return [Label("[SRCF Plugin] Claimed lock.")]
 
-    def answer_publish_pages(self, htmlResponse):
+    def ask_restore_backup(self) -> List[HTMLComponent]:
+        with self._get_client() as sftp:
+            backups = sftp.listdir(REMOTE_BACKUP_LOCATION)
+        return [
+            InputWithDropDown(
+                identifier=self.html_ids["backup_name"],
+                title="Choose backup to restore",
+                options=["Exit"] + backups
+            )
+        ] + self.ask_ignore_lock()
+
+    def answer_restore_backup(self, htmlResponse) -> List[HTMLComponent]:
+        chosen_backup = htmlResponse[self.html_ids["backup_name"]]
+        if chosen_backup == "Exit":
+            return [Label("[SRCF Plugin] Aborted.")]
+        if not htmlResponse[self.html_ids["ignore_lock"]]:
+            return [Label("[SRCF Plugin] Aborted.")]
+        with self._get_client() as sftp:
+            if htmlResponse[self.html_ids["requires_claiming"]]:
+                print("[SRCF Plugin] Claiming lock...")
+                self._lock(sftp)
+
+            remote_backup_folder = REMOTE_BACKUP_LOCATION + "/" + chosen_backup
+            for db in sftp.listdir(remote_backup_folder):
+                localpath = os.path.join(BASE_WRITE_LOCATION, db)
+                remotetarget = REMOTE_DATABASE_LOCATION + "/" + db
+                remotepath = remote_backup_folder + "/" + db
+                self._log_to(sftp, PUBLISH_LOG, f"Trying to restore {remotepath}...")
+                sftp.get(remotepath, localpath)
+                sftp.put(localpath, remotetarget)
+                self._log_to(sftp, PUBLISH_LOG, f"Restored {remotepath}.")
+
+            refresh_databases()
+            return [Label(f"[SRCF Plugin] Restored {chosen_backup}")]
+
+    def answer_manual_sync(self, htmlResponse) -> List[HTMLComponent]:
+        """
+        Manually call the _sync method that is called upon login.
+        """
+        if not htmlResponse[self.html_ids["ignore_lock"]]:
+            return [Label("[SRCF Plugin] Aborted.")]
+        with self._get_client() as sftp:
+            if htmlResponse[self.html_ids["requires_claiming"]]:
+                print("[SRCF Plugin] Claiming lock...")
+                self._lock(sftp)
+            self._sync(sftp)
+        return []
+
+    def answer_publish_pages(self, htmlResponse) -> List[HTMLComponent]:
         """
         Publishes all pages in `WEBSITE_WRITE_LOCATION`, wiping each page it uploads.
 
@@ -167,11 +229,19 @@ class SRCFPlugin(AbstractPlugin):
                 localpath = os.path.join(WEBPAGE_WRITE_LOCATION, page)
                 remotepath = REMOTE_WEBPAGES_PATH + "/" + page
                 print(f"[SRCF Plugin] Publishing {page}")
-                self._log_to(sftp, PUBLISH_LOG, f"({self.username}) Trying to publish {page}")
+                self._log_to(sftp, PUBLISH_LOG, f"Trying to publish {page}")
                 sftp.put(localpath, remotepath)
-                self._log_to(sftp, PUBLISH_LOG, f"({self.username}) Published {page}")
+                self._log_to(sftp, PUBLISH_LOG, f"Published {page}")
                 os.remove(localpath)
-        return [Label("[SRCF Plugin] Successfuly published locally generated pages.")]
+
+            for database in self._find_jsons(BASE_WRITE_LOCATION):
+                localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                remotepath = REMOTE_DATABASE_LOCATION + "/" + database
+                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+                sftp.put(localpath, remotepath)
+                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+
+        return [Label("[SRCF Plugin] Successfuly published locally generated pages and uploaded database.")]
 
     def ask_backup(self) -> List[HTMLComponent]:
         now = datetime.datetime.now()
@@ -190,11 +260,10 @@ class SRCFPlugin(AbstractPlugin):
         with self._get_client() as sftp:
             self._makedirs(sftp, backup_path)
             self._log_to(sftp, EDIT_LOG, f"Creating backup at {backup_path}")
-            for f in os.listdir(BASE_WRITE_LOCATION):
-                if f.endswith(".json"):
-                    localpath = os.path.join(BASE_WRITE_LOCATION, f)
-                    remotepath = backup_path + "/" + f
-                    sftp.put(localpath, remotepath)
+            for f in self._find_jsons(BASE_WRITE_LOCATION):
+                localpath = os.path.join(BASE_WRITE_LOCATION, f)
+                remotepath = backup_path + "/" + f
+                sftp.put(localpath, remotepath)
         return [Label("[SRCF Plugin] Success!")]
 
     def _read_lock_file(self, sftp: paramiko.SFTPClient) -> (Optional[str], Optional[datetime.datetime]):
@@ -262,18 +331,120 @@ class SRCFPlugin(AbstractPlugin):
     def _execute_login(self, username: str, password: str):
         """
         Performs an authentication check to see if the supplied credentials can log into SRCF.
+        It offers to update local copy of DB with remote DB if they are out of sync.
         Closes the connection after.
         """
         self.username = username
         self.password = password
         try:
             with self._get_client() as sftp:
-                pass
+                self._sync(sftp)
+
         except paramiko.ssh_exception.AuthenticationException:
             self.username = ""
             self.password = ""
             return False
         return True
+
+    def _find_jsons(self, path):
+        for db in os.listdir(path):
+            if db.endswith(".json"):
+                yield db
+
+    def _sync(self, sftp: paramiko.SFTPClient):
+
+        remotepath = REMOTE_DATABASE_LOCATION + "/" + os.path.basename(GENERIC_STATE_DATABASE.WRITE_LOCATION)
+        exists = True
+        try:
+            sftp.stat(remotepath)
+        except FileNotFoundError:
+            exists = False
+        if exists:
+            localpath = os.path.join(BASE_WRITE_LOCATION, "TemporaryGenericStateDatabase.json")
+            sftp.get(remotepath, localpath)
+
+            with open(localpath, "r") as F:
+                dump = F.read()
+
+            remote_gsd = GenericStateDatabase.from_json(dump)
+            os.remove(localpath)
+            if remote_gsd.uniqueId > GENERIC_STATE_DATABASE.uniqueId:
+                print("[SRCF Plugin] Your databases appear to be BEHIND the copies on SRCF. "
+                            "Do you want to bring the LOCAL copies up to date?")
+                a = inquirer.prompt([inquirer.Confirm(
+                    "confirm",
+                    default=True)
+                ])
+                if a is not None and a["confirm"]:
+                    for database in self._find_jsons(BASE_WRITE_LOCATION):
+                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                        remotepath = REMOTE_DATABASE_LOCATION + "/" + database
+
+                        self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
+                        sftp.get(remotepath, localpath)
+                        self._log_to(sftp, ACCESS_LOG, f"Read {database}")
+                    print("[SRCF Plugin] Success!")
+                else:
+                    print("[SRCF Plugin] Did not update LOCAL copies.")
+
+            elif remote_gsd.uniqueId < GENERIC_STATE_DATABASE.uniqueId:
+                print("[SRCF Plugin] Your databases appear to be AHEAD of the copies on SRCF. "
+                            "Do you want to bring the REMOTE copies up to date?")
+                a = inquirer.prompt([inquirer.Confirm(
+                    "confirm",
+                    default=True)
+                ])
+                if a is not None and a["confirm"]:
+                    for database in self._find_jsons(BASE_WRITE_LOCATION):
+                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                        remotepath = REMOTE_DATABASE_LOCATION + "/" + database
+                        self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+                        sftp.put(localpath, remotepath)
+                        self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+                    print("[SRCF Plugin] Success!")
+                else:
+                    print("[SRCF Plugin] Did not update REMOTE copies.")
+
+            else:
+                print("[SRCF Plugin] Your local database APPEARS up to date. This may be the case if only small "
+                      "changes were made.")
+                print("[SRCF Plugin] Do you want to download remote copies, upload local copies, or do nothing?")
+                a = inquirer.prompt([inquirer.List(
+                    "confirm",
+                    message="Choices",
+                    choices=["Download", "Upload", "Nothing"],
+                    default="Nothing")
+                ])
+                if a is None or a["confirm"] == "Nothing":
+                    print("[SRCF Plugin] No changes made.")
+                elif a["confirm"] == "Download":
+                    for database in self._find_jsons(BASE_WRITE_LOCATION):
+                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                        remotepath = REMOTE_DATABASE_LOCATION + "/" + database
+
+                        self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
+                        sftp.get(remotepath, localpath)
+                        self._log_to(sftp, ACCESS_LOG, f"Read {database}")
+                    print("[SRCF Plugin] Success!")
+                elif a["confirm"] == "Upload":
+                    for database in self._find_jsons(BASE_WRITE_LOCATION):
+                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                        remotepath = REMOTE_DATABASE_LOCATION + "/" + database
+                        self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+                        sftp.put(localpath, remotepath)
+                        self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+                    print("[SRCF Plugin] Success!")
+
+        else:
+            self._makedirs(sftp, REMOTE_DATABASE_LOCATION)
+            for database in self._find_jsons(BASE_WRITE_LOCATION):
+                localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                remotepath = REMOTE_DATABASE_LOCATION + "/" + database
+                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+                sftp.put(localpath, remotepath)
+                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+            print("[SRCF Plugin] No databases were found in the SRCF, so local copies have been uploaded.")
+        return []
 
     @contextlib.contextmanager
     def _get_client(self) -> paramiko.SFTPClient:
