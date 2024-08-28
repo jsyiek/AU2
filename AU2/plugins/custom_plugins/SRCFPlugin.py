@@ -2,7 +2,6 @@ import contextlib
 import datetime
 import os
 import re
-import shutil
 from typing import Optional, List
 
 import inquirer
@@ -24,7 +23,7 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 SRCF_WEBSITE = "shell.srcf.net"
 SSH_PORT = 22
 
-ASSASSINS_PATH = "assassins"
+ASSASSINS_PATH = "/societies/assassins"
 AU2_DATA_PATH = ASSASSINS_PATH + "/AU2_files"
 DATABASES = AU2_DATA_PATH + "/databases"
 LOGS = AU2_DATA_PATH + "/logs"
@@ -304,6 +303,9 @@ class SRCFPlugin(AbstractPlugin):
         Recursively creates directories if they do not exist.
         """
         dir_list = dir.split("/")
+        if not dir_list[0]:
+            dir_list[1] = "/" + dir_list[1]
+            del dir_list[0]
         current_dir = ""
         for d in dir_list:
             current_dir = f"{current_dir}/{d}" if current_dir else d

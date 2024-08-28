@@ -14,7 +14,7 @@ VENV_FOLDER_NAME = "src"
 VENV_LOCATION = os.path.join(DIR_NAME, VENV_FOLDER_NAME)
 PY_EXECUTABLE_MAC = os.path.join(VENV_LOCATION, "bin", "python3")
 PY_EXECUTABLE_WINDOWS = os.path.join(VENV_LOCATION, "Scripts", "python.exe")
-REPO_DIR = "AU2"
+REPO_DIR = os.path.join(DIR_NAME, "AU2")
 
 if "windows" in platform.system().lower():
     windows = True
@@ -79,7 +79,7 @@ try:
             print(f"Can't find a Python binary (looked for {PY_EXECUTABLE}). Setting up a new virtual environment.")
             if os.path.exists(VENV_LOCATION):
                 shutil.rmtree(VENV_LOCATION)
-            subprocess.run([sys.executable, "-m", "venv", VENV_FOLDER_NAME])
+            subprocess.run([sys.executable, "-m", "venv", VENV_LOCATION])
             print("Set up new virtual environment.")
         else:
             print("Found virtual environment.")
@@ -100,7 +100,7 @@ try:
 
         print(f"In future, use {loc} to launch AU2.")
         print("Finished.")
-        time.sleep(3)
+        time.sleep(120)
         exit()
 except Exception as e:
     print(traceback.format_exc())
