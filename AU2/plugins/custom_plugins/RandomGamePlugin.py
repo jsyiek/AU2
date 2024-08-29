@@ -124,7 +124,7 @@ class RandomGamePlugin(AbstractPlugin):
                 if random.random() > activity_chance:
                     continue
 
-                hour = datetime.timedelta(hours=random.randint(0, 1080))
+                hour = datetime.timedelta(minutes=random.randint(0, 1080))
 
                 # if here, then assassin has been selected for a random event
                 # check if they kill
