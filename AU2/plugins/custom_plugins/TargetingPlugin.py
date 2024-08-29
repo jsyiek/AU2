@@ -44,7 +44,8 @@ class TargetingPlugin(AbstractPlugin):
             print(f"|________ {targets[2]}")
             print()
 
-        print(f"Total alive players: {len(graph.keys())}")
+        if graph:
+            print(f"Total alive players: {len(graph.keys())}")
         return []
 
     def compute_targets(self):
@@ -73,7 +74,7 @@ class TargetingPlugin(AbstractPlugin):
 
         # FIRST STEP, get initial targets
         # we use a hash set to cache combinations disallowed in subsequent chains.
-        # (i.e., a targets b in chain one means a cannot target b and b cannot target a in chain two
+        # (i.e., a targets b in chain one means a cannot target b and b cannot target a in chain two)
         claimed_combos = set()
 
         def new_unique_chain(abort_after=1000):
@@ -175,6 +176,10 @@ class TargetingPlugin(AbstractPlugin):
         for targeters_permutation in itertools.permutations(targeters):
             # list of [(targeter, targeted), (a, b), ...]
             new_targets = list(zip(targeters_permutation, targeting))
+
+            # Constraint 0: no one can get a target they already have
+            if any(b in targeting_graph[a] for (a, b) in new_targets):
+                continue
 
             # Constraint 1: no one targets themselves
             if any(a == b for (a, b) in new_targets):

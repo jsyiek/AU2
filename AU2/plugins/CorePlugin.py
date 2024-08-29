@@ -1,8 +1,6 @@
 import glob
 import os.path
-import sys, inspect
 
-from datetime import datetime
 from typing import Dict, List
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -352,6 +350,25 @@ class CorePlugin(AbstractPlugin):
         return [
             Label("[CORE] Plugin change success!")
         ]
+
+    def ask_request_custom_hook(self, hook: str, data) -> List[HTMLComponent]:
+        """
+        Allows Plugins to expose global hooks
+        """
+        components = []
+        for p in PLUGINS:
+            components += p.on_request_hook_respond(hook, data)
+        return components
+
+    def answer_custom_hook(self, hook: str, htmlResponse) -> List[HTMLComponent]:
+        """
+        Allows Plugins to expose global hooks
+        """
+        components = []
+        for p in PLUGINS:
+            components += p.on_hook_respond(hook, htmlResponse, data)
+        return components
+
 
 
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):

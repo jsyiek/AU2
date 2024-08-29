@@ -89,7 +89,12 @@ class SRCFPlugin(AbstractPlugin):
         self.html_ids = {
             "ignore_lock": self.identifier + "_ignore_lock",
             "requires_claiming": self.identifier + "_requires_claiming",
-            "backup_name": self.identifier + "_backup_name"
+            "backup_name": self.identifier + "_backup_name",
+            "send_all": self.identifier + "_send_all"
+        }
+
+        self.hooks = {
+            "email": self.identifier + "_email"
         }
 
     @property

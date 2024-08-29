@@ -42,10 +42,13 @@ class RandomGamePlugin(AbstractPlugin):
                 title="[RANDOM GAME] How many players should we create? (Max 500, and Police aren't supported)",
                 default=280
             ),
+            Label(
+                title="[RANDOM GAME] How many events does a player partake over the course of a six-week game on "
+                      "average, assuming they live until the end? (Max 20)"
+            ),
             IntegerEntry(
                 identifier=self.html_ids["Activity"],
-                title="[RANDOM GAME] How many events does a player partake over the course of a six-week game on average,"
-                      " assuming they live until the end? (Max 20)",
+                title="",
                 default=5
             ),
             IntegerEntry(
@@ -113,8 +116,16 @@ class RandomGamePlugin(AbstractPlugin):
         for day in range(num_weeks*7):
             date_of_event = game_start + datetime.timedelta(days=day, hours=6)
             for assassin_ind in range(len(live_assassins)):
+
+                # this can occur as `live_assassins` is edited during iteration
+                if assassin_ind >= len(live_assassins):
+                    continue
+
                 if random.random() > activity_chance:
                     continue
+
+                hour = datetime.timedelta(hours=random.randint(0, 1080))
+
                 # if here, then assassin has been selected for a random event
                 # check if they kill
                 if random.random() < lethality_chance:
@@ -124,7 +135,7 @@ class RandomGamePlugin(AbstractPlugin):
                     if num_killers + num_victims > len(live_assassins):
                         continue
 
-                    others = random.choices([a for (j, a) in enumerate(live_assassins) if assassin_ind != j], k=num_killers+num_victims-1)
+                    others = random.sample([a for (j, a) in enumerate(live_assassins) if assassin_ind != j], k=num_killers+num_victims-1)
                     victim_assassins: List[Assassin] = [ASSASSINS_DATABASE.get(a) for a in others[:num_victims]]
                     killer_assassins: List[Assassin] = [ASSASSINS_DATABASE.get(a) for a in ([live_assassins[assassin_ind]] + others[num_victims:])]
                     headline: str = random.choice(random_data.death_headlines[(num_killers, num_victims)])
@@ -140,11 +151,10 @@ class RandomGamePlugin(AbstractPlugin):
                     killer_id = killer_assassins[0].identifier
                     kills[killer_id] = kills.get(killer_id, 0) + num_victims
 
-                    hour = random.randint(0, 1080)
                     EVENTS_DATABASE.add(
                         Event(
                             assassins={a.identifier: 0 for a in victim_assassins + killer_assassins},
-                            datetime=date_of_event + datetime.timedelta(minutes=hour),
+                            datetime=date_of_event + hour,
                             headline=headline,
                             reports=[],
                             kills=[
@@ -161,6 +171,38 @@ class RandomGamePlugin(AbstractPlugin):
                     )
                     for victim in victim_assassins:
                         live_assassins.remove(victim.identifier)
+
+                else:
+                    num_participants = random.choice(list(random_data.participant_headlines.keys()))
+
+                    if num_participants > len(live_assassins):
+                        continue
+
+                    others = random.sample([a for (j, a) in enumerate(live_assassins) if assassin_ind != j], k=num_participants-1)
+                    headline: str = random.choice(random_data.participant_headlines[num_participants])
+
+                    participants = [ASSASSINS_DATABASE.get(a) for a in [live_assassins[assassin_ind]] + others]
+
+                    for (i, player) in enumerate(participants):
+                        headline = headline.replace("{V" + str(i) + "}", f"[P{player._secret_id}]")
+
+                    EVENTS_DATABASE.add(
+                        Event(
+                            assassins={a.identifier: 0 for a in participants},
+                            datetime=date_of_event + hour,
+                            headline=headline,
+                            reports=[],
+                            kills=[],
+                            pluginState={
+                                "CompetencyPlugin": {
+                                    "competency": {
+                                        participants[0].identifier: 7 - (day % 14)
+                                    }
+                                }
+                            }
+                        )
+                    )
+
 
         game_end = game_start + datetime.timedelta(weeks=6)
         if not kills:
@@ -181,7 +223,7 @@ class RandomGamePlugin(AbstractPlugin):
                 Event(
                     assassins={winner: 0},
                     datetime=game_end,
-                    headline=f"And the winner is... [D{winner_id}] ([N{winner_id}])",
+                    headline=f"And the winner is... [D{winner_id}] ([N{winner_id}]), with {kills[winner]} kills!",
                     reports={},
                     kills=[],
                     pluginState={}

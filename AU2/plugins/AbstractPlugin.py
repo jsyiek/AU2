@@ -87,3 +87,19 @@ class AbstractPlugin:
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         return []
+
+    def on_request_hook_respond(self, hook: str, data) -> List[HTMLComponent]:
+        """
+        Allows you to respond to hooks from other plugins.
+
+        The `hook` parameter is a string identifier from a function that you can check for and respond to.
+        `data` can be anything the hooking function wants you to contribute to
+        """
+        return []
+
+    def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
+        """
+        Allows you to respond to hooks from other plugins.
+        `data` can be anything the hooking function wants you to contribute to
+        """
+        return []

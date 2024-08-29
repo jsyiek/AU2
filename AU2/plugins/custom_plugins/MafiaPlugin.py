@@ -10,7 +10,6 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.AssassinDependentFloatEntry import AssassinDependentFloatEntry
-from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.AssassinDependentTextEntry import AssassinDependentTextEntry
 from AU2.html_components.Checkbox import Checkbox
