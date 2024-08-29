@@ -25,7 +25,20 @@ else:
 
 INQUIRER_PY = os.path.join(REPO_DIR, "AU2", "frontends", "inquirer_cli.py")
 
-AU2_EXE_LOCATION = os.path.join(VENV_LOCATION, "Scripts", "au2.exe")
+EASY_RUN_WINDOWS = f"""
+@echo off
+setlocal
+
+REM Get the path of the folder where the batch file is located
+set "SCRIPT_DIR=%~dp0"
+
+REM Run the Python script using the Python binary in the same folder
+"%SCRIPT_DIR%{VENV_FOLDER_NAME}\\Scripts\\au2.exe"
+
+endlocal
+"""
+EASY_RUN_WINDOWS_NAME = "au2_win.bat"
+EASY_RUN_WINDOWS_LOCATION = os.path.join(DIR_NAME, EASY_RUN_WINDOWS_NAME)
 
 EASY_RUN_MAC = f"""
 #!/bin/bash
@@ -39,6 +52,12 @@ PYTHON_BIN="{os.path.abspath(DIR_NAME)}/{VENV_FOLDER_NAME}/bin/python3"
 EASY_RUN_MAC_NAME = "au2_mac"
 EASY_RUN_MAC_LOCATION = os.path.join(DIR_NAME, EASY_RUN_MAC_NAME)
 
+if windows:
+    loc = EASY_RUN_WINDOWS_LOCATION
+    src = EASY_RUN_WINDOWS
+else:
+    loc = EASY_RUN_MAC_LOCATION
+    src = EASY_RUN_MAC
 
 
 def parse_args():
@@ -72,16 +91,12 @@ try:
         print("Setting up AU2 source...")
         subprocess.run([sys.executable, "-m", "pip", "install", "-e", REPO_DIR])
         print("Source has been set up.")
-        if not windows:
-            with open(EASY_RUN_MAC_LOCATION, "w+") as F:
-                F.write(EASY_RUN_MAC)
-            st = os.stat(EASY_RUN_MAC_LOCATION)
-            os.chmod(EASY_RUN_MAC_LOCATION, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-            loc = EASY_RUN_MAC_LOCATION
 
-        else:
-            os.symlink(src=AU2_EXE_LOCATION, dst=os.path.join(DIR_NAME, "AU2"))
-            loc = "the newly created AU2 file"
+        with open(loc, "w+") as F:
+            F.write(src)
+        if not windows:
+            st = os.stat(loc)
+            os.chmod(loc, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
         print(f"In future, use {loc} to launch AU2.")
         print("Finished.")
