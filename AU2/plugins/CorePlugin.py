@@ -23,9 +23,10 @@ from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
+from AU2.plugins.util.game import get_game_start, set_game_start
 
 # Add plugins here
 # Note that importing this dictionary and adding to it will NOT necessarily
@@ -142,6 +143,22 @@ class CorePlugin(AbstractPlugin):
                 "Generate pages",
                 self.ask_generate_pages,
                 self.answer_generate_pages
+            ),
+            Export(
+                "core_plugin_edit_config",
+                "Plugin config -> Plugin-specific parameters",
+                self.ask_config,
+                self.answer_config,
+                (self.gather_config_names,)
+            )
+        ]
+
+        self.config_exports = [
+            ConfigExport(
+                "core_plugin_set_game_start",
+                "CorePlugin -> Set game start",
+                self.ask_set_game_start,
+                self.answer_set_game_start
             )
         ]
 
@@ -369,6 +386,76 @@ class CorePlugin(AbstractPlugin):
             components += p.on_hook_respond(hook, htmlResponse, data)
         return components
 
+    def gather_config_names(self):
+        """
+        Gathers the name of all ConfigExports from all plugins
+        """
+        names = []
+        for p in PLUGINS:
+            for c in p.config_exports:
+                names.append(c.display_name)
+        names.sort()
+        return names
+
+    def ask_config(self, config_option: str):
+        """
+        Opens the menu for a chosen config option
+        """
+        all_config_exports = []
+        for p in PLUGINS:
+            all_config_exports += p.config_exports
+
+        config: ConfigExport
+        for c in all_config_exports:
+            if c.display_name == config_option:
+                config = c
+                break
+        else:
+            return [
+                HiddenTextbox(
+                    identifier=self.identifier + "_config",
+                    default=""
+                )
+            ]
+
+        return [
+            HiddenTextbox(
+                identifier=self.identifier + "_config",
+                default=config.identifier
+            )
+        ] + config.ask()
+
+    def answer_config(self, htmlResponse):
+        all_config_exports = []
+        for p in PLUGINS:
+            all_config_exports += p.config_exports
+
+        config_identifier = htmlResponse[self.identifier + "_config"]
+
+        config: ConfigExport
+        for c in all_config_exports:
+            if c.identifier == config_identifier:
+                config = c
+                break
+        else:
+            return []
+
+        return config.answer(htmlResponse)
+
+    def ask_set_game_start(self):
+        return [
+            DatetimeEntry(
+                self.identifier + "_game_start",
+                title="Enter game start",
+                default=get_game_start()
+            )
+        ]
+
+    def answer_set_game_start(self, htmlResponse):
+        set_game_start(htmlResponse[self.identifier + "_game_start"])
+        return [
+            Label(f"[CORE] Set game start to {get_game_start().strftime('%Y-%m-%d %H:%M:%S')}")
+        ]
 
 
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):

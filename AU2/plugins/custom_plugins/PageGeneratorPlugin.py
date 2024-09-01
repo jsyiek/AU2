@@ -16,6 +16,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.game import get_game_start
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
 
@@ -188,16 +189,8 @@ class PageGeneratorPlugin(AbstractPlugin):
     def on_page_generate(self, _) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
-        start_date: datetime.date
-        start_datetime: datetime.datetime
-        for e in events:
-            if e.headline.startswith("GAME START") and e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
-                start_date = e.datetime.date()
-                start_datetime = e.datetime
-                break
-        else:
-            return [Label(
-                "[NEWS PAGE GENERATOR  ] Could not determine game start. Create an event with headline GAME START and make it hidden.")]
+        start_datetime: datetime.datetime = get_game_start()
+        start_date: datetime.date = start_datetime.date()
 
         # maps chapter (news week) to day-of-week to list of reports
         # this is 1-indexed (week 1 is first week of game)

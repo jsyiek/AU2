@@ -24,8 +24,25 @@ class Export:
         self.options_functions = options_functions
 
 
-# You must define and export this variable
-EXPORT_PLUGIN = None
+class ConfigExport:
+    """
+    Represents a callback for a configuration parameter.
+    """
+
+    def __init__(self, identifier: str, display_name: str, ask, answer):
+        """
+        Unlike Export, this bans the options function as there are only two stages to Config.
+
+        :param identifier: internal identifier for the callback
+        :param display_name: html-visible display name
+        :param ask: function that generates a list of HTML components
+        :param answer: function that takes a dictionary of arg -> str and actions the output
+        """
+        self.identifier = identifier
+        self.display_name = display_name
+        self.ask = ask
+        self.answer = answer
+
 
 
 class AbstractPlugin:
@@ -34,6 +51,7 @@ class AbstractPlugin:
         self.identifier = identifier
         self.enabled = True
         self.exports: List[Export] = []
+        self.config_exports: List[ConfigExport]= []
 
     def _dump_state(self):
         """

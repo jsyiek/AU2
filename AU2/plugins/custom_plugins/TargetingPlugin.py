@@ -5,11 +5,10 @@ from typing import Tuple, Dict, List, Set
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.html_components.ArbitraryList import ArbitraryList
-from AU2.html_components.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.IntegerEntry import IntegerEntry
 from AU2.html_components.Label import Label
 from AU2.html_components.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 
 
@@ -34,20 +33,29 @@ class TargetingPlugin(AbstractPlugin):
                 "Targeting Graph -> Print",
                 lambda *args: [],
                 self.answer_show_targeting_graph
-            ),
-            Export(
-                "TargetingPlugin",
-                "Targeting Graph -> Set seeds",
-                self.ask_set_seeds,
-                self.answer_set_seeds
             )
         ]
 
-        # TODO: Config parameter: RANDOM LIBRARY'S SEED
-        self.seed = 28082024
+        self.config_exports = [
+            ConfigExport(
+                "TargetingPlugin_set_player_seeds",
+                "Targeting Graph -> Set player seeds",
+                self.ask_set_seeds,
+                self.answer_set_seeds
+            ),
+            ConfigExport(
+                "TargetingPlugin_set_random_seed",
+                "Targeting Graph -> Set random seed",
+                self.ask_set_random_seed,
+                self.answer_set_random_seed
+            )
+        ]
+
+        self.seed = GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("random_seed", 28082024)
 
         self.html_ids = {
-            "Seeds": self.identifier + "_seeds"
+            "Seeds": self.identifier + "_seeds",
+            "Random Seed": self.identifier + "_random_seed"
         }
 
     def ask_set_seeds(self):
@@ -64,6 +72,20 @@ class TargetingPlugin(AbstractPlugin):
         seeds = htmlResponse[self.html_ids["Seeds"]]
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["seeds"] = seeds
         return [Label("[TARGETING] Success!")]
+
+    def ask_set_random_seed(self):
+        return [
+            IntegerEntry(
+                identifier = self.html_ids["Random Seed"],
+                title="Enter new random seed",
+                default=self.seed
+            )
+        ]
+
+    def answer_set_random_seed(self, htmlResponse):
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["random_seed"] = htmlResponse[self.html_ids["Random Seed"]]
+        self.seed = htmlResponse[self.html_ids["Random Seed"]]
+        return [Label(f"[TARGETING] Set random seed to: {self.seed}")]
 
     def answer_show_targeting_graph(self, _):
         graph = self.compute_targets()

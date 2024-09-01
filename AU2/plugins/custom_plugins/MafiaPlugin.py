@@ -20,6 +20,7 @@ from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.game import get_game_start
 
 MAFIAS = [
     "The Crazy 88",
@@ -349,14 +350,7 @@ class MafiaPlugin(AbstractPlugin):
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda e: e.datetime)
         events_for_chapter = {}
-        start_date: datetime.datetime = None
-        for e in events:
-            if e.headline.startswith("GAME START") and e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
-                start_date = e.datetime.date()
-                break
-        else:
-            return [Label(
-                "[MAFIA] Could not determine game start. Create an event with headline GAME START and make it hidden.")]
+        start_date: datetime.datetime = get_game_start()
 
         for e in events:
             # skip hidden events

@@ -13,12 +13,13 @@ from AU2.html_components.DatetimeEntry import DatetimeEntry
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.IntegerEntry import IntegerEntry
 from AU2.html_components.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, DEFAULT_START_COMPETENCY, \
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.game import get_game_start
 
 INCOS_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -76,8 +77,8 @@ class CompetencyPlugin(AbstractPlugin):
             "COMPETENCY": "competency"
         }
 
-        self.exports = [
-            Export(
+        self.config_exports = [
+            ConfigExport(
                 identifier="CompetencyPlugin_update_competency_defaults",
                 display_name="Competency -> Update Default Extension",
                 ask=self.set_default_competency_deadline_ask,
@@ -155,17 +156,8 @@ class CompetencyPlugin(AbstractPlugin):
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
-        start_datetime: datetime.datetime
-        for e in events:
-            if e.headline.startswith("GAME START") and e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
-                start_datetime = e.datetime
-                break
-        else:
-            return [
-                Label(
-                    "[COMPETENCY] Could not determine game start. "
-                    "Create an event with headline GAME START and make it hidden.")
-            ]
+        start_datetime: datetime.datetime = get_game_start()
+
         competency_manager = CompetencyManager(start_datetime)
         death_manager = DeathManager(perma_death=True)
         limit = htmlResponse[self.html_ids["Datetime"]]
