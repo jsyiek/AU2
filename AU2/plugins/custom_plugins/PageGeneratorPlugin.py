@@ -16,7 +16,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.game import get_game_start
+from AU2.plugins.util.game import get_game_start, soft_escape
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
 
@@ -103,20 +103,6 @@ def datetime_to_time_str(event_time: datetime.datetime) -> str:
     Returns a formatted timestamp suitable for the news.
     """
     return event_time.strftime("%I:%M %p")
-
-
-def soft_escape(string: str) -> str:
-    """
-    Escapes only if not prefixed by <!--HTML-->
-    """
-
-    # umpires may regret allowing this
-    # supposing you are a clever player who has found this and the umpire does not know...
-    # please spare the umpire any headaches
-    # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
-    if not string.startswith("<!--HTML-->"):
-        return escape(string)
-    return string
 
 
 @registered_plugin

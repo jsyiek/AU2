@@ -8,7 +8,9 @@ import inquirer
 import paramiko
 
 from AU2 import BASE_WRITE_LOCATION
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
+from AU2.database.model import Assassin
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.Checkbox import Checkbox
@@ -16,9 +18,11 @@ from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbo
 from AU2.html_components.HiddenTextbox import HiddenTextbox
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.html_components.LargeTextEntry import LargeTextEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.game import soft_escape
 
 SRCF_WEBSITE = "shell.srcf.net"
 SSH_PORT = 22
@@ -34,9 +38,42 @@ ACCESS_LOG = LOGS + "/access.log"
 EDIT_LOG = LOGS + "/edit.log"
 PUBLISH_LOG = LOGS + "/publish.log"
 
-REMOTE_WEBPAGES_PATH = ASSASSINS_PATH + "/public_html" + "/testing" #delete "/testing" when in prod"
+REMOTE_WEBPAGES_PATH = ASSASSINS_PATH + "/public_html" + "/testing"  # delete "/testing" when in prod"
 REMOTE_BACKUP_LOCATION = AU2_DATA_PATH + "/backups"
 REMOTE_DATABASE_LOCATION = AU2_DATA_PATH + "/databases"
+
+EMAIL_TEMPLATE = """\
+MAIL FROM:assassins-umpire@srcf.net
+RCPT TO:{EMAIL}
+DATA
+From: assassins-umpire@srcf.net
+Subject: {SUBJECT}
+{CONTENT}
+
+.
+"""
+
+EMAIL_FILE_TEMPLATE = """\
+{EMAILS}
+QUIT
+"""
+
+EMAIL_WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "emails")
+REMOTE_EMAIL_WRITE_LOCATION = ASSASSINS_PATH + "/" + "emails"
+
+
+class Email:
+    def __init__(self, recipient: Assassin):
+        self.recipient = recipient
+        self.content_list = []
+        self.send = False
+
+    def add_content(self, content: str, require_send: bool = False):
+        self.content_list.append(content)
+        self.send &= require_send
+
+    def get_content_as_str(self, delimiter="\n\n---------------\n\n"):
+        return delimiter.join(self.content_list)
 
 
 @registered_plugin
@@ -86,11 +123,25 @@ class SRCFPlugin(AbstractPlugin):
             )
         ]
 
+        self.hooked_exports = [
+            HookedExport(
+                plugin_name=self.identifier,
+                identifier=self.identifier + "_email",
+                display_name="SRCF -> Send emails",
+                producer=self.email_producer,
+                call_order=HookedExport.FIRST
+            )
+        ]
+
         self.html_ids = {
             "ignore_lock": self.identifier + "_ignore_lock",
             "requires_claiming": self.identifier + "_requires_claiming",
             "backup_name": self.identifier + "_backup_name",
-            "send_all": self.identifier + "_send_all"
+            "send_all": self.identifier + "_send_all",
+            "email_subject": self.identifier + "_email_subject",
+            "email_message": self.identifier + "_email_message",
+            "email_require_send": self.identifier + "_email_require_send",
+            "email_file_name": self.identifier + "_email_file_name"
         }
 
         self.hooks = {
@@ -131,6 +182,99 @@ class SRCFPlugin(AbstractPlugin):
             break
         return self._successful_login()
 
+    def email_producer(self, _):
+        emails = []
+        for a in ASSASSINS_DATABASE.assassins.values():
+            emails.append(Email(a))
+        return emails
+
+    def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
+        if hook == self.hooks["email"]:
+            return [
+                DefaultNamedSmallTextbox(
+                    identifier=self.html_ids["email_subject"],
+                    title="[SRCFPlugin] Email Subject",
+                    default="[Assassins' Guild] Game Update",
+                ),
+                Label("[SRCFPlugin] Format specifiers (they will be replaced individually for each assassin)"),
+                Label("     [P] - First pseudonym of that assassin"),
+                Label("     [N] - Real name of that assassin"),
+                LargeTextEntry(
+                    identifier=self.html_ids["email_message"],
+                    title="[SRCFPlugin] Add additional message?",
+                ),
+                Checkbox(
+                    identifier=self.html_ids["email_require_send"],
+                    title="[SRCFPlugin] Do you want to mail to all players (Y) or just those with a plugin update (N)?",
+                    checked=False
+                )
+            ]
+        return []
+
+    def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
+        if hook == self.hooks["email"]:
+            email_list: List[Email] = data
+            subject = htmlResponse[self.html_ids["email_subject"]]
+            message = soft_escape(htmlResponse[self.html_ids["email_message"]])
+
+            for email in email_list:
+                email.content_list.insert(
+                    0,
+                    message.replace("[P]", email.recipient.pseudonyms[0]).replace("[N]", email.recipient.real_name)
+                )
+
+            if not htmlResponse[self.html_ids["email_require_send"]]:
+                email_list = [e for e in email_list if e.send]
+
+            email_str_list = [
+                EMAIL_TEMPLATE.format(
+                    SUBJECT=subject,
+                    EMAIL=email.recipient.email,
+                    CONTENT=email.get_content_as_str()
+                ) for email in email_list
+            ]
+
+            email_file_contents = EMAIL_FILE_TEMPLATE.format(
+                EMAILS="\n".join(email_str_list)
+            )
+
+            now = datetime.datetime.now()
+            email_file_name = f"email.{now.day:02}{now.month:02}{now.year}" \
+                              f"_{now.hour:02}_{now.minute:02}_{now.second:02}"
+
+            localpath = os.path.join(EMAIL_WRITE_LOCATION, email_file_name)
+            os.makedirs(EMAIL_WRITE_LOCATION, exist_ok=True)
+            with open(localpath, "w+") as F:
+                F.write(email_file_contents)
+
+            with self._get_ssh_client() as ssh_client:
+                with ssh_client.open_sftp() as sftp:
+                    self._log_to(sftp, ACCESS_LOG, "Logging in for email")
+
+                    self._makedirs(sftp, REMOTE_EMAIL_WRITE_LOCATION)
+
+                    remotetarget = REMOTE_EMAIL_WRITE_LOCATION + "/" + email_file_name
+                    sftp.put(localpath, remotetarget)
+
+                    self._log_to(sftp, ACCESS_LOG, "Logging out of email")
+                    self._log_to(sftp, PUBLISH_LOG, "Trying to send email...")
+
+                    (stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
+
+                    self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
+
+                    if stdout:
+                        print("stdout:")
+                        # TODO: Implement proper print
+                        print(stdout)
+                    if stderr:
+                        print("stderr (useful for debugging):")
+                        # TODO: Implement proper print
+                        print(stderr)
+
+            return [Label("[SRCFPlugin] Sent!")]
+        return []
+
     def ask_ignore_lock(self) -> List[HTMLComponent]:
         with self._get_client() as sftp:
             (locked_user, locked_datetime) = self._read_lock_file(sftp)
@@ -170,12 +314,12 @@ class SRCFPlugin(AbstractPlugin):
         with self._get_client() as sftp:
             backups = sftp.listdir(REMOTE_BACKUP_LOCATION)
         return [
-            InputWithDropDown(
-                identifier=self.html_ids["backup_name"],
-                title="Choose backup to restore",
-                options=["Exit"] + backups
-            )
-        ] + self.ask_ignore_lock()
+                   InputWithDropDown(
+                       identifier=self.html_ids["backup_name"],
+                       title="Choose backup to restore",
+                       options=["Exit"] + backups
+                   )
+               ] + self.ask_ignore_lock()
 
     def answer_restore_backup(self, htmlResponse) -> List[HTMLComponent]:
         chosen_backup = htmlResponse[self.html_ids["backup_name"]]
@@ -377,7 +521,7 @@ class SRCFPlugin(AbstractPlugin):
             os.remove(localpath)
             if remote_gsd.uniqueId > GENERIC_STATE_DATABASE.uniqueId:
                 print("[SRCF Plugin] Your databases appear to be BEHIND the copies on SRCF. "
-                            "Do you want to bring the LOCAL copies up to date?")
+                      "Do you want to bring the LOCAL copies up to date?")
                 a = inquirer.prompt([inquirer.Confirm(
                     "confirm",
                     default=True)
@@ -396,7 +540,7 @@ class SRCFPlugin(AbstractPlugin):
 
             elif remote_gsd.uniqueId < GENERIC_STATE_DATABASE.uniqueId:
                 print("[SRCF Plugin] Your databases appear to be AHEAD of the copies on SRCF. "
-                            "Do you want to bring the REMOTE copies up to date?")
+                      "Do you want to bring the REMOTE copies up to date?")
                 a = inquirer.prompt([inquirer.Confirm(
                     "confirm",
                     default=True)
@@ -459,15 +603,30 @@ class SRCFPlugin(AbstractPlugin):
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
             client.connect(
-                    hostname=SRCF_WEBSITE,
-                    port=SSH_PORT,
-                    username=self.username,
-                    password=self.password
-                )
+                hostname=SRCF_WEBSITE,
+                port=SSH_PORT,
+                username=self.username,
+                password=self.password
+            )
             with client.open_sftp() as sftp:
                 self._log_to(sftp, ACCESS_LOG, "Logged in.")
                 yield sftp
                 self._log_to(sftp, ACCESS_LOG, "Logging out.")
+        finally:
+            client.close()
+
+    @contextlib.contextmanager
+    def _get_ssh_client(self) -> paramiko.SSHClient:
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                hostname=SRCF_WEBSITE,
+                port=SSH_PORT,
+                username=self.username,
+                password=self.password
+            )
+            yield client
         finally:
             client.close()
 

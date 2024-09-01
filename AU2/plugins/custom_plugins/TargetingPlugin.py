@@ -76,7 +76,7 @@ class TargetingPlugin(AbstractPlugin):
     def ask_set_random_seed(self):
         return [
             IntegerEntry(
-                identifier = self.html_ids["Random Seed"],
+                identifier=self.html_ids["Random Seed"],
                 title="Enter new random seed",
                 default=self.seed
             )
