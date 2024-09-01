@@ -1,9 +1,14 @@
 import itertools
 import random
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Set
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.html_components.ArbitraryList import ArbitraryList
+from AU2.html_components.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.Label import Label
+from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 
@@ -29,11 +34,36 @@ class TargetingPlugin(AbstractPlugin):
                 "Targeting Graph -> Print",
                 lambda *args: [],
                 self.answer_show_targeting_graph
+            ),
+            Export(
+                "TargetingPlugin",
+                "Targeting Graph -> Set seeds",
+                self.ask_set_seeds,
+                self.answer_set_seeds
             )
         ]
 
         # TODO: Config parameter: RANDOM LIBRARY'S SEED
         self.seed = 28082024
+
+        self.html_ids = {
+            "Seeds": self.identifier + "_seeds"
+        }
+
+    def ask_set_seeds(self):
+        return [
+            SelectorList(
+                identifier=self.html_ids["Seeds"],
+                title="Choose which assassins should be seeded",
+                options=list(ASSASSINS_DATABASE.assassins),
+                defaults=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
+            )
+        ]
+
+    def answer_set_seeds(self, htmlResponse):
+        seeds = htmlResponse[self.html_ids["Seeds"]]
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["seeds"] = seeds
+        return [Label("[TARGETING] Success!")]
 
     def answer_show_targeting_graph(self, _):
         graph = self.compute_targets()
@@ -77,15 +107,49 @@ class TargetingPlugin(AbstractPlugin):
         # (i.e., a targets b in chain one means a cannot target b and b cannot target a in chain two)
         claimed_combos = set()
 
+        # We must respect any seeding constraints.
+        player_seeds = [p for p in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])]
+
+        def seed_shuffle(chain):
+            if not player_seeds:
+                random.shuffle(chain)
+                return chain
+
+            chain_no_seeds = [p for p in chain if p not in player_seeds]
+
+            if not chain_no_seeds:
+                random.shuffle(player_seeds)
+                return player_seeds
+
+            random.shuffle(chain_no_seeds)
+            random.shuffle(player_seeds)
+
+            output = []
+            increase_factor = len(chain_no_seeds)/len(player_seeds)
+            player_seeds_pointer = 0
+            chain_no_seeds_pointer = 0
+            balance = 0
+            while chain_no_seeds_pointer < len(chain_no_seeds) and player_seeds_pointer < len(player_seeds):
+                if balance > 0:
+                    output.append(chain_no_seeds[chain_no_seeds_pointer])
+                    chain_no_seeds_pointer += 1
+                    balance -= 1
+                elif balance <= 0:
+                    output.append(player_seeds[player_seeds_pointer])
+                    balance += increase_factor
+                    player_seeds_pointer += 1
+            return output + chain_no_seeds[chain_no_seeds_pointer:] + player_seeds[player_seeds_pointer:]
+
         def new_unique_chain(abort_after=1000):
             chain = [p for p in players]
-            random.shuffle(chain)
+            chain = seed_shuffle(chain)
             tries = 0
+            last_chain = chain
             while any((a, b) in claimed_combos or (b, a) in claimed_combos
                       for (a, b) in zip(chain, chain[1:] + [chain[0]])):
                 if tries >= abort_after:
                     raise FailedToCreateChainException()
-                random.shuffle(chain)
+                chain = seed_shuffle(chain)
                 tries += 1
 
             for (a, b) in zip(chain, chain[1:] + [chain[0]]):
@@ -123,21 +187,41 @@ class TargetingPlugin(AbstractPlugin):
         events = [e_model for e_model in EVENTS_DATABASE.events.values()]
         events.sort(key=lambda e: e._Event__secret_id)
 
-        # NO USE OF RANDOM AFTER THIS POINT WITHOUT RE-SEEDING.
+        # NO USE OF RANDOM AFTER THIS POINT WITHOUT RE-SEEDING (random.seed).
+        player_seeds_set = set(player_seeds)
 
         for e in events:
             deaths = [victim for (_, victim) in e.kills]
 
             # try to fix with triangle elimination
             # this function has side effects
-            success = self.update_graph(targeting_graph, targeters_graph, deaths)
+            success = self.update_graph(targeting_graph, targeters_graph, deaths, player_seeds_set)
             if success:
                 continue
 
-            success = self.update_graph(targeting_graph, targeters_graph, deaths, allow_mutual_targets=True)
+            success = self.update_graph(
+                targeting_graph,
+                targeters_graph,
+                deaths,
+                player_seeds_set,
+                allow_mutual_seed_targets=True
+            )
+
             if success:
-                print("[TARGETING] WARNING: An unavoidable targeting graph collapse has lead to two assassins"
-                      " targeting each other.")
+                print("[TARGETING] WARNING: Seeding has been violated due to an unavoidable graph collapse.")
+                continue
+
+            success = self.update_graph(
+                targeting_graph,
+                targeters_graph,
+                deaths,
+                player_seeds_set,
+                allow_mutual_seed_targets=True,
+                allow_mutual_targets=True
+            )
+
+            if success:
+                print("[TARGETING] WARNING: Two assassins target each other due to an unavoidable graph collapse.")
                 continue
 
             print("[TARGETING] CRITICAL: The targeting graph 3-targets 3-targeting invariant cannot be maintained."
@@ -151,7 +235,10 @@ class TargetingPlugin(AbstractPlugin):
             targeting_graph: Dict[str, List[str]],
             targeters_graph: Dict[str, List[str]],
             deaths: List[str],
-            allow_mutual_targets: bool = False
+            player_seeds: Set[str],
+            allow_mutual_seed_targets: bool = False,
+            allow_mutual_targets: bool = False,
+            limit_checks=1000000
     ) -> bool:
         """
         Updates the targeting graph given a list of deaths.
@@ -173,7 +260,16 @@ class TargetingPlugin(AbstractPlugin):
 
         # to generate-and-test all matchings, we can permute one list and zip it with the second
         new_targets: List[Tuple[str, str]]
+        checks = 0
         for targeters_permutation in itertools.permutations(targeters):
+            # events with a huge number of deaths can be spiral badly in extremely rare edge cases
+            # thanks to the factorial function, so I've put in a check to abort instead of stalling
+            if checks > limit_checks:
+                print("[TARGETING] WARNING: Aborted search check due to excessive depth. This can happen if you added "
+                      "many deaths in one event, and only exists as a safety check to avoid the app stalling.")
+                return False
+            checks += 1
+
             # list of [(targeter, targeted), (a, b), ...]
             new_targets = list(zip(targeters_permutation, targeting))
 
@@ -221,6 +317,17 @@ class TargetingPlugin(AbstractPlugin):
                 any_clashes = False
                 for (a, b) in new_targets:
                     if any(a in targeting_graph[p] for p in targeting_graph[b]):
+                        any_clashes = True
+                        break
+                if any_clashes:
+                    continue
+
+            # Constraint 5: limit mutual seed targeting
+                # ideally, we try to avoid two seeds targeting each other
+            if not allow_mutual_seed_targets:
+                any_clashes = False
+                for (a, b) in new_targets:
+                    if a in player_seeds and b in player_seeds:
                         any_clashes = True
                         break
                 if any_clashes:

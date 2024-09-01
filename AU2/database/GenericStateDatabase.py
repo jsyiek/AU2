@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Any
 
 from dataclasses_json import dataclass_json
 
@@ -22,7 +22,7 @@ class GenericStateDatabase(PersistentFile):
 
     # arbitrary state dictionaries
     # plugins can leave config parameters here
-    arb_str_state: Dict[str, str] = field(default_factory=dict)
+    arb_state: Dict[str, Any] = field(default_factory=dict)
     arb_int_state: Dict[str, int] = field(default_factory=dict)
 
     WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "GenericState.json")
