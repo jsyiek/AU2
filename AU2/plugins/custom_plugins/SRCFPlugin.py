@@ -49,7 +49,6 @@ DATA
 From: assassins-umpire@srcf.net
 Subject: {SUBJECT}
 {CONTENT}
-
 .
 """
 
@@ -57,6 +56,14 @@ EMAIL_FILE_TEMPLATE = """\
 {EMAILS}
 QUIT
 """
+
+EMAIL_WHO_ARE_YOU_TEMPLATE = """\
+Your details:
+                Name: {NAME}
+             College: {COLLEGE}
+             Address: {ADDRESS}
+Water Weapons Status: {WATER_STATUS}
+               Notes: {NOTES}"""
 
 EMAIL_WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "emails")
 REMOTE_EMAIL_WRITE_LOCATION = ASSASSINS_PATH + "/" + "emails"
@@ -68,12 +75,13 @@ class Email:
         self.content_list = []
         self.send = False
 
-    def add_content(self, content: str, require_send: bool = False):
-        self.content_list.append(content)
-        self.send &= require_send
+    def add_content(self, plugin_name: str, content: str, require_send: bool = False):
+        self.content_list.append((plugin_name, content))
+        self.send |= require_send
 
     def get_content_as_str(self, delimiter="\n\n---------------\n\n"):
-        return delimiter.join(self.content_list)
+        self.content_list.sort(key=lambda t: t[0])
+        return delimiter.join(t[1] for t in self.content_list)
 
 
 @registered_plugin
@@ -129,7 +137,7 @@ class SRCFPlugin(AbstractPlugin):
                 identifier=self.identifier + "_email",
                 display_name="SRCF -> Send emails",
                 producer=self.email_producer,
-                call_order=HookedExport.FIRST
+                call_order=HookedExport.LAST
             )
         ]
 
@@ -218,13 +226,29 @@ class SRCFPlugin(AbstractPlugin):
             message = soft_escape(htmlResponse[self.html_ids["email_message"]])
 
             for email in email_list:
-                email.content_list.insert(
-                    0,
-                    message.replace("[P]", email.recipient.pseudonyms[0]).replace("[N]", email.recipient.real_name)
+                recipient = email.recipient
+                email.add_content(
+                    plugin_name="!!SRCFPlugin",
+                    content=EMAIL_WHO_ARE_YOU_TEMPLATE.format(
+                        NAME=recipient.real_name,
+                        COLLEGE=recipient.college,
+                        ADDRESS=recipient.address,
+                        WATER_STATUS=recipient.water_status,
+                        NOTES=recipient.notes
+                    )
+                )
+                email.add_content(
+                    plugin_name="!SRCFPlugin",
+                    content=message.replace("[P]", email.recipient.pseudonyms[0]).replace("[N]", email.recipient.real_name),
+                    require_send=htmlResponse[self.html_ids["email_require_send"]]
                 )
 
-            if not htmlResponse[self.html_ids["email_require_send"]]:
-                email_list = [e for e in email_list if e.send]
+            email_list = [e for e in email_list if e.send]
+
+            if not email_list:
+                print("[SRCFPlugin] No emails need to be sent, aborting.")
+                return []
+            print(f"[SRCFPlugin] Found {len(email_list)} emails to send.")
 
             email_str_list = [
                 EMAIL_TEMPLATE.format(
@@ -235,7 +259,7 @@ class SRCFPlugin(AbstractPlugin):
             ]
 
             email_file_contents = EMAIL_FILE_TEMPLATE.format(
-                EMAILS="\n".join(email_str_list)
+                EMAILS="".join(email_str_list)
             )
 
             now = datetime.datetime.now()

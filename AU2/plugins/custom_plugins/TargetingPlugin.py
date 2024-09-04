@@ -5,11 +5,31 @@ from typing import Tuple, Dict, List, Set
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.model import Event
+from AU2.html_components import HTMLComponent
 from AU2.html_components.IntegerEntry import IntegerEntry
 from AU2.html_components.Label import Label
 from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.custom_plugins.SRCFPlugin import Email
+
+EMAIL_TARGETS_TEMPLATE = """\
+Your targets are:
+
+{TARGET1}
+
+{TARGET2}
+
+{TARGET3}
+"""
+
+EMAIL_SINGLE_TARGET_TEMPLATE = """\
+Name: {NAME}
+College: {COLLEGE}
+Address: {ADDRESS}
+Water Weapons Status: {WATER_STATUS}
+Notes: {NOTES}"""
 
 
 class FailedToCreateChainException(Exception):
@@ -58,12 +78,64 @@ class TargetingPlugin(AbstractPlugin):
             "Random Seed": self.identifier + "_random_seed"
         }
 
+    def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
+        if hook == "SRCFPlugin_email":
+            # if graph computation time becomes an issue, we could yield the `last_graph` and then compute
+            # current_graph without needing to recompute
+            last_emailed_event = int(GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("last_emailed_event", -1))
+            last_graph = self.compute_targets(max_event=last_emailed_event)
+            current_graph = self.compute_targets()
+
+            if not current_graph:
+                return []
+
+            email_list: List[Email] = data
+            for email in email_list:
+                assassin = email.recipient
+                target_strs = []
+                if assassin.identifier not in current_graph:
+                    continue
+                for target_identifier in current_graph[assassin.identifier]:
+                    target_assassin = ASSASSINS_DATABASE.assassins[target_identifier]
+                    target_strs.append(
+                        EMAIL_SINGLE_TARGET_TEMPLATE.format(
+                            NAME=target_assassin.real_name,
+                            COLLEGE=target_assassin.college,
+                            ADDRESS=target_assassin.address,
+                            WATER_STATUS=target_assassin.water_status,
+                            NOTES=target_assassin.notes
+                        )
+                    )
+
+                email_content = EMAIL_TARGETS_TEMPLATE.format(
+                    TARGET1=target_strs[0],
+                    TARGET2=target_strs[1],
+                    TARGET3=target_strs[2]
+                )
+
+                # only send email if targets for this user have changed
+                targets_changed = any(a not in current_graph[assassin.identifier] for a in last_graph[assassin.identifier])
+                targets_changed |= len(current_graph[assassin.identifier]) != len(last_graph[assassin.identifier])
+                targets_changed |= last_emailed_event == -1 # we haven't emailed anything yet
+
+                email.add_content(
+                    plugin_name="TargetingPlugin",
+                    content=email_content,
+                    require_send=targets_changed
+                )
+
+            if EVENTS_DATABASE.events:
+                max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
+                GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
+            return []
+        return []
+
     def ask_set_seeds(self):
         return [
             SelectorList(
                 identifier=self.html_ids["Seeds"],
                 title="Choose which assassins should be seeded",
-                options=list(ASSASSINS_DATABASE.assassins),
+                options=sorted(list(ASSASSINS_DATABASE.assassins)),
                 defaults=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
             )
         ]
@@ -83,7 +155,8 @@ class TargetingPlugin(AbstractPlugin):
         ]
 
     def answer_set_random_seed(self, htmlResponse):
-        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["random_seed"] = htmlResponse[self.html_ids["Random Seed"]]
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["random_seed"] = htmlResponse[
+            self.html_ids["Random Seed"]]
         self.seed = htmlResponse[self.html_ids["Random Seed"]]
         return [Label(f"[TARGETING] Set random seed to: {self.seed}")]
 
@@ -100,7 +173,7 @@ class TargetingPlugin(AbstractPlugin):
             print(f"Total alive players: {len(graph.keys())}")
         return []
 
-    def compute_targets(self):
+    def compute_targets(self, max_event=100000000000000000):
         """
         Deterministically computes the targeting graph given current events.
 
@@ -147,7 +220,7 @@ class TargetingPlugin(AbstractPlugin):
             random.shuffle(player_seeds)
 
             output = []
-            increase_factor = len(chain_no_seeds)/len(player_seeds)
+            increase_factor = len(chain_no_seeds) / len(player_seeds)
             player_seeds_pointer = 0
             chain_no_seeds_pointer = 0
             balance = 0
@@ -213,6 +286,9 @@ class TargetingPlugin(AbstractPlugin):
         player_seeds_set = set(player_seeds)
 
         for e in events:
+            if int(e._Event__secret_id) > max_event:
+                break
+
             deaths = [victim for (_, victim) in e.kills]
 
             # try to fix with triangle elimination
@@ -278,7 +354,7 @@ class TargetingPlugin(AbstractPlugin):
 
         # we assume as a precondition the "3-targeters, 3-targeting" invariant.
         # this guarantees len(targeters) == len(targeting)
-        assert(len(targeters) == len(targeting))
+        assert (len(targeters) == len(targeting))
 
         # to generate-and-test all matchings, we can permute one list and zip it with the second
         new_targets: List[Tuple[str, str]]
@@ -322,9 +398,9 @@ class TargetingPlugin(AbstractPlugin):
                     continue
 
             # Constraint 4: no triangles are formed
-                # (a triangle is any targeting of players (eg) Vendetta, OHare, and O-Ren Ishii such that
-                # Vendetta targets OHare targets O-Ren Ishii targets Vendetta
-                # V -> OH -> OR -> V)
+            # (a triangle is any targeting of players (eg) Vendetta, OHare, and O-Ren Ishii such that
+            # Vendetta targets OHare targets O-Ren Ishii targets Vendetta
+            # V -> OH -> OR -> V)
             # Ignore conditions: allow_mutual_targets=True
             if not allow_mutual_targets:
                 # precondition: assume triangle elimination has been performed up to this point.
@@ -345,7 +421,7 @@ class TargetingPlugin(AbstractPlugin):
                     continue
 
             # Constraint 5: limit mutual seed targeting
-                # ideally, we try to avoid two seeds targeting each other
+            # ideally, we try to avoid two seeds targeting each other
             if not allow_mutual_seed_targets:
                 any_clashes = False
                 for (a, b) in new_targets:
@@ -373,4 +449,3 @@ class TargetingPlugin(AbstractPlugin):
 
             return True
         return False
-

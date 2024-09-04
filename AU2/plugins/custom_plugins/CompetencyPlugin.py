@@ -16,6 +16,7 @@ from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.custom_plugins.SRCFPlugin import Email
 from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, DEFAULT_START_COMPETENCY, \
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
@@ -107,6 +108,35 @@ class CompetencyPlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_int_state[self.plugin_state["GAME START"]] = new_game_start
         GENERIC_STATE_DATABASE.arb_int_state[self.plugin_state["DEFAULT"]] = new_val
         return [Label(f"[COMPETENCY] Updated game start to {new_game_start} and extension to {new_val}")]
+
+    def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
+        if hook == "SRCFPlugin_email":
+            events = EVENTS_DATABASE.events
+            competency_manager = CompetencyManager(game_start=get_game_start())
+            death_manager = DeathManager()
+            for e in events.values():
+                competency_manager.add_event(e)
+                death_manager.add_event(e)
+
+            now = datetime.datetime.now()
+            email_list: List[Email] = data
+            for email in email_list:
+                recipient = email.recipient
+                if recipient.is_police:
+                    continue
+                if competency_manager.is_inco_at(recipient, now):
+                    content = "It would seem you've become incompetent. You might wish to change that.\nIn order to " \
+                              "regain competency, you must make a kill, or two attempted kills, or assist two " \
+                              "attempts by another (or some combination thereof)."
+                else:
+                    deadline_str = competency_manager.deadlines[recipient.identifier].strftime("%Y-%m-%d %H:%M:%s")
+                    content = f"Your competence deadline is at: {deadline_str}"
+                email.add_content(
+                    self.identifier,
+                    content=content,
+                    require_send=False
+                )
+        return []
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [

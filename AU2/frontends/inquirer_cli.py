@@ -33,7 +33,6 @@ from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS
 
-
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 
@@ -99,15 +98,13 @@ def render(html_component, dependency_context={}):
                     # we can guarantee the necessary context is at front of Dependency
                     needed = html_component.htmlComponents[0]
                     # if this fails check the sorting function (merge_dependency)
-                    assert(needed.identifier == html_component.dependentOn)
+                    assert (needed.identifier == html_component.dependentOn)
                     out = render(needed, dependency_context)
                     new_dependency = dependency_context.copy()
                     new_dependency.update(out)
                 elif iteration > 0:
                     h = html_component.htmlComponents[iteration]
-                    print(f"COMPONENT: {h}")
                     if isinstance(h, Label) and last_step == -1:
-                        print("backing")
                         iteration -= 1
                         continue
                     value = render(h, new_dependency)
@@ -147,7 +144,7 @@ def render(html_component, dependency_context={}):
                         message=f"{player}: Choose pseudonym",
                         choices=choices,
                         default=html_component.default.get(player, "")
-                )]
+                    )]
                 pseudonym = inquirer_prompt_with_abort(q)["q"]
             else:
                 pseudonym = choices[0]
@@ -158,7 +155,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentReportEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert(dependent in dependency_context)
+        assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "skip": True}
@@ -166,7 +163,7 @@ def render(html_component, dependency_context={}):
             name="q",
             message="Reports (select players with reports)",
             choices=list(assassins_mapping.keys()),
-            default=list(a[0] for a in html_component.default) # default: List[Tuple[str, int, str]]
+            default=list(a[0] for a in html_component.default)  # default: List[Tuple[str, int, str]]
         )]
         reporters = inquirer_prompt_with_abort(q)["q"]
         results = []
@@ -176,7 +173,8 @@ def render(html_component, dependency_context={}):
         if assassins_mapping:
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
-            print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
+            print(
+                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
             print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
             print("    [NX] Renders real name of assassin with ID X (if in the event)")
             print("ASSASSIN IDENTIFIERS")
@@ -197,7 +195,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentKillEntry):
         dependent = html_component.assassins_list_identifier
-        assert(dependent in dependency_context)
+        assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "skip": True}
@@ -226,7 +224,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentCrimeEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert(dependent in dependency_context)
+        assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
@@ -234,7 +232,7 @@ def render(html_component, dependency_context={}):
             name="q",
             message=html_component.title,
             choices=list(assassins_mapping.keys()),
-            default=list(html_component.default.keys()) # default: Dict[str, int]
+            default=list(html_component.default.keys())  # default: Dict[str, int]
         )]
         assassins = inquirer_prompt_with_abort(q)["q"]
         results = {}
@@ -269,7 +267,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentSelector):
         dependent = html_component.pseudonym_list_identifier
-        assert(dependent in dependency_context)
+        assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "skip": True}
@@ -285,7 +283,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentFloatEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert(dependent in dependency_context)
+        assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
@@ -311,7 +309,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentIntegerEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert(dependent in dependency_context)
+        assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
@@ -338,7 +336,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentTextEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert(dependent in dependency_context)
+        assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
@@ -413,19 +411,21 @@ def render(html_component, dependency_context={}):
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, LargeTextEntry):
-        q = [inquirer.Editor(name=html_component.identifier, message=html_component.title, default=html_component.default)]
+        q = [inquirer.Editor(name=html_component.identifier, message=html_component.title,
+                             default=html_component.default)]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
         q = [inquirer.List(
-                name=html_component.identifier,
-                message=html_component.title,
-                choices=html_component.options,
-                default=html_component.selected)]
+            name=html_component.identifier,
+            message=html_component.title,
+            choices=html_component.options,
+            default=html_component.selected)]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, DefaultNamedSmallTextbox):
-        q = [inquirer.Text(name=html_component.identifier, message=html_component.title, default=html_component.default)]
+        q = [
+            inquirer.Text(name=html_component.identifier, message=html_component.title, default=html_component.default)]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, ArbitraryList):
@@ -473,7 +473,7 @@ def render(html_component, dependency_context={}):
 def move_dependent_to_front(dependency: Dependency) -> None:
     # only the required element should have score False(=0) (and the rest True(=1))
     dependency.htmlComponents.sort(key=lambda h: h.identifier != dependency.dependentOn)
-    assert(dependency.htmlComponents[0].identifier == dependency.dependentOn)
+    assert (dependency.htmlComponents[0].identifier == dependency.dependentOn)
 
 
 def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]:
@@ -502,9 +502,38 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
 def main():
     while True:
         exports = []
+        core_plugin = PLUGINS["CorePlugin"]
         for p in PLUGINS:
             exports += p.exports
-        q = [inquirer.List(name="mode", message="Select mode", choices=["Exit"] + sorted([e.display_name for e in exports]))]
+
+        for p in PLUGINS:
+            for hooked_export in p.hooked_exports:
+
+                # hideous disgusting lambda scoping rules means we have to do awful
+                # terrible no good very bad shenanigans to get the lambdas to correctly
+                # bind the values. ew!
+                exports.append(
+                    Export(
+                        "core_plugin_hook_" + hooked_export.identifier,
+                        hooked_export.display_name,
+                        lambda export_identifier=hooked_export.identifier: core_plugin.ask_custom_hook(export_identifier),
+                        lambda htmlResponse,
+                               identifier=p.identifier,
+                               export_identifier=hooked_export.identifier,
+                               producer_function=hooked_export.producer,
+                               call_first=hooked_export.call_first:
+                            core_plugin.answer_custom_hook(
+                                export_identifier,
+                                htmlResponse,
+                                data=producer_function(htmlResponse),
+                                call_first=call_first,
+                                hook_owner=identifier
+                            )
+                    )
+                )
+
+        q = [inquirer.List(name="mode", message="Select mode",
+                           choices=["Exit"] + sorted([e.display_name for e in exports]))]
         try:
             a = inquirer_prompt_with_abort(q)["mode"]
         except KeyboardInterrupt:
@@ -523,7 +552,8 @@ def main():
         qs = []
         i = 0
         for f in exp.options_functions:
-            qs.append(inquirer.List(name=i, choices=["*EXIT*"] + f(), ignore=lambda x: any(a[j] == "*EXIT*" for j in range(i))))
+            qs.append(inquirer.List(name=i, choices=["*EXIT*"] + f(),
+                                    ignore=lambda x: any(a[j] == "*EXIT*" for j in range(i))))
             i += 1
         if qs:
             try:
@@ -565,7 +595,7 @@ def main():
             print("Saving databases...")
             ASSASSINS_DATABASE.save()
             EVENTS_DATABASE.save()
-            GENERIC_STATE_DATABASE.save() # utility database
+            GENERIC_STATE_DATABASE.save()  # utility database
 
 
 if __name__ == "__main__":

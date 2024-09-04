@@ -45,7 +45,12 @@ class GenericStateDatabase(PersistentFile):
         """
         Forces a refresh of underlying state
         """
-        self.uniqueId = self.load().uniqueId
+        loaded = self.load()
+        self.uniqueId = loaded.uniqueId
+        # there is no need to refresh the plugin map
+        # self.plugin_map = loaded.plugin_map
+        self.arb_state = loaded.arb_state
+        self.arb_int_state = loaded.arb_int_state
 
 
 GENERIC_STATE_DATABASE = GenericStateDatabase.load()

@@ -23,14 +23,12 @@ from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.util.game import get_game_start, set_game_start
 
-# Add plugins here
-# Note that importing this dictionary and adding to it will NOT necessarily
-# make it a functional plugin! Don't do this!
+
 AVAILABLE_PLUGINS = {}
 
 
@@ -38,8 +36,6 @@ def registered_plugin(plugin_class):
     plugin = plugin_class()
     AVAILABLE_PLUGINS[plugin.identifier] = plugin
 
-    if plugin.identifier == "CorePlugin":
-        plugin._refresh_hooks()
 
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):
     name = os.path.splitext(os.path.basename(file))[0]
@@ -174,21 +170,6 @@ class CorePlugin(AbstractPlugin):
                 self.answer_set_game_start
             )
         ]
-
-    def _refresh_hooks(self):
-        for p in PLUGINS:
-            for hooked_export in p.hooked_exports:
-                if hooked_export.identifier in self.hooks:
-                    continue
-                self.exports.append(
-                    Export(
-                        "core_plugin_hook_" + hooked_export.identifier,
-                        hooked_export.display_name,
-                        lambda: self.ask_custom_hook(hooked_export.identifier),
-                        lambda htmlResponse: self.answer_custom_hook(hooked_export.identifier, htmlResponse)
-                    )
-                )
-                self.hooks[hooked_export.identifier] = hooked_export
 
     def on_assassin_request_create(self):
         html = [
@@ -405,16 +386,13 @@ class CorePlugin(AbstractPlugin):
             components += p.on_request_hook_respond(hook)
         return components
 
-    def answer_custom_hook(self, hook: str, htmlResponse) -> List[HTMLComponent]:
+    def answer_custom_hook(self, hook: str, htmlResponse, data, call_first: bool, hook_owner: str) -> List[HTMLComponent]:
         """
         Allows Plugins to expose global hooks
         """
         components = []
-        hooked_export = self.hooks[hook]
-        data = hooked_export.producer(htmlResponse)
-        hook_owner = hooked_export.plugin_name
 
-        if hooked_export.call_first:
+        if call_first:
             PLUGINS.plugins[hook_owner].on_hook_respond(hook, htmlResponse, data)
 
         for p in PLUGINS:
@@ -422,7 +400,7 @@ class CorePlugin(AbstractPlugin):
                 continue
             components += p.on_hook_respond(hook, htmlResponse, data)
 
-        if not hooked_export.call_first:
+        if not call_first:
             PLUGINS.plugins[hook_owner].on_hook_respond(hook, htmlResponse, data)
 
         return components
