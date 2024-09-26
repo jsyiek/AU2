@@ -148,6 +148,8 @@ class SRCFPlugin(AbstractPlugin):
             "email": self.identifier + "_email"
         }
 
+        self.config_exports = []
+
     @property
     def exports(self):
         """
