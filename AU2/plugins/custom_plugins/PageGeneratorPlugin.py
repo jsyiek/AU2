@@ -55,7 +55,7 @@ DEAD_COLS = [
 ]
 
 
-INCO_COLORS = [
+INCO_COLS = [
     "#FFC0CB",  # Light Pink
     "#FFB6C1",  # Light Pink 2
     "#FF69B4",  # Hot Pink
@@ -66,6 +66,21 @@ INCO_COLORS = [
     "#FF82AB",  # Light Pink 3
     "#FF007F",  # Bright Pink
     "#FF85B2"   # Ultra Pink
+]
+
+POLICE_COLS = [
+    "#FF5733",
+    "#7433FF",
+    "#03D11C",
+    "#0066CC",
+]
+
+DEAD_POLICE_COLS = [
+    "#000066"
+]
+
+CORRUPT_POLICE_COLS = [
+    "#9999CC"
 ]
 
 HEAD_HEADLINE_TEMPLATE = """
@@ -148,14 +163,19 @@ class PageGeneratorPlugin(AbstractPlugin):
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=hidden),
         ]
 
-    def get_color(self, pseudonym: str, dead: bool=False, incompetent: bool=False) -> str:
+    def get_color(self, pseudonym: str, dead: bool=False, incompetent: bool=False, is_police: bool=False) -> str:
         ind = zlib.adler32(pseudonym.encode(encoding="utf-32"))
         if dead:
-            return DEAD_COLS[ind % len(DEAD_COLS)]
+            if is_police:
+                return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
+            else:
+                return DEAD_COLS[ind % len(DEAD_COLS)]
         if incompetent:
-            return INCO_COLORS[ind % len(INCO_COLORS)]
+            return INCO_COLS[ind % len(INCO_COLS)]
         if pseudonym in HARDCODED_COLORS:
             return HARDCODED_COLORS[pseudonym]
+        if is_police:
+            return POLICE_COLS[ind % len(POLICE_COLS)]
         return HEX_COLS[ind % len(HEX_COLS)]
 
     def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str) -> str:
@@ -209,7 +229,8 @@ class PageGeneratorPlugin(AbstractPlugin):
                 color = self.get_color(
                     pseudonym,
                     dead=death_manager.is_dead(assassin_model),
-                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime)
+                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
+                    is_police=assassin_model.is_police
                 )
                 headline = self.substitute_pseudonyms(headline, pseudonym, assassin_model, color)
 
@@ -226,7 +247,8 @@ class PageGeneratorPlugin(AbstractPlugin):
                 color = self.get_color(
                     pseudonym,
                     dead=death_manager.is_dead(assassin_model),
-                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime)
+                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
+                    is_police=assassin_model.is_police
                 )
 
                 painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
