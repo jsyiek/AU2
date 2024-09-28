@@ -104,7 +104,7 @@ def render(html_component, dependency_context={}):
                     new_dependency.update(out)
                 elif iteration > 0:
                     h = html_component.htmlComponents[iteration]
-                    if isinstance(h, Label) and last_step == -1:
+                    if h.noInteraction and last_step == -1:
                         iteration -= 1
                         continue
                     value = render(h, new_dependency)
@@ -574,7 +574,7 @@ def main():
             try:
                 if iteration == -1:
                     break
-                if last_step == -1 and isinstance(components[iteration], Label):
+                if last_step == -1 and components[iteration].noInteraction:
                     iteration -= 1
                     continue
                 result = render(components[iteration])
