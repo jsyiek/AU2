@@ -10,6 +10,9 @@ class HTMLComponent:
 
     name = "abstract_HTMLComponent"
 
+    # whether a component requires user interaction (no: label, yes: textbox)
+    noInteraction = False
+
     def __init__(self):
         self.__decoders[self.name] = self.__class__
 

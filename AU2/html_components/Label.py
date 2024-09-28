@@ -6,6 +6,7 @@ from AU2.html_components import HTMLComponent
 class Label(HTMLComponent):
 
     name = "Label"
+    noInteraction: bool = True
 
     def __init__(self, title: str):
         self.identifier = "Label" # needed for compatibility but not strictly relevant

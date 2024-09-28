@@ -5,6 +5,7 @@ from AU2.html_components import HTMLComponent
 
 class HiddenTextbox(HTMLComponent):
     name: str = "HiddenTextbox"
+    noInteraction: bool = True
 
     def __init__(self, identifier: str, default: str):
         self.identifier = identifier
