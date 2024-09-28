@@ -225,7 +225,6 @@ class PageGeneratorPlugin(AbstractPlugin):
 
                 # TODO: Wanted coloring
                 # TODO: Incompetent coloring
-                # TODO: Police coloring
                 color = self.get_color(
                     pseudonym,
                     dead=death_manager.is_dead(assassin_model),
