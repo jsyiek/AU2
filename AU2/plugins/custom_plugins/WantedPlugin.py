@@ -14,31 +14,48 @@ from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.WantedManager import WantedManager
+
+PLAYER_TABLE_TEMPLATE = """
+<p xmlns="">
+    This is the <b>List of Wanted players</b>.
+</p>
+<table xmlns="" class="playerlist">
+    <tr><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
+    {ROWS}
+</table>
+"""
 
 
-PLAYER_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
-<tr><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
-{ROWS}
-</table>"""
-
-
-POLICE_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
-<tr><th>Rank</th><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
-{ROWS}
-</table>"""
+POLICE_TABLE_TEMPLATE = """
+<p xmlns="">
+    Those that were corrupted by the dark side of the police force....
+</p>
+<table xmlns="" class="playerlist">
+    <tr><th>Rank</th><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
+    {ROWS}
+</table>
+"""
 
 PLAYER_TABLE_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{CRIME}</td><td>{REDEMPTION}</td><td>{NOTES}</td></tr>"
 POLICE_TABLE_ROW_TEMPLATE = "<tr><td>{RANK}</td><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{CRIME}</td><td>{REDEMPTION}</td><td>{NOTES}</td></tr>"
 
 
-DEAD_PLAYER_TABLE_TEMPLATE = """<table xmlns="" class="playerlist">
-<tr><th>Name</th><th>Pseudonym</th><th>Crime</th></tr>
-{ROWS}
-</table>"""
-
+DEAD_PLAYER_TABLE_TEMPLATE = """
+<p xmlns="">
+    Inevitably, this happens....
+</p>
+<table xmlns="" class="playerlist">
+    <tr><th>Name</th><th>Pseudonym</th><th>Crime</th></tr>
+    {ROWS}
+</table>
+"""
 
 DEAD_PLAYER_TABLE_ROW_TEMPLATE = """<tr><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{CRIME}</td></tr>"""
 
+NO_WANTED_PLAYERS = """<p xmlns="">Nobody has gone Wanted yet. What a bunch of law-abiding assassins.</p>"""
+NO_DEAD_WANTED_PLAYERS = """<p xmlns="">No Wanted players have been killed... yet.</p>"""
 
 WANTED_PAGE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r") as F:
@@ -56,15 +73,6 @@ class WantedPlugin(AbstractPlugin):
         self.event_html_ids = {
             "Wanted": self.identifier + "_wanted"
         }
-
-        self.exports = [
-            Export(
-                "generate_page_wanted",
-                "Generate page -> Wanted",
-                self.ask_generate_page,
-                self.answer_generate_page
-            ),
-        ]
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
@@ -102,21 +110,37 @@ class WantedPlugin(AbstractPlugin):
         e.pluginState[self.identifier] = htmlResponse[self.event_html_ids["Wanted"]]
         return [Label("[WANTED] Success!")]
 
-    def ask_generate_page(self) -> List[HTMLComponent]:
-        return [Label("[WANTED] Preparing...")]
-
-    def answer_generate_page(self, _) -> List[HTMLComponent]:
+    """def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
 
         # sort by datetime to ensure we read events in chronological order
         # (umpires messing with event timings could affect the canon timeline!)
         events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
 
-        wanted_players = {}
-        wanted_police = {}
-        dead_players = {}
-        dead_police = {} # currently unused - keeping it calculated incase we want to display dead wanted police
+        now = datetime.datetime.now()
 
-        # maps ID to datetime of expiry and (duration, crime, redemption)
+        wanted_manger = WantedManager()
+        death_manager = DeathManager(perma_death=True)
+
+        for e in events:
+            wanted_manger.add_event(e)
+            death_manager.add_event(e)
+
+        current_wanted_players = wanted_manger.get_wanted_players(now)
+        wanted_players = [player for player in current_wanted_players if not player.is_police and not death_manager.is_dead(player)]
+        wanted_police = [player for player in current_wanted_players if player.is_police and not death_manager.is_dead(player)]
+        '''dead_players = [(player, death_manager.get_death_timings(player)[0]) for player in ASSASSINS_DATABASE.get(death_manager.get_dead() 
+                        if not player.is_police and wanted_manger.is_wanted_at(player, death_manager.get_death_timings(player)[0])]'''
+        dead_police = []
+        # Support for police dying multiple times
+        # Intentionally has multiple copies of police if they die while corrupt multiple times
+        for id in death_manager.get_dead():
+            player = ASSASSINS_DATABASE.get(id)
+            if player.is_police:
+                for time in death_manager.death_timings[player.identifier]:
+                    if wanted_manger.is_wanted_at(player)
+            else:  # Assume regular player's first death is only relevant one
+                pass
+        '''# maps ID to datetime of expiry and (duration, crime, redemption)
         most_recent_wanted: Dict[str, Tuple[datetime.datetime, Tuple[int, str, str]]] = {}
 
         now = datetime.datetime.now()
@@ -125,7 +149,7 @@ class WantedPlugin(AbstractPlugin):
             if name in d:
                 del d[name]
 
-        for e in events:
+        for e in events:  # Might be cleaner to have this in a 'WantedManager'
             for playerID in e.pluginState.get(self.identifier, {}):
                 duration, crime, redemption = e.pluginState[self.identifier][playerID]
                 expiry = e.datetime + datetime.timedelta(days=duration)
@@ -154,48 +178,48 @@ class WantedPlugin(AbstractPlugin):
                         dead_players[victim] = wanted_data
                         silentpop(wanted_players, victim)
 
-        """
-        
-    PLAYER_TABLE_ROW_TEMPLATE = 
-    "<tr><td>{REAL NAME}</td><td>{PSEUDONYMS}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{CRIME}</td><td>{REDEMPTION}</td><td>{NOTES}</td></tr>"
-    POLICE_TABLE_ROW_TEMPLATE = 
-    "<tr><td>{RANK}</td><td>{REAL NAME}</td><td>{PSEUDONYMS}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{CRIME}</td><td>{REDEMPTION}</td><td>{NOTES}</td></tr>"
-        """
         player_rows = []
         police_rows = []
-        dead_player_rows = []
-        for playerID in wanted_players:
-            player = ASSASSINS_DATABASE.get(playerID)
-            (_, crime, redemption) = wanted_players[playerID]
-            player_rows.append(
-                PLAYER_TABLE_ROW_TEMPLATE.format(
-                    REAL_NAME=escape(player.real_name),
-                    PSEUDONYMS=escape(player.all_pseudonyms()),
-                    ADDRESS=escape(player.address),
-                    COLLEGE=escape(player.college),
-                    WATER_STATUS=escape(player.water_status),
-                    CRIME=escape(crime),
-                    REDEMPTION=escape(redemption),
-                    NOTES=escape(player.notes)
-                )
-            )
+        dead_player_rows = []'''
 
-        for playerID in wanted_police:
-            player = ASSASSINS_DATABASE.get(playerID)
-            (_, crime, redemption) = wanted_police[playerID]
-            police_rows.append(
-                POLICE_TABLE_ROW_TEMPLATE.format(
-                    RANK="Police", # TODO: update when police rank plugin implemented
-                    REAL_NAME=escape(player.real_name),
-                    PSEUDONYMS=escape(player.all_pseudonyms()),
-                    ADDRESS=escape(player.address),
-                    COLLEGE=escape(player.college),
-                    WATER_STATUS=escape(player.water_status),
-                    CRIME=escape(crime),
-                    REDEMPTION=escape(redemption),
-                    NOTES=escape(player.notes)
+        tables = []
+        if wanted_players:
+            rows = []
+            for playerID in wanted_players:
+                player = ASSASSINS_DATABASE.get(playerID)
+                (_, crime, redemption) = wanted_players[playerID]
+                rows.append(
+                    PLAYER_TABLE_ROW_TEMPLATE.format(
+                        REAL_NAME=escape(player.real_name),
+                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        ADDRESS=escape(player.address),
+                        COLLEGE=escape(player.college),
+                        WATER_STATUS=escape(player.water_status),
+                        CRIME=escape(crime),
+                        REDEMPTION=escape(redemption),
+                        NOTES=escape(player.notes)
+                    )
                 )
+            tables.append(
+                PLAYER_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
+        if wanted_police:
+            for playerID in wanted_police:
+                player = ASSASSINS_DATABASE.get(playerID)
+                (_, crime, redemption) = wanted_police[playerID]
+                police_rows.append(
+                    POLICE_TABLE_ROW_TEMPLATE.format(
+                        RANK="Police", # TODO: update when police rank plugin implemented
+                        REAL_NAME=escape(player.real_name),
+                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        ADDRESS=escape(player.address),
+                        COLLEGE=escape(player.college),
+                        WATER_STATUS=escape(player.water_status),
+                        CRIME=escape(crime),
+                        REDEMPTION=escape(redemption),
+                        NOTES=escape(player.notes)
+                    )
+                )
 
         for playerID in dead_players:
             player = ASSASSINS_DATABASE.get(playerID)
@@ -227,5 +251,6 @@ class WantedPlugin(AbstractPlugin):
 
         with open(self.WRITE_PATH, "w+") as F:
             F.write(wanted_html)
+            # TODO add year to footer
 
-        return [Label(f"[WANTED] Saved to {self.WRITE_PATH}")]
+        return [Label(f"[WANTED] Saved to {self.WRITE_PATH}")]"""
