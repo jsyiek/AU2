@@ -1,5 +1,3 @@
-import datetime
-
 from collections import defaultdict
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
