@@ -35,6 +35,7 @@ AVAILABLE_PLUGINS = {}
 def registered_plugin(plugin_class):
     plugin = plugin_class()
     AVAILABLE_PLUGINS[plugin.identifier] = plugin
+    return plugin_class
 
 
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):

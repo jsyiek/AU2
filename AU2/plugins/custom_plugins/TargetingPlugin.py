@@ -291,6 +291,11 @@ class TargetingPlugin(AbstractPlugin):
 
             deaths = [victim for (_, victim) in e.kills]
 
+            # filter out police
+            deaths = [d for d in deaths if not ASSASSINS_DATABASE.get(d).is_police]
+            if not deaths:
+                continue
+
             # try to fix with triangle elimination
             # this function has side effects
             success = self.update_graph(targeting_graph, targeters_graph, deaths, player_seeds_set)

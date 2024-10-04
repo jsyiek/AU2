@@ -37,6 +37,10 @@ class AssassinsDatabase(PersistentFile):
         """
         Forces a refresh of the underlying database
         """
+        if self.TEST_MODE:
+            self.assassins = {}
+            return
+
         self.assassins = self.load().assassins
 
 
