@@ -53,7 +53,7 @@ class MockGame:
 
     def new_datetime(self) -> datetime.datetime:
         old_date = self.date
-        self.date = self.date + datetime.timedelta(days=1)
+        self.date = self.date + datetime.timedelta(minutes=1)
         return old_date
 
     def having_assassins(self, names: List[str]) -> "MockGame":
@@ -150,7 +150,8 @@ class ProxyAssassin:
             datetime=self.mockGame.new_datetime(),
             headline="Event Headline",
             reports=[],
-            kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in victims]
+            kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in victims],
+            pluginState={"CompetencyPlugin": {"competency" : {self.__ident(a): 14 for a in self.assassins}}}
         )
         EVENTS_DATABASE.add(e)
 
