@@ -1,5 +1,3 @@
-import pytest
-
 from AU2.plugins.custom_plugins.TargetingPlugin import TargetingPlugin
 from AU2.test.test_utils import plugin_test, some_players, MockGame
 

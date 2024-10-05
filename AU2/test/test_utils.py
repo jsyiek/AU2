@@ -8,6 +8,25 @@ from AU2.database.model.database_utils import refresh_databases
 from AU2.plugins.util import random_data
 
 
+def dummy_event():
+    """
+    assassins: Dict[str, int]
+    datetime: datetime.datetime
+    headline: str
+    reports: List[Tuple[str, int, str]]
+    kills: List[Tuple[str, str]]
+    pluginState: Dict[str, Any] = field(default_factory=dict)
+    """
+    return Event(
+        assassins={},
+        datetime=datetime.datetime.now(),
+        headline="",
+        reports=[],
+        kills={},
+        pluginState={}
+    )
+
+
 def plugin_test(f):
     """
     Wraps a test function with functionality to clear the databases
@@ -35,6 +54,49 @@ def some_players(num: int) -> List[str]:
     if num > len(random_data.all_names):
         raise Exception("Not enough names")
     return random_data.all_names[0:num]
+
+
+class Database:
+
+    @staticmethod
+    def has_assassin(assassin: str):
+        assert assassin + " identifier" in ASSASSINS_DATABASE.assassins, "Not in database"
+        return AssassinValidator(ASSASSINS_DATABASE.assassins[assassin + " identifier"])
+
+    @classmethod
+    def doesnt_have_assassin(cls, assassin: str):
+        assert assassin + " identifier" not in ASSASSINS_DATABASE.assassins, "In database"
+        return cls
+
+    @classmethod
+    def has_no_events(cls):
+        return cls.has_events(0)
+
+    @classmethod
+    def has_events(cls, num: int):
+        assert len(EVENTS_DATABASE.events) == num
+        return cls
+
+class AssassinValidator:
+    def __init__(self, assassin):
+        self.assassin = assassin
+
+    @property
+    def having(self):
+        assassin = self.assassin
+        outer = self
+
+        class Having:
+            def __getattribute__(self, var: str):
+                if var == "having":
+                    return self
+                return lambda expected: outer.check(assassin.__getattribute__(var), expected, self)
+
+        return Having()
+
+    def check(self, actual, expected, having):
+        assert actual == expected
+        return having
 
 
 class MockGame:
