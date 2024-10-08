@@ -83,7 +83,7 @@ class PlayerImporterPlugin(AbstractPlugin):
                     if e == "pseudonym":
                         params["pseudonyms"] = [arg]
                     elif e == "is_police":
-                        params["is_police"] = arg == "yes"
+                        params["is_police"] = arg.lower() == "yes"
                     else:
                         params[e] = arg
                 a = Assassin(**params)
