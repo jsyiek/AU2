@@ -32,6 +32,10 @@ class EventsDatabase(PersistentFile):
         """
         Forces a refresh of the underlying database
         """
+        if self.TEST_MODE:
+            self.events = {}
+            return
+
         self.events = self.load().events
 
 EVENTS_DATABASE = EventsDatabase.load()

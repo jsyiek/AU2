@@ -31,6 +31,11 @@ class Assassin(PersistentFile):
             raise ValueError(f"Tried to initialize {self}, but no pseudonyms were provided!")
         if not self._secret_id:
             self._secret_id = GENERIC_STATE_DATABASE.get_unique_str()
+
+        if self.TEST_MODE:
+            self.identifier = f"{self.real_name} identifier"
+            return
+
         # Don't move this out of __post_init__
         if not self.identifier:
             self.identifier = f"{self.real_name} ({self.pseudonyms[0]}) ID: {self._secret_id}"

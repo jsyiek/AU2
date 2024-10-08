@@ -18,7 +18,6 @@ def set_game_start(date: datetime.datetime):
     GENERIC_STATE_DATABASE.arb_state["game_start"] = date
 
 
-
 def soft_escape(string: str) -> str:
     """
     Escapes only if not prefixed by <!--HTML-->
