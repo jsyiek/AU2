@@ -48,19 +48,7 @@ DEAD_POLICE_TABLE_ROW_TEMPLATE = """
 <tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td></tr>
 """
 
-DEAD_CORRUPT_POLICE_TABLE_TEMPLATE = """
-<p xmlns="">
-    And these are the names of those who turned to the dark side, and paid the price:
-</p>
-<table xmlns="" class="playerlist">
-  <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th></tr>
-  {ROWS}
-</table>
-"""
-
-DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE = """
-<tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td></tr>
-"""
+# Corrupt Police moved to Wanted Page, because it's too annoying to code otherwise.
 
 NO_DEAD_POLICE = """<p xmlns="">No police have been killed... yet.</p>"""
 NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the moment</p>"""
@@ -69,6 +57,7 @@ NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the 
 POLICE_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "police.html"), "r") as F:
     POLICE_PAGE_TEMPLATE = F.read()
+
 
 @registered_plugin
 class PolicePlugin(AbstractPlugin):

@@ -31,7 +31,7 @@ class WantedManager:
          2) `a`'s most recent wanted_event (at `date`) puts them wanted at `date`
         """
         if self.activated:
-            if not self.wanted_events[a.identifier]:
+            if not self.wanted_events.get(a.identifier, False):
                 return False
             most_recent_event = 0
             for i in self.wanted_events[a.identifier]:
