@@ -51,3 +51,4 @@ class PoliceRankManager:
 
     def get_relative_rank(self, a: Assassin):
         return self.assassin_relative_ranks[a.identifier]
+

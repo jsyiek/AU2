@@ -40,7 +40,7 @@ def port_files(source_dir: str, target_dir: str, allowed_filetypes: List[str]):
 def main():
     args = parse_args()
 
-    print(f"Outputting au2-{args.version_name}.zip...")
+    print(f"Outputting au2-v{args.version_name}.zip...")
 
     with tempfile.TemporaryDirectory() as tempdir:
         source_code_path = os.path.join(tempdir, "AU2")
