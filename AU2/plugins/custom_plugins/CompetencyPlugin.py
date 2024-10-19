@@ -189,7 +189,6 @@ class CompetencyPlugin(AbstractPlugin):
             return []
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        print(e.pluginState)
         message = []
         competency_extension = GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual") != "Full Auto":
