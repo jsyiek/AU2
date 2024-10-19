@@ -189,6 +189,7 @@ class CompetencyPlugin(AbstractPlugin):
             return []
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
+        print(e.pluginState)
         message = []
         competency_extension = GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual") != "Full Auto":
@@ -233,7 +234,8 @@ class CompetencyPlugin(AbstractPlugin):
         return message
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
-        # Allow updating event competencies, even if Full Auto enabled
+        # Auto Competency directly modifying event state doesn't play well with modifying events. Hence, modified events
+        # (forgotten kills, etc.) will have to have competency manually added.
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
@@ -249,49 +251,9 @@ class CompetencyPlugin(AbstractPlugin):
         ]
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        message = []
-        competency_extension = GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual") != "Full Auto":
-            e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[
-                self.html_ids["Competency"]]
-
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual") != "Manual":
-            # auto kill competency:
-            for (killer, victim) in e.kills:
-                if not ASSASSINS_DATABASE.get(victim).is_police:
-                    if killer not in e.pluginState[self.identifier][self.plugin_state["COMPETENCY"]]:
-                        # if to avoid overwriting manual entries
-                        message.append(
-                            Label(f"[COMPETENCY] Granted {competency_extension} days competency to {killer} for a kill"))
-                        e.pluginState[self.identifier][self.plugin_state["COMPETENCY"]][killer] = competency_extension
-
-            # auto attempt competency:
-            if GENERIC_STATE_DATABASE.plugin_map.get("AttemptPlugin", False):
-                # Is this reliable? It works, but seems to depend on AttemptPlugin.on_event_create() running before this
-                # If not, how would I do this?
-                events = list(EVENTS_DATABASE.events.values())
-                events.sort(key=lambda j: j.datetime)
-                attempts_since_last_kill = {}
-
-                for event in events:
-                    for i in event.pluginState.get("AttemptPlugin", []):
-                        attempts_since_last_kill.setdefault(i, 0)
-                        attempts_since_last_kill[i] += 1
-                    for (killer, victim) in event.kills:
-                        if not ASSASSINS_DATABASE.get(victim).is_police:
-                            attempts_since_last_kill[killer] = 0
-                            # Rules unclear - should attempts be reset upon competency gain (from a kill)?
-
-                for i in e.pluginState.get("AttemptPlugin"):
-                    if attempts_since_last_kill.get(i, 0) % 2:  # This grants competency for every other attempt
-                        if i not in e.pluginState[self.identifier][self.plugin_state["COMPETENCY"]]:
-                            message.append(
-                                Label(f"[COMPETENCY] Granted {competency_extension} days competency to {i} for attempts"))
-                            e.pluginState[self.identifier][self.plugin_state["COMPETENCY"]][i] = competency_extension
-
-        if not message:
-            message.append(Label("[COMPETENCY] Success!"))
-        return message
+        e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[
+            self.html_ids["Competency"]]
+        return [Label("[COMPETENCY] Success!")]
 
     def on_page_request_generate(self) -> List[HTMLComponent]:
         return [DatetimeEntry(
