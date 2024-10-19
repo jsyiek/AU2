@@ -219,6 +219,7 @@ class PolicePlugin(AbstractPlugin):
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
             return [Label("[POLICE] Didn't need to do anything")]
+
         for player_id, relative_rank in htmlResponse[self.html_ids["Relative Rank"]].items():
             e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
         return [Label("[POLICE] Success!")]

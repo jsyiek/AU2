@@ -16,7 +16,7 @@ class PersistentFile:
 
     def save(self):
         # don't save while doing tests
-        if self.test_mode:
+        if self.TEST_MODE:
             return
         dump = self.to_json()
         with open(self.WRITE_LOCATION, "w+") as F:
