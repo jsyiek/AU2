@@ -9,6 +9,7 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
+from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.DatetimeEntry import DatetimeEntry
 from AU2.html_components.Dependency import Dependency
 from AU2.html_components.InputWithDropDown import InputWithDropDown
@@ -72,15 +73,17 @@ class CompetencyPlugin(AbstractPlugin):
             "Default": self.identifier + "_default",
             "Competency": self.identifier + "_competency",
             "Datetime": self.identifier + "_datetime",
-            "Auto Competency": self.identifier + "_auto_competency"
+            "Auto Competency": self.identifier + "_auto_competency",
+            "Attempts": self.identifier + "_attempts"
         }
 
         self.plugin_state = {
             "GAME START": ID_GAME_START,
             "DEFAULT": ID_DEFAULT_EXTN,
+            "AUTO COMPETENCY": "auto_competency",
+            "ATTEMPT_TRACKING": "attempt_tracking",
             "COMPETENCY": "competency",
-            "Auto Competency": "auto_competency",
-
+            "ATTEMPTS": "attempts"
         }
 
         self.config_exports = [
@@ -95,6 +98,12 @@ class CompetencyPlugin(AbstractPlugin):
                 display_name="Competency -> Change Auto Competency",
                 ask=self.ask_auto_competency,
                 answer=self.answer_auto_competency
+            ),
+            ConfigExport(
+                identifier="CompetencyPlugin_attempt_tracking",
+                display_name="Competency -> Toggle Attempt Tracking",
+                ask=self.ask_toggle_attempt_tracking,
+                answer=self.answer_toggle_attempt_tracking
             )
         ]
 
@@ -126,13 +135,13 @@ class CompetencyPlugin(AbstractPlugin):
                 identifier=self.html_ids["Auto Competency"],
                 title="Select Auto Competency Mode",
                 options=self.AUTO_COMPETENCY_OPTIONS,
-                selected=GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual")
+                selected=GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual")
             )
         ]
 
     def answer_auto_competency(self, htmlResponse):
         mode = htmlResponse[self.html_ids["Auto Competency"]]
-        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["Auto Competency"]] = mode
+        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["AUTO COMPETENCY"]] = mode
         response = [Label(f"[COMPETENCY] Auto Competency Mode set to {mode}")]
         if mode != "Manual" and not GENERIC_STATE_DATABASE.plugin_map.get("AttemptPlugin", False):
             response.append(
@@ -170,8 +179,9 @@ class CompetencyPlugin(AbstractPlugin):
         return []
 
     def on_event_request_create(self) -> List[HTMLComponent]:
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual") != "Full Auto":
-            return [
+        questions = []
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Full Auto":
+            questions.append(
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
                     htmlComponents=[
@@ -184,19 +194,31 @@ class CompetencyPlugin(AbstractPlugin):
                         )
                     ]
                 )
-            ]
-        else:
-            return []
+            )
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT_TRACKING"], False):
+            questions.append(
+                Dependency(
+                    dependentOn="CorePlugin_assassin_pseudonym",
+                    htmlComponents=[
+                        AssassinDependentSelector(
+                            pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                            identifier=self.event_html_ids["Attempts"],
+                            title="ATTEMPTS: Select players who made an attempt or assist",
+                        )
+                    ]
+                )
+            )
+        return questions
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         message = []
         competency_extension = GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual") != "Full Auto":
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Full Auto":
             e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[self.html_ids["Competency"]]
         else:  # Create an empty competency dict when nothing was entered (due to full auto mode)
             e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = {}
 
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["Auto Competency"], "Manual") != "Manual":
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Manual":
             # auto kill competency:
             for (killer, victim) in e.kills:
                 if not ASSASSINS_DATABASE.get(victim).is_police:
