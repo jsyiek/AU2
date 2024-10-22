@@ -2,6 +2,7 @@ import contextlib
 import datetime
 import os
 import re
+import time
 from typing import Optional, List
 
 import inquirer
@@ -19,7 +20,7 @@ from AU2.html_components.HiddenTextbox import HiddenTextbox
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.game import soft_escape
@@ -128,6 +129,13 @@ class SRCFPlugin(AbstractPlugin):
                 "SRCF -> Manual database sync",
                 self.ask_ignore_lock,
                 self.answer_manual_sync
+            ),
+            Export(
+                identifier="SRCFPlugin_raw_page_edit",
+                display_name="SRCF -> Raw page editor",
+                ask=self.ask_raw_page_edit,
+                answer=self.answer_raw_page_edit,
+                options_functions=(self.options_raw_page_edit,),
             )
         ]
 
@@ -149,14 +157,67 @@ class SRCFPlugin(AbstractPlugin):
             "email_subject": self.identifier + "_email_subject",
             "email_message": self.identifier + "_email_message",
             "email_require_send": self.identifier + "_email_require_send",
-            "email_file_name": self.identifier + "_email_file_name"
+            "email_file_name": self.identifier + "_email_file_name",
+            "should_enable_raw_editor": self.identifier + "_raw_editor",
+            "raw_page_contents": self.identifier + "_raw_page_contents",
+            "raw_page_filename": self.identifier + "_raw_page_filename"
         }
 
         self.hooks = {
             "email": self.identifier + "_email"
         }
 
-        self.config_exports = []
+        self.config_exports = [
+            ConfigExport(
+                "Enable Raw Page Editor",
+                "Enable Raw Page Editor",
+                self.ask_enable_raw_page_editor,
+                self.answer_enable_raw_page_editor
+            )
+        ]
+
+    def ask_enable_raw_page_editor(self):
+        def say(x, end="\n"):
+            print(x, end=end)
+            time.sleep(3)
+
+        try:
+            say("I see you want to enable raw page editing. I'm going to make you read some text first.")
+            say("This is not a good idea.")
+            say("It's perfectly safe from a technical point of view, but...")
+            say("it is crucial that umpires know how to access SRCF without AU2.")
+            say("At some point AU2 will break.")
+            say("At some point a computer won't be able to run it.")
+            say("At some point you won't be able to get in touch with me to fix it.")
+            say("At some point you won't want to fix it.")
+            say("You can log into SRCF using ssh. Get in contact with SRCF if you are really stuck.")
+            say("You can get in touch with a CompSci.")
+            say("You can use something like WinSCP or FileZilla to do this over SFTP.")
+            say("If things haven't changed, you can use the following settings for SFTP:")
+            say("username=your CRSid")
+            say("password=your SRCF password")
+            say("url=shell.srcf.net")
+            say("port=22")
+            say("Can you give this a try first please?")
+            say("Please.")
+            say(".", end="")
+            say(".", end="")
+            say(".", end="")
+            say(".", end="")
+            say(".")
+            say("You really want to do this?")
+            say("Ah, well, I hope you aren't making a habit out of this in the future.")
+            say("I hope you know what you're doing.")
+            return [Checkbox(identifier=self.html_ids["should_enable_raw_editor"], title="Enable raw editing?", checked=False)]
+        except KeyboardInterrupt:
+
+            print("Thank you for going back. You made the right choice. Raw page editor will be disabled.")
+            return [HiddenTextbox(identifier=self.html_ids["should_enable_raw_editor"], default=False)]
+
+    def answer_enable_raw_page_editor(self, htmlResponse):
+        result = htmlResponse[self.html_ids["should_enable_raw_editor"]]
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["raw_page_edit"] = bool(result)
+        return [Label(f"[SRCF Plugin] Set raw page edit to: {bool(result)}")]
 
     @property
     def exports(self):
@@ -326,15 +387,51 @@ class SRCFPlugin(AbstractPlugin):
                 )
             ]
 
+    def options_raw_page_edit(self):
+        results = []
+        if GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).get("raw_page_edit", False):
+            with self._get_client() as sftp:
+                for f in sftp.listdir("/public/societies/assassins/public_html"):
+                    if "." in f:
+                        results.append(f)
+        return sorted(results)
+
+    def ask_raw_page_edit(self, filename: str):
+        contents = ""
+        with self._get_client() as sftp:
+            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r") as F:
+                contents = F.read()
+
+        return [
+            HiddenTextbox(
+                identifier=self.html_ids["raw_page_filename"],
+                default=filename
+            ),
+            LargeTextEntry(
+                identifier=self.html_ids["raw_page_contents"],
+                title="Raw content of page",
+                default=contents.decode()
+            )
+        ]
+
+    def answer_raw_page_edit(self, htmlResponse):
+        filename = htmlResponse[self.html_ids["raw_page_filename"]]
+        filepath = f"/public/societies/assassins/public_html/{filename}"
+        contents = htmlResponse[self.html_ids["raw_page_contents"]]
+        with self._get_client() as sftp:
+            with sftp.file(filepath, "w+") as F:
+                F.write(contents)
+        return [Label(f"[SRCFPlugin] Wrote to: {filepath}")]
+
     def answer_lock(self, htmlResponse) -> List[HTMLComponent]:
         """
         Claims a lock.
         """
         if not htmlResponse[self.html_ids["ignore_lock"]]:
-            return [Label("[SRCF Plugin] Aborted.")]
+            return [Label("[SRCFPlugin] Aborted.")]
         with self._get_client() as sftp:
             self._lock(sftp)
-        return [Label("[SRCF Plugin] Claimed lock.")]
+        return [Label("[SRCFPlugin] Claimed lock.")]
 
     def ask_restore_backup(self) -> List[HTMLComponent]:
         with self._get_client() as sftp:
@@ -343,13 +440,13 @@ class SRCFPlugin(AbstractPlugin):
                    InputWithDropDown(
                        identifier=self.html_ids["backup_name"],
                        title="Choose backup to restore",
-                       options=["Exit"] + backups
+                       options=["*EXIT*"] + backups
                    )
                ] + self.ask_ignore_lock()
 
     def answer_restore_backup(self, htmlResponse) -> List[HTMLComponent]:
         chosen_backup = htmlResponse[self.html_ids["backup_name"]]
-        if chosen_backup == "Exit":
+        if chosen_backup == "*EXIT*":
             return [Label("[SRCF Plugin] Aborted.")]
         if not htmlResponse[self.html_ids["ignore_lock"]]:
             return [Label("[SRCF Plugin] Aborted.")]
