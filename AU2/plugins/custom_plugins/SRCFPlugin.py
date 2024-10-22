@@ -179,7 +179,7 @@ class SRCFPlugin(AbstractPlugin):
     def ask_enable_raw_page_editor(self):
         def say(x, end="\n"):
             print(x, end=end)
-            time.sleep(3)
+            time.sleep(4)
 
         try:
             say("I see you want to enable raw page editing. I'm going to make you read some text first.")
@@ -200,11 +200,11 @@ class SRCFPlugin(AbstractPlugin):
             say("port=22")
             say("Can you give this a try first please?")
             say("Please.")
-            say(".", end="")
-            say(".", end="")
-            say(".", end="")
-            say(".", end="")
-            say(".")
+            say("...")
+            say("...")
+            say(".....")
+            say(".....")
+            say("........")
             say("You really want to do this?")
             say("Ah, well, I hope you aren't making a habit out of this in the future.")
             say("I hope you know what you're doing.")
