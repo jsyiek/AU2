@@ -159,6 +159,7 @@ class CompetencyPlugin(AbstractPlugin):
         return [Label("[COMPETENCY] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+        # TODO Make a selector that pre-filters to non-police players
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
