@@ -125,14 +125,14 @@ class WantedPlugin(AbstractPlugin):
 
         now = datetime.datetime.now()
 
-        wanted_manger = WantedManager()
+        wanted_manager = WantedManager()
         death_manager = DeathManager(perma_death=True)
 
         for e in events:
-            wanted_manger.add_event(e)
+            wanted_manager.add_event(e)
             death_manager.add_event(e)
 
-        current_wanted_players = wanted_manger.get_wanted_players(now)
+        current_wanted_players = wanted_manager.get_wanted_players(now)
         wanted_players = [player for player in current_wanted_players if not player.is_police and not death_manager.is_dead(player)]
         wanted_police = [player for player in current_wanted_players if player.is_police and not death_manager.is_dead(player)]
         # TODO Put dead police on the corrupt list if they have been made re-corrupt after dying, I think
@@ -140,21 +140,21 @@ class WantedPlugin(AbstractPlugin):
         dead_police_times = []
         # Support for police dying multiple times
         # Intentionally has multiple copies of police if they die while corrupt multiple times
-        for id in set(death_manager.get_dead()):
-            player = ASSASSINS_DATABASE.get(id)
+        for player_id in set(death_manager.get_dead()):
+            player = ASSASSINS_DATABASE.get(player_id)
             if player.is_police:
-                for time in death_manager.death_timings[id]:
-                    if wanted_manger.is_wanted_at(player, time):
+                for time in death_manager.death_timings[player_id]:
+                    if wanted_manager.is_wanted_at(player, time):
                         dead_police_times.append((player, time))
             else:  # Assume regular player's first death is only relevant one
-                if wanted_manger.is_wanted_at(player, death_manager.death_timings[id][0]):
-                    dead_players_times.append((player, death_manager.death_timings[id][0]))
+                if wanted_manager.is_wanted_at(player, death_manager.death_timings[player_id][0]):
+                    dead_players_times.append((player, death_manager.death_timings[player_id][0]))
 
         tables = []
         if wanted_players:
             rows = []
             for player in wanted_players:
-                (_, crime, redemption) = wanted_manger.get_wanted_player_crime_info(player, now)[1]
+                (_, crime, redemption) = wanted_manager.get_wanted_player_crime_info(player, now)[1]
                 rows.append(
                     PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
@@ -173,7 +173,7 @@ class WantedPlugin(AbstractPlugin):
         if wanted_police:
             rows = []
             for player in wanted_police:
-                (_, crime, redemption) = wanted_manger.get_wanted_player_crime_info(player, now)[1]
+                (_, crime, redemption) = wanted_manager.get_wanted_player_crime_info(player, now)[1]
                 rows.append(
                     POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK="Police",
@@ -195,7 +195,7 @@ class WantedPlugin(AbstractPlugin):
         if dead_players_times:
             rows = []
             for player, time in dead_players_times:
-                (_, crime, _) = wanted_manger.get_wanted_player_crime_info(player, time)[1]
+                (_, crime, _) = wanted_manager.get_wanted_player_crime_info(player, time)[1]
                 rows.append(
                     DEAD_PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
@@ -209,7 +209,7 @@ class WantedPlugin(AbstractPlugin):
         if dead_police_times:  # TODO Make this generate on the police page, as before
             rows = []
             for player, time in dead_police_times:
-                (_, crime, _) = wanted_manger.get_wanted_player_crime_info(player, time)[1]
+                (_, crime, _) = wanted_manager.get_wanted_player_crime_info(player, time)[1]
                 rows.append(
                     DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK="Police",  # TODO Same as above; make ranks work

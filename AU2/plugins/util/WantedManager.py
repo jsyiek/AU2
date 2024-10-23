@@ -9,7 +9,7 @@ from AU2.database.model import Event, Assassin
 
 class WantedManager:
     """
-    Simple manager for wantedness
+    (Not so) Simple manager for wantedness
     """
 
     def __init__(self):
@@ -31,7 +31,7 @@ class WantedManager:
          2) `a`'s most recent wanted_event (at `date`) puts them wanted at `date`
         """
         if self.activated:
-            if not self.wanted_events.get(a.identifier, False):
+            if not self.wanted_events.get(a.identifier, []):
                 return False
             most_recent_event = 0
             for i in self.wanted_events[a.identifier]:

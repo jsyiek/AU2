@@ -3,7 +3,7 @@ from collections import defaultdict
 from AU2.database.model import Event, Assassin
 
 
-class DeathManager:
+class DeathManager:  # TODO Undo changes; reimplemented inside wantedmanager
     def __init__(self, perma_death: bool=True):
         self.perma_death = perma_death
         self.deaths = []
