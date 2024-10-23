@@ -33,31 +33,35 @@ class WantedManager:
     def get_live_wanted_players(self, police=False):
         players = {}
         for player_id in self.wanted_events:
-            if ASSASSINS_DATABASE.get(player_id).is_police == police:
-                last_event = self.wanted_events[player_id][-1]
-                if len(last_event.keys()) == 1:
-                    # if a players last event is a death, then they haven't committed a post-resurrection crime, so ignore
-                    continue
-                # Check most recent event for wanted info. No support for multiple active wanted_events per player
-                if last_event['event_time'] + last_event['wanted_duration'] >= self.current_time:
-                    players[player_id] = {'crime': last_event['crime'], 'redemption': last_event['redemption']}
+            if ASSASSINS_DATABASE.get(player_id).is_police != police:
+                continue
+            last_event = self.wanted_events[player_id][-1]
+            if len(last_event.keys()) == 1:
+                # if a players last event is a death, then they haven't committed a post-resurrection crime, so ignore
+                continue
+            # Check most recent event for wanted info. No support for multiple active wanted_events per player
+            if last_event['event_time'] + last_event['wanted_duration'] >= self.current_time:
+                players[player_id] = {'crime': last_event['crime'], 'redemption': last_event['redemption']}
         return players
 
     def get_wanted_player_deaths(self, police=False):
         wanted_deaths = []
         for player_id in self.wanted_events:
-            if ASSASSINS_DATABASE.get(player_id).is_police == police:
-                for idx, wanted_event in enumerate(self.wanted_events[player_id]):
-                    # if the player died, and the preceding event places them wanted at time of death, then they died while wanted
-                    if len(wanted_event.keys()) == 1 and idx != 0:
-                        preceding_event = self.wanted_events[player_id][idx-1]
-                        if len(preceding_event.keys()) == 1:
-                            continue
-                        if preceding_event['event_time'] + preceding_event['wanted_duration'] >= wanted_event['event_time']:
-                            wanted_deaths.append({
-                                'player_id': player_id,
-                                'crime': preceding_event['crime'],
-                                'death_time': wanted_event['event_time']
-                            })
+            if ASSASSINS_DATABASE.get(player_id).is_police != police:
+                continue
+            for idx, wanted_event in enumerate(self.wanted_events[player_id]):
+                # ignore if not a death event, or it's a death before any wanted events
+                if len(wanted_event.keys()) != 1 or idx == 0:
+                    continue
+                preceding_event = self.wanted_events[player_id][idx-1]
+                # ignore if second death in a row
+                if len(preceding_event.keys()) == 1:
+                    continue
+                if preceding_event['event_time'] + preceding_event['wanted_duration'] >= wanted_event['event_time']:
+                    wanted_deaths.append({
+                        'player_id': player_id,
+                        'crime': preceding_event['crime'],
+                        'death_time': wanted_event['event_time']
+                    })
         return sorted(wanted_deaths, key=lambda x: x['death_time'])
 

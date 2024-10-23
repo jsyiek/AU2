@@ -183,6 +183,7 @@ class WantedPlugin(AbstractPlugin):
                     except IndexError:
                         # Lets the user know if the ranks break due to PolicePlugin.generate_pages not generating new ranks in time.
                         # Could maybe be avoided with a refactor of how ranks work, but I really don't want to do that now
+                        # TODO Refactor policerankmanager to also manage rank names, not just relative numbers
                         rank = '[ERROR]'
                         messages.append(Label("[WANTED] WARNING: Error in police ranks. Generate pages again to fix"))
                 rows.append(
