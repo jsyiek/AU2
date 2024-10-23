@@ -15,7 +15,7 @@ from AU2.html_components.Dependency import Dependency
 from AU2.html_components.InputWithDropDown import InputWithDropDown
 from AU2.html_components.IntegerEntry import IntegerEntry
 from AU2.html_components.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -83,8 +83,18 @@ class CompetencyPlugin(AbstractPlugin):
             "AUTO COMPETENCY": "auto_competency",
             "ATTEMPT TRACKING": "attempt_tracking",
             "COMPETENCY": "competency",
-            "ATTEMPTS": "attempts"
+            "ATTEMPTS": "attempts",
+            "CURRENT DEFAULT": "current_default"
         }
+
+        self.exports = [  # TODO Remove before PR gets merged and I don't have to test everything anymore
+            Export(
+                identifier="competency_test_competency",
+                display_name="Competency -> Test Competency",
+                ask=lambda *args: [],
+                answer=self.answer_test_incos
+            ),
+        ]
 
         self.config_exports = [
             ConfigExport(
@@ -106,6 +116,21 @@ class CompetencyPlugin(AbstractPlugin):
                 answer=self.answer_toggle_attempt_tracking
             )
         ]
+
+    def answer_test_incos(self, _):  # TODO Remove before PR gets merged
+        events = list(EVENTS_DATABASE.events.values())
+        events.sort(key=lambda event: event.datetime)
+        start_datetime: datetime.datetime = get_game_start()
+        auto_competency_bool = False if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"],
+                                                                             "Manual") == "Manual" else True
+
+        competency_manager = CompetencyManager(start_datetime - datetime.timedelta(days=15), auto_competency_bool)
+        for e in events:
+            competency_manager.add_event(e)
+        for i in range(10):
+            print([j.identifier for j in competency_manager.get_incos_at(datetime.datetime.now() + datetime.timedelta(days=i))])
+
+        return []
 
     def set_default_competency_deadline_ask(self):
         return [
@@ -220,6 +245,10 @@ class CompetencyPlugin(AbstractPlugin):
             e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[self.html_ids["Competency"]]
         if self.html_ids["Attempts"] in htmlResponse:
             e.pluginState.setdefault(self.identifier, {})[self.plugin_state["ATTEMPTS"]] = htmlResponse[self.html_ids["Attempts"]]
+        # Store the default competency extension aat the time of the event, in the event
+        # This way auto competency can be calculated dynamically
+        e.pluginState.setdefault(self.identifier, {})[self.plugin_state["CURRENT DEFAULT"]] = \
+            GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
         return [Label("[COMPETENCY] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
@@ -270,9 +299,9 @@ class CompetencyPlugin(AbstractPlugin):
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
-        #auto_competency_bool = False if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") == "Manual" else True
+        auto_competency_bool = False if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") == "Manual" else True
 
-        competency_manager = CompetencyManager(start_datetime)
+        competency_manager = CompetencyManager(start_datetime, auto_competency_bool)
         death_manager = DeathManager(perma_death=True)
         limit = htmlResponse[self.html_ids["Datetime"]]
         for e in events:
