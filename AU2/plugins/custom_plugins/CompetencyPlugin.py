@@ -139,6 +139,7 @@ class CompetencyPlugin(AbstractPlugin):
         return []
 
     def on_event_request_create(self) -> List[HTMLComponent]:
+        # TODO Make a selector that pre-filters to non-police players
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
