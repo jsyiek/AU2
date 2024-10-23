@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from AU2.database.model import Event, Assassin
 
 

@@ -36,7 +36,7 @@ POLICE_TABLE_ROW_TEMPLATE = """
 
 DEAD_POLICE_TABLE_TEMPLATE = """
 <p xmlns="">
-    Killed in the line of duty:
+    Those who underestimated the dangers of constabulary work:
 </p>
 <table xmlns="" class="playerlist">
   <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th></tr>
@@ -48,19 +48,7 @@ DEAD_POLICE_TABLE_ROW_TEMPLATE = """
 <tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td></tr>
 """
 
-DEAD_CORRUPT_POLICE_TABLE_TEMPLATE = """
-<p xmlns="">
-    And these are the names of those who turned to the dark side, and paid the price:
-</p>
-<table xmlns="" class="playerlist">
-  <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th></tr>
-  {ROWS}
-</table>
-"""
-
-DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE = """
-<tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td></tr>
-"""
+# Corrupt Police moved to Wanted Page, because it's too annoying to code otherwise.
 
 NO_DEAD_POLICE = """<p xmlns="">No police have been killed... yet.</p>"""
 NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the moment</p>"""
@@ -69,6 +57,7 @@ NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the 
 POLICE_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "police.html"), "r") as F:
     POLICE_PAGE_TEMPLATE = F.read()
+
 
 @registered_plugin
 class PolicePlugin(AbstractPlugin):
@@ -86,7 +75,7 @@ class PolicePlugin(AbstractPlugin):
             "Default Rank": {'id': self.identifier + "_default_rank", 'default': DEFAULT_POLICE_RANK},  # Int
             "Auto Rank": {'id': self.identifier + "_auto_rank", 'default': AUTO_RANK_DEFAULT},  # Bool
             "Manual Rank": {'id': self.identifier + "_manual_rank", 'default': MANUAL_RANK_DEFAULT},  # Bool
-            "Police Kills Rankup": {'id': self.identifier + "police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT}  # Bool
+            "Police Kills Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT}  # Bool
         }
 
         self.config_exports = [
@@ -134,7 +123,6 @@ class PolicePlugin(AbstractPlugin):
         answer = htmlResponse[self.html_ids['Ranks']].split("\n")
         answer = [i.strip() for i in answer if not i.lstrip().startswith('#')]
         if len(answer) < 3:
-            # TODO check how many ranks minimum are required from event data.
             return [Label("[POLICE] Rename failed - Must have enough ranks")]
 
         default_counter = 0
@@ -254,13 +242,6 @@ class PolicePlugin(AbstractPlugin):
         police: List[Assassin] = [a for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
         dead_police: List[Assassin] = [i for i in police if i.identifier in death_manager.get_dead()]
         alive_police: List[Assassin] = [i for i in police if i not in dead_police]
-        if GENERIC_STATE_DATABASE.plugin_map.get("WantedPlugin", True):  # i.e. we can separate police into dead and corrupt-dead
-            pass
-            # TODO after wanted rewrite
-            '''
-            dead_corrupt_police: List[Assassin] = [i for i in dead_police if i.]
-            dead_non_corrupt_police: List[Assassin]
-            '''
 
         tables = []
         if police:
