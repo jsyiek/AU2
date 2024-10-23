@@ -6,6 +6,7 @@ from typing import List
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
@@ -14,7 +15,8 @@ from AU2.html_components.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
-from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
+    DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
 
 PLAYER_TABLE_TEMPLATE = """
@@ -26,7 +28,6 @@ PLAYER_TABLE_TEMPLATE = """
     {ROWS}
 </table>
 """
-
 
 POLICE_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -118,43 +119,39 @@ class WantedPlugin(AbstractPlugin):
         return [Label("[WANTED] Success!")]
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
-
+        messages = []
         # sort by datetime to ensure we read events in chronological order
         # (umpires messing with event timings could affect the canon timeline!)
         events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
 
         now = datetime.datetime.now()
 
-        wanted_manager = WantedManager()
-        death_manager = DeathManager(perma_death=True)
+        police_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("PolicePlugin", False)
+
+        wanted_manager = WantedManager(current_time=now)
+        if police_ranks_enabled:
+            police_rank_manager = PoliceRankManager(
+                auto_ranking=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get(
+                    "PolicePlugin_auto_rank", AUTO_RANK_DEFAULT),
+                police_kill_ranking=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get(
+                    "PolicePlugin_police_kills_rankup", POLICE_KILLS_RANKUP_DEFAULT)
+            )
+            for e in events:
+                police_rank_manager.add_event(e)
 
         for e in events:
             wanted_manager.add_event(e)
-            death_manager.add_event(e)
 
-        current_wanted_players = wanted_manager.get_wanted_players(now)
-        wanted_players = [player for player in current_wanted_players if not player.is_police and not death_manager.is_dead(player)]
-        wanted_police = [player for player in current_wanted_players if player.is_police and not death_manager.is_dead(player)]
-        # TODO Put dead police on the corrupt list if they have been made re-corrupt after dying, I think
-        dead_players_times = []
-        dead_police_times = []
-        # Support for police dying multiple times
-        # Intentionally has multiple copies of police if they die while corrupt multiple times
-        for player_id in set(death_manager.get_dead()):
-            player = ASSASSINS_DATABASE.get(player_id)
-            if player.is_police:
-                for time in death_manager.death_timings[player_id]:
-                    if wanted_manager.is_wanted_at(player, time):
-                        dead_police_times.append((player, time))
-            else:  # Assume regular player's first death is only relevant one
-                if wanted_manager.is_wanted_at(player, death_manager.death_timings[player_id][0]):
-                    dead_players_times.append((player, death_manager.death_timings[player_id][0]))
+        wanted_players = wanted_manager.get_live_wanted_players(police=False)
+        wanted_police = wanted_manager.get_live_wanted_players(police=True)
+        wanted_player_deaths = wanted_manager.get_wanted_player_deaths(police=False)
+        wanted_police_deaths = wanted_manager.get_wanted_player_deaths(police=True)
 
         tables = []
         if wanted_players:
             rows = []
-            for player in wanted_players:
-                (_, crime, redemption) = wanted_manager.get_wanted_player_crime_info(player, now)[1]
+            for player_id in wanted_players:
+                player = ASSASSINS_DATABASE.get(player_id)
                 rows.append(
                     PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
@@ -162,8 +159,8 @@ class WantedPlugin(AbstractPlugin):
                         ADDRESS=escape(player.address),
                         COLLEGE=escape(player.college),
                         WATER_STATUS=escape(player.water_status),
-                        CRIME=escape(crime),
-                        REDEMPTION=escape(redemption),
+                        CRIME=escape(wanted_players[player_id]['crime']),
+                        REDEMPTION=escape(wanted_players[player_id]['redemption']),
                         NOTES=escape(player.notes)
                     )
                 )
@@ -172,50 +169,74 @@ class WantedPlugin(AbstractPlugin):
             )
         if wanted_police:
             rows = []
-            for player in wanted_police:
-                (_, crime, redemption) = wanted_manager.get_wanted_player_crime_info(player, now)[1]
+            if police_ranks_enabled:
+                default_rank = GENERIC_STATE_DATABASE.arb_state.get(
+                    "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
+                ranks = GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
+            for player_id in wanted_police:
+                player = ASSASSINS_DATABASE.get(player_id)
+                rank = "Police"
+                if police_ranks_enabled:
+                    rank_no = police_rank_manager.get_relative_rank(player) + default_rank
+                    try:
+                        rank = ranks[rank_no]
+                    except IndexError:
+                        # Lets the user know if the ranks break due to PolicePlugin.generate_pages not generating new ranks in time.
+                        # Could maybe be avoided with a refactor of how ranks work, but I really don't want to do that now
+                        rank = '[ERROR]'
+                        messages.append(Label("[WANTED] WARNING: Error in police ranks. Generate pages again to fix"))
                 rows.append(
                     POLICE_TABLE_ROW_TEMPLATE.format(
-                        RANK="Police",
-                        # TODO: update when police rank plugin refactored such that it is possible to get the rank name,
-                        # Rank names can be generated when generate_pages is run, and this might run first, breaking it
+                        RANK=rank,
                         REAL_NAME=escape(player.real_name),
                         PSEUDONYMS=escape(player.all_pseudonyms()),
                         ADDRESS=escape(player.address),
                         COLLEGE=escape(player.college),
                         WATER_STATUS=escape(player.water_status),
-                        CRIME=escape(crime),
-                        REDEMPTION=escape(redemption),
+                        CRIME=escape(wanted_police[player_id]['crime']),
+                        REDEMPTION=escape(wanted_police[player_id]['redemption']),
                         NOTES=escape(player.notes)
                     )
                 )
             tables.append(
                 POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if dead_players_times:
+        if wanted_player_deaths:
             rows = []
-            for player, time in dead_players_times:
-                (_, crime, _) = wanted_manager.get_wanted_player_crime_info(player, time)[1]
+            for wanted_death_event in wanted_player_deaths:
+                player = ASSASSINS_DATABASE.get(wanted_death_event['player_id'])
                 rows.append(
                     DEAD_PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
                         PSEUDONYMS=escape(player.all_pseudonyms()),
-                        CRIME=escape(crime)
+                        CRIME=escape(wanted_death_event['crime'])
                     )
                 )
             tables.append(
                 DEAD_PLAYER_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if dead_police_times:  # TODO Make this generate on the police page, as before
+        if wanted_police_deaths:
             rows = []
-            for player, time in dead_police_times:
-                (_, crime, _) = wanted_manager.get_wanted_player_crime_info(player, time)[1]
+            if police_ranks_enabled:
+                default_rank = GENERIC_STATE_DATABASE.arb_state.get(
+                    "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
+                ranks = GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
+            for wanted_death_event in wanted_police_deaths:
+                player = ASSASSINS_DATABASE.get(wanted_death_event['player_id'])
+                rank = "Police"
+                if police_ranks_enabled:
+                    rank_no = police_rank_manager.get_relative_rank(player) + default_rank
+                    try:
+                        rank = ranks[rank_no]
+                    except IndexError:
+                        rank = '[ERROR]'
+                        messages.append(Label("[WANTED] WARNING: Error in police ranks. Generate pages again to fix"))
                 rows.append(
                     DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE.format(
-                        RANK="Police",  # TODO Same as above; make ranks work
+                        RANK=rank,
                         REAL_NAME=escape(player.real_name),
                         PSEUDONYMS=escape(player.all_pseudonyms()),
-                        CRIME=escape(crime)
+                        CRIME=escape(wanted_death_event['crime'])
                     )
                 )
             tables.append(
@@ -224,7 +245,7 @@ class WantedPlugin(AbstractPlugin):
 
         if not tables:
             tables.append(NO_WANTED_PLAYERS)
-        elif not (dead_police_times or dead_players_times):
+        elif not (wanted_police_deaths or wanted_player_deaths):
             tables.append(NO_DEAD_WANTED_PLAYERS)
 
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+") as F:
@@ -234,5 +255,5 @@ class WantedPlugin(AbstractPlugin):
                     YEAR=datetime.datetime.now().year
                 )
             )
-
-        return [Label("[WANTED] Success!")]
+        messages.append(Label("[WANTED] Success!"))
+        return messages
