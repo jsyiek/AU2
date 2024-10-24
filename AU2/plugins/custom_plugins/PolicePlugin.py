@@ -13,7 +13,7 @@ from AU2.html_components.Dependency import Dependency
 from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
@@ -67,7 +67,9 @@ class PolicePlugin(AbstractPlugin):
         self.html_ids = {
             "Ranks": self.identifier + "_ranks",
             "Relative Rank": self.identifier + "_rank_relative",
-            "Options": self.identifier + "_options"
+            "Options": self.identifier + "_options",
+            "Umpires": self.identifier + "_umpires",
+            "CoP": self.identifier + "_cop"
         }
 
         self.plugin_state = {
@@ -75,8 +77,19 @@ class PolicePlugin(AbstractPlugin):
             "Default Rank": {'id': self.identifier + "_default_rank", 'default': DEFAULT_POLICE_RANK},  # Int
             "Auto Rank": {'id': self.identifier + "_auto_rank", 'default': AUTO_RANK_DEFAULT},  # Bool
             "Manual Rank": {'id': self.identifier + "_manual_rank", 'default': MANUAL_RANK_DEFAULT},  # Bool
-            "Police Kills Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT}  # Bool
+            "Police Kills Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT},  # Bool
+            "Umpires": {'id': self.identifier + "_umpires", 'default': []},
+            "Chief of Police": {'id': self.identifier + "_cop", 'default': []},
         }
+
+        self.exports = [
+            Export(
+                identifier="PolicePlugin_set_special_ranks",
+                display_name="Police -> Set Umpire/CoP",
+                ask=self.ask_set_special_ranks,
+                answer=self.answer_set_special_ranks
+            )
+        ]
 
         self.config_exports = [
             ConfigExport(
@@ -101,6 +114,29 @@ class PolicePlugin(AbstractPlugin):
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]['id']] = data
+
+    def ask_set_special_ranks(self):
+        all_police = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
+        return [
+            Label("This only affects the displayed rank on the website"),
+            SelectorList(
+                title="Select Police who are Umpires",
+                identifier=self.html_ids["Umpires"],
+                options=all_police,
+                defaults=self.gsdb_get("Umpires")
+            ),
+            SelectorList(
+                title="Select Police to be Chief of Police",
+                identifier=self.html_ids["CoP"],
+                options=all_police,
+                defaults=self.gsdb_get("Chief of Police")
+            )
+        ]
+
+    def answer_set_special_ranks(self, htmlResponse):
+        self.gsdb_set("Umpires", htmlResponse[self.html_ids["Umpires"]])
+        self.gsdb_set("Chief of Police", htmlResponse[self.html_ids["CoP"]])
+        return [Label("[POLICE] Success!")]
 
     def ask_set_ranks(self):
         question = []

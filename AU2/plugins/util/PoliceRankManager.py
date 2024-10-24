@@ -51,6 +51,10 @@ class PoliceRankManager:
             return 0
 
     def get_relative_rank(self, player_id: str):
+        if player_id in GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_umpires", []):
+            return self.get_max_rank() + 2
+        if player_id in GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_cop", []):
+            return self.get_max_rank() + 1
         return self.assassin_relative_ranks[player_id]
 
     def get_rank_name(self, player_id: str):
