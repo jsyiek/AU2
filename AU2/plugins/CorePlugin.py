@@ -117,7 +117,7 @@ class CorePlugin(AbstractPlugin):
                 "Assassin -> Update",
                 self.ask_core_plugin_update_assassin,
                 self.answer_core_plugin_update_assassin,
-                (lambda: [v for v in ASSASSINS_DATABASE.assassins],)
+                (lambda: sorted([v for v in ASSASSINS_DATABASE.assassins]),)
             ),
             Export(
                 "core_event_create_event",
