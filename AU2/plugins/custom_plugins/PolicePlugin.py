@@ -222,22 +222,7 @@ class PolicePlugin(AbstractPlugin):
             police_rank_manager.add_event(e)
             death_manager.add_event(e)
 
-        # Code to generate new ranks if police are promoted/demoted more than ever before
-        # This will add them to the database to be renamed by the umpire
-        if police_rank_manager.get_min_rank() < -int(self.gsdb_get("Default Rank")):
-            current_ranks = self.gsdb_get("Ranks")
-            current_default = int(self.gsdb_get("Default Rank"))
-            for i in range(-current_default - police_rank_manager.get_min_rank()):
-                current_ranks.insert(0, f"Level {-(i+current_default+1)} Constable")
-            self.gsdb_set("Ranks", current_ranks)
-            self.gsdb_set("Default Rank", -police_rank_manager.get_min_rank())
-            message.append(Label("[POLICE] Warning: New ranks generated below existing. Rename them in the config"))
-        if police_rank_manager.get_max_rank() > (len(self.gsdb_get("Ranks")) - int(self.gsdb_get("Default Rank")) - 3):
-            current_ranks = self.gsdb_get("Ranks")
-            for i in range(police_rank_manager.get_max_rank() - (len(self.gsdb_get("Ranks")) - self.gsdb_get("Default Rank") - 3)):
-                current_ranks.insert(-2, f"Level {len(current_ranks)-2} Constable")
-            self.gsdb_set("Ranks", current_ranks)
-            message.append(Label("[POLICE] Warning: New ranks generated above existing. Rename them in the config"))
+        message += police_rank_manager.generate_new_ranks_if_necessary()
 
         police: List[Assassin] = [a for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
         dead_police: List[Assassin] = [i for i in police if i.identifier in death_manager.get_dead()]
@@ -246,12 +231,12 @@ class PolicePlugin(AbstractPlugin):
         tables = []
         if police:
             if alive_police:
-                alive_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a)), a.real_name))
+                alive_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
                 rows = []
                 for a in alive_police:
                     rows.append(
                         POLICE_TABLE_ROW_TEMPLATE.format(
-                            RANK=self.gsdb_get("Ranks")[police_rank_manager.get_relative_rank(a)+self.gsdb_get("Default Rank")],
+                            RANK=police_rank_manager.get_rank_name(a.identifier),
                             PSEUDONYM=a.all_pseudonyms(),
                             NAME=a.real_name,
                             EMAIL=a.email,
@@ -263,12 +248,12 @@ class PolicePlugin(AbstractPlugin):
                     POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
                 )
             if dead_police:
-                dead_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a)), a.real_name))
+                dead_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
                 rows = []
                 for a in dead_police:
                     rows.append(
                         DEAD_POLICE_TABLE_ROW_TEMPLATE.format(
-                            RANK=self.gsdb_get("Ranks")[police_rank_manager.get_relative_rank(a)+self.gsdb_get("Default Rank")],
+                            RANK=police_rank_manager.get_rank_name(a.identifier),
                             PSEUDONYM=a.all_pseudonyms(),
                             NAME=a.real_name,
                             EMAIL=a.email,
