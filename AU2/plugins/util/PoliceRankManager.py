@@ -32,11 +32,15 @@ class PoliceRankManager:
             self.assassin_relative_ranks[aID] += rank
         if self.auto_ranking:
             for (killer, victim) in e.kills:
-                if ASSASSINS_DATABASE.get(killer).is_police:
-                    if self.police_kill_ranking:
-                        self.assassin_relative_ranks[killer] += 1
-                    elif not ASSASSINS_DATABASE.get(victim).is_police:
-                        self.assassin_relative_ranks[killer] += 1
+                if not ASSASSINS_DATABASE.get(killer).is_police:
+                    continue
+                if (killer in GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_umpires", [])
+                        or killer in GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_cop", [])):
+                    continue
+                if self.police_kill_ranking:
+                    self.assassin_relative_ranks[killer] += 1
+                elif not ASSASSINS_DATABASE.get(victim).is_police:
+                    self.assassin_relative_ranks[killer] += 1
 
     def get_min_rank(self):
         try:

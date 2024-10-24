@@ -82,27 +82,24 @@ class PolicePlugin(AbstractPlugin):
             "Chief of Police": {'id': self.identifier + "_cop", 'default': []},
         }
 
-        self.exports = [
-            Export(
+        self.config_exports = [
+            ConfigExport(
+                identifier="PolicePlugin_set_ranks",
+                display_name="Police -> Set Ranks",
+                ask=self.ask_set_ranks,
+                answer=self.answer_set_ranks
+            ),
+            ConfigExport(
+                identifier="PolicePlugin_select_options",
+                display_name="Police -> Select Ranking options",
+                ask=self.ask_select_options,
+                answer=self.answer_select_options
+            ),
+            ConfigExport(
                 identifier="PolicePlugin_set_special_ranks",
                 display_name="Police -> Set Umpire/CoP",
                 ask=self.ask_set_special_ranks,
                 answer=self.answer_set_special_ranks
-            )
-        ]
-
-        self.config_exports = [
-            ConfigExport(
-                "PolicePlugin_set_ranks",
-                "Police -> Set Ranks",
-                self.ask_set_ranks,
-                self.answer_set_ranks
-            ),
-            ConfigExport(
-                "PolicePlugin_select_options",
-                "Police -> Select Ranking options",
-                self.ask_select_options,
-                self.answer_select_options
             )
         ]
 
