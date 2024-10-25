@@ -15,7 +15,7 @@ def set_game_start(date: datetime.datetime):
     """
     Sets the start of the game
     """
-    GENERIC_STATE_DATABASE.arb_state["game_start"] = date
+    GENERIC_STATE_DATABASE.arb_state["game_start"] = date.timestamp()
 
 
 def soft_escape(string: str) -> str:
