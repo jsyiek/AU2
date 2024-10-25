@@ -38,7 +38,8 @@ class Assassin(PersistentFile):
 
         # Don't move this out of __post_init__
         if not self.identifier:
-            self.identifier = f"{self.real_name} ({self.pseudonyms[0]}) ID: {self._secret_id}"
+            dotdotdot = "..." if len(self.pseudonyms[0]) > 15 else ""
+            self.identifier = f"{self.real_name} ({self.pseudonyms[0][:15]}{dotdotdot}) ID: {self._secret_id}"
 
     def get_pseudonym(self, i: int) -> str:
         if i >= len(self.pseudonyms):
