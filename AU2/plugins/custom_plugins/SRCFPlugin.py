@@ -160,7 +160,8 @@ class SRCFPlugin(AbstractPlugin):
             "email_file_name": self.identifier + "_email_file_name",
             "should_enable_raw_editor": self.identifier + "_raw_editor",
             "raw_page_contents": self.identifier + "_raw_page_contents",
-            "raw_page_filename": self.identifier + "_raw_page_filename"
+            "raw_page_filename": self.identifier + "_raw_page_filename",
+            "dry_run": self.identifier + "_dry_run"
         }
 
         self.hooks = {
@@ -262,6 +263,11 @@ class SRCFPlugin(AbstractPlugin):
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["email"]:
             return [
+                Checkbox(
+                    identifier=self.html_ids["dry_run"],
+                    title="Actually send emails? (Choosing 'No' will not send any emails but print out the contents",
+                    checked=True
+                ),
                 DefaultNamedSmallTextbox(
                     identifier=self.html_ids["email_subject"],
                     title="[SRCFPlugin] Email Subject",
@@ -287,6 +293,7 @@ class SRCFPlugin(AbstractPlugin):
             email_list: List[Email] = data
             subject = htmlResponse[self.html_ids["email_subject"]]
             message = soft_escape(htmlResponse[self.html_ids["email_message"]])
+            send_emails = htmlResponse[self.html_ids["dry_run"]]
 
             for email in email_list:
                 recipient = email.recipient
@@ -346,18 +353,21 @@ class SRCFPlugin(AbstractPlugin):
                     self._log_to(sftp, ACCESS_LOG, "Logging out of email")
                     self._log_to(sftp, PUBLISH_LOG, "Trying to send email...")
 
-                    (stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
+                    if send_emails:
+                        (stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
+
+                        if stdout:
+                            print("stdout:")
+                            # TODO: Implement proper print
+                            print(stdout)
+                        if stderr:
+                            print("stderr (useful for debugging):")
+                            # TODO: Implement proper print
+                            print(stderr)
+                    else:
+                        print(email_file_contents)
 
                     self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
-
-                    if stdout:
-                        print("stdout:")
-                        # TODO: Implement proper print
-                        print(stdout)
-                    if stderr:
-                        print("stderr (useful for debugging):")
-                        # TODO: Implement proper print
-                        print(stderr)
 
             return [Label("[SRCFPlugin] Sent!")]
         return []
