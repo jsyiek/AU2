@@ -17,12 +17,14 @@ class CompetencyManager:
     Simple manager for competency
     """
 
-    def __init__(self, game_start: datetime.datetime):
+    def __init__(self, game_start: datetime.datetime, auto_competency: bool = False):
         # from assassin ID to deadline
         self.deadlines = defaultdict(lambda: self.game_start + self.initial_competency_period)
         self.game_start = game_start
         self.initial_competency_period = datetime.timedelta(days=GENERIC_STATE_DATABASE.arb_int_state.get(ID_GAME_START, DEFAULT_START_COMPETENCY))
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("CompetencyPlugin", False)
+        self.auto_competency = auto_competency
+        self.attempts_since_kill = defaultdict(int)
 
     def add_event(self, e: Event):
         for (aID, extn) in e.pluginState.get("CompetencyPlugin", {}).get("competency", {}).items():
@@ -30,6 +32,40 @@ class CompetencyManager:
                 self.deadlines[aID],
                 e.datetime + datetime.timedelta(days=extn)
             )
+        if self.auto_competency:
+            for (killer, victim) in e.kills:
+                if ASSASSINS_DATABASE.get(victim).is_police:
+                    continue
+                self.attempts_since_kill[killer] = 0
+                # Allows overriding auto competency on a case-by-case basis
+                if killer in e.pluginState.get("CompetencyPlugin", {}).get("competency", {}):
+                    continue
+                self.deadlines[killer] = max(
+                    self.deadlines[killer],
+                    e.datetime + datetime.timedelta(
+                        days=e.pluginState.get("CompetencyPlugin", {})
+                            .get("current_default", GENERIC_STATE_DATABASE.arb_int_state.get(ID_DEFAULT_EXTN, DEFAULT_EXTENSION)))
+                )
+
+            for assassin_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
+                # Logic for not increasing attempts if player got a player kill in same event.
+                for (killer, victim) in e.kills:
+                    if killer == assassin_id and not ASSASSINS_DATABASE.get(victim).is_police:
+                        break
+                else:
+                    self.attempts_since_kill[assassin_id] += 1
+                # Checks if the assassin has had 2, 4, etc attempts since last kill,
+                # and the competency has not been manually overridden
+                # Then grants attempt competency
+                if self.attempts_since_kill[assassin_id] % 2 or assassin_id in e.pluginState\
+                        .get("CompetencyPlugin", {}).get("competency", {}):
+                    continue
+                self.deadlines[assassin_id] = max(
+                    self.deadlines[assassin_id],
+                    e.datetime + datetime.timedelta(
+                        days=e.pluginState.get("CompetencyPlugin", {})
+                            .get("current_default", GENERIC_STATE_DATABASE.arb_int_state.get(ID_DEFAULT_EXTN, DEFAULT_EXTENSION)))
+                )
 
     def is_inco_at(self, a: Assassin, date: datetime.datetime):
         """

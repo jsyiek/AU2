@@ -138,6 +138,7 @@ class WantedPlugin(AbstractPlugin):
             )
             for e in events:
                 police_rank_manager.add_event(e)
+            messages += police_rank_manager.generate_new_ranks_if_necessary()
 
         for e in events:
             wanted_manager.add_event(e)
@@ -177,15 +178,7 @@ class WantedPlugin(AbstractPlugin):
                 player = ASSASSINS_DATABASE.get(player_id)
                 rank = "Police"
                 if police_ranks_enabled:
-                    rank_no = police_rank_manager.get_relative_rank(player) + default_rank
-                    try:
-                        rank = ranks[rank_no]
-                    except IndexError:
-                        # Lets the user know if the ranks break due to PolicePlugin.generate_pages not generating new ranks in time.
-                        # Could maybe be avoided with a refactor of how ranks work, but I really don't want to do that now
-                        # TODO Refactor policerankmanager to also manage rank names, not just relative numbers
-                        rank = '[ERROR]'
-                        messages.append(Label("[WANTED] WARNING: Error in police ranks. Generate pages again to fix"))
+                    rank = police_rank_manager.get_rank_name(player_id)
                 rows.append(
                     POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
@@ -226,12 +219,7 @@ class WantedPlugin(AbstractPlugin):
                 player = ASSASSINS_DATABASE.get(wanted_death_event['player_id'])
                 rank = "Police"
                 if police_ranks_enabled:
-                    rank_no = police_rank_manager.get_relative_rank(player) + default_rank
-                    try:
-                        rank = ranks[rank_no]
-                    except IndexError:
-                        rank = '[ERROR]'
-                        messages.append(Label("[WANTED] WARNING: Error in police ranks. Generate pages again to fix"))
+                    rank = police_rank_manager.get_rank_name(wanted_death_event['player_id'])
                 rows.append(
                     DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,

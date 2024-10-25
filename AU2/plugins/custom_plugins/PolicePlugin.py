@@ -13,7 +13,7 @@ from AU2.html_components.Dependency import Dependency
 from AU2.html_components.Label import Label
 from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
@@ -67,7 +67,9 @@ class PolicePlugin(AbstractPlugin):
         self.html_ids = {
             "Ranks": self.identifier + "_ranks",
             "Relative Rank": self.identifier + "_rank_relative",
-            "Options": self.identifier + "_options"
+            "Options": self.identifier + "_options",
+            "Umpires": self.identifier + "_umpires",
+            "CoP": self.identifier + "_cop"
         }
 
         self.plugin_state = {
@@ -75,21 +77,29 @@ class PolicePlugin(AbstractPlugin):
             "Default Rank": {'id': self.identifier + "_default_rank", 'default': DEFAULT_POLICE_RANK},  # Int
             "Auto Rank": {'id': self.identifier + "_auto_rank", 'default': AUTO_RANK_DEFAULT},  # Bool
             "Manual Rank": {'id': self.identifier + "_manual_rank", 'default': MANUAL_RANK_DEFAULT},  # Bool
-            "Police Kills Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT}  # Bool
+            "Police Kills Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT},  # Bool
+            "Umpires": {'id': self.identifier + "_umpires", 'default': []},
+            "Chief of Police": {'id': self.identifier + "_cop", 'default': []},
         }
 
         self.config_exports = [
             ConfigExport(
-                "PolicePlugin_set_ranks",
-                "Police -> Set Ranks",
-                self.ask_set_ranks,
-                self.answer_set_ranks
+                identifier="PolicePlugin_set_ranks",
+                display_name="Police -> Set Ranks",
+                ask=self.ask_set_ranks,
+                answer=self.answer_set_ranks
             ),
             ConfigExport(
-                "PolicePlugin_select_options",
-                "Police -> Select Ranking options",
-                self.ask_select_options,
-                self.answer_select_options
+                identifier="PolicePlugin_select_options",
+                display_name="Police -> Select Ranking options",
+                ask=self.ask_select_options,
+                answer=self.answer_select_options
+            ),
+            ConfigExport(
+                identifier="PolicePlugin_set_special_ranks",
+                display_name="Police -> Set Umpire/CoP",
+                ask=self.ask_set_special_ranks,
+                answer=self.answer_set_special_ranks
             )
         ]
 
@@ -101,6 +111,29 @@ class PolicePlugin(AbstractPlugin):
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]['id']] = data
+
+    def ask_set_special_ranks(self):
+        all_police = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
+        return [
+            Label("This only affects the displayed rank on the website"),
+            SelectorList(
+                title="Select Police who are Umpires",
+                identifier=self.html_ids["Umpires"],
+                options=all_police,
+                defaults=self.gsdb_get("Umpires")
+            ),
+            SelectorList(
+                title="Select Police to be Chief of Police",
+                identifier=self.html_ids["CoP"],
+                options=all_police,
+                defaults=self.gsdb_get("Chief of Police")
+            )
+        ]
+
+    def answer_set_special_ranks(self, htmlResponse):
+        self.gsdb_set("Umpires", htmlResponse[self.html_ids["Umpires"]])
+        self.gsdb_set("Chief of Police", htmlResponse[self.html_ids["CoP"]])
+        return [Label("[POLICE] Success!")]
 
     def ask_set_ranks(self):
         question = []
@@ -207,6 +240,7 @@ class PolicePlugin(AbstractPlugin):
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
             return [Label("[POLICE] Didn't need to do anything")]
+
         for player_id, relative_rank in htmlResponse[self.html_ids["Relative Rank"]].items():
             e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
         return [Label("[POLICE] Success!")]
@@ -222,22 +256,7 @@ class PolicePlugin(AbstractPlugin):
             police_rank_manager.add_event(e)
             death_manager.add_event(e)
 
-        # Code to generate new ranks if police are promoted/demoted more than ever before
-        # This will add them to the database to be renamed by the umpire
-        if police_rank_manager.get_min_rank() < -int(self.gsdb_get("Default Rank")):
-            current_ranks = self.gsdb_get("Ranks")
-            current_default = int(self.gsdb_get("Default Rank"))
-            for i in range(-current_default - police_rank_manager.get_min_rank()):
-                current_ranks.insert(0, f"Level {-(i+current_default+1)} Constable")
-            self.gsdb_set("Ranks", current_ranks)
-            self.gsdb_set("Default Rank", -police_rank_manager.get_min_rank())
-            message.append(Label("[POLICE] Warning: New ranks generated below existing. Rename them in the config"))
-        if police_rank_manager.get_max_rank() > (len(self.gsdb_get("Ranks")) - int(self.gsdb_get("Default Rank")) - 3):
-            current_ranks = self.gsdb_get("Ranks")
-            for i in range(police_rank_manager.get_max_rank() - (len(self.gsdb_get("Ranks")) - self.gsdb_get("Default Rank") - 3)):
-                current_ranks.insert(-2, f"Level {len(current_ranks)-2} Constable")
-            self.gsdb_set("Ranks", current_ranks)
-            message.append(Label("[POLICE] Warning: New ranks generated above existing. Rename them in the config"))
+        message += police_rank_manager.generate_new_ranks_if_necessary()
 
         police: List[Assassin] = [a for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
         dead_police: List[Assassin] = [i for i in police if i.identifier in death_manager.get_dead()]
@@ -246,12 +265,12 @@ class PolicePlugin(AbstractPlugin):
         tables = []
         if police:
             if alive_police:
-                alive_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a)), a.real_name))
+                alive_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
                 rows = []
                 for a in alive_police:
                     rows.append(
                         POLICE_TABLE_ROW_TEMPLATE.format(
-                            RANK=self.gsdb_get("Ranks")[police_rank_manager.get_relative_rank(a)+self.gsdb_get("Default Rank")],
+                            RANK=police_rank_manager.get_rank_name(a.identifier),
                             PSEUDONYM=a.all_pseudonyms(),
                             NAME=a.real_name,
                             EMAIL=a.email,
@@ -263,12 +282,12 @@ class PolicePlugin(AbstractPlugin):
                     POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
                 )
             if dead_police:
-                dead_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a)), a.real_name))
+                dead_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
                 rows = []
                 for a in dead_police:
                     rows.append(
                         DEAD_POLICE_TABLE_ROW_TEMPLATE.format(
-                            RANK=self.gsdb_get("Ranks")[police_rank_manager.get_relative_rank(a)+self.gsdb_get("Default Rank")],
+                            RANK=police_rank_manager.get_rank_name(a.identifier),
                             PSEUDONYM=a.all_pseudonyms(),
                             NAME=a.real_name,
                             EMAIL=a.email,
