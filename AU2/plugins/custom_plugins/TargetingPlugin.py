@@ -49,7 +49,7 @@ class TargetingPlugin(AbstractPlugin):
         super().__init__("TargetingPlugin")
         self.exports = [
             Export(
-                "TargetingPlugin",
+                "targeting_print_targeting_graph",
                 "Targeting Graph -> Print",
                 lambda *args: [],
                 self.answer_show_targeting_graph
@@ -58,13 +58,13 @@ class TargetingPlugin(AbstractPlugin):
 
         self.config_exports = [
             ConfigExport(
-                "TargetingPlugin_set_player_seeds",
+                "targeting_set_player_seeds",
                 "Targeting Graph -> Set player seeds",
                 self.ask_set_seeds,
                 self.answer_set_seeds
             ),
             ConfigExport(
-                "TargetingPlugin_set_random_seed",
+                "targeting_set_random_seed",
                 "Targeting Graph -> Set random seed",
                 self.ask_set_random_seed,
                 self.answer_set_random_seed

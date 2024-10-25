@@ -31,7 +31,7 @@ from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.PathEntry import PathEntry
 from AU2.html_components.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import Export
-from AU2.plugins.CorePlugin import PLUGINS
+from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -501,36 +501,8 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
 
 def main():
     while True:
-        exports = []
-        core_plugin = PLUGINS["CorePlugin"]
-        for p in PLUGINS:
-            exports += p.exports
-
-        for p in PLUGINS:
-            for hooked_export in p.hooked_exports:
-
-                # hideous disgusting lambda scoping rules means we have to do awful
-                # terrible no good very bad shenanigans to get the lambdas to correctly
-                # bind the values. ew!
-                exports.append(
-                    Export(
-                        "core_plugin_hook_" + hooked_export.identifier,
-                        hooked_export.display_name,
-                        lambda export_identifier=hooked_export.identifier: core_plugin.ask_custom_hook(export_identifier),
-                        lambda htmlResponse,
-                               identifier=p.identifier,
-                               export_identifier=hooked_export.identifier,
-                               producer_function=hooked_export.producer,
-                               call_first=hooked_export.call_first:
-                            core_plugin.answer_custom_hook(
-                                export_identifier,
-                                htmlResponse,
-                                data=producer_function(htmlResponse),
-                                call_first=call_first,
-                                hook_owner=identifier
-                            )
-                    )
-                )
+        core_plugin: CorePlugin = PLUGINS["CorePlugin"]
+        exports = core_plugin.get_all_exports()
 
         q = [inquirer.List(name="mode", message="Select mode",
                            choices=["Exit"] + sorted([e.display_name for e in exports]))]

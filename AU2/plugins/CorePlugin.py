@@ -49,6 +49,10 @@ PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
 @registered_plugin
 class CorePlugin(AbstractPlugin):
 
+    PLUGIN_ENABLE_EXPORT: str = "core_plugin_config_update"
+    CONFIG_PARAMETER_EXPORT: str = "core_plugin_edit_config"
+    IRREMOVABLE_EXPORTS = [PLUGIN_ENABLE_EXPORT, CONFIG_PARAMETER_EXPORT]
+
     def __init__(self):
         super().__init__("CorePlugin")
         self.HTML_SECRET_ID = "CorePlugin_identifier"
@@ -105,6 +109,10 @@ class CorePlugin(AbstractPlugin):
             self.event_html_ids["Kills"]: "kills"
         }
 
+        self.config_html_ids = {
+            "Suppressed Exports": self.identifier + "_suppressed_exports"
+        }
+
         self.exports = [
             Export(
                 "core_assassin_create_assassin",
@@ -140,7 +148,7 @@ class CorePlugin(AbstractPlugin):
                 (lambda: [v for v in EVENTS_DATABASE.events],)
             ),
             Export(
-                "core_plugin_config_update",
+                self.PLUGIN_ENABLE_EXPORT,
                 "Plugin config -> Enable/disable plugins",
                 self.ask_core_plugin_update_config,
                 self.answer_core_plugin_update_config
@@ -152,7 +160,7 @@ class CorePlugin(AbstractPlugin):
                 self.answer_generate_pages
             ),
             Export(
-                "core_plugin_edit_config",
+                self.CONFIG_PARAMETER_EXPORT,
                 "Plugin config -> Plugin-specific parameters",
                 self.ask_config,
                 self.answer_config,
@@ -169,6 +177,12 @@ class CorePlugin(AbstractPlugin):
                 "CorePlugin -> Set game start",
                 self.ask_set_game_start,
                 self.answer_set_game_start
+            ),
+            ConfigExport(
+                "core_plugin_suppress_exports",
+                "CorePlugin -> Hide menu options",
+                self.ask_suppress_exports,
+                self.answer_suppress_exports
             )
         ]
 
@@ -263,6 +277,68 @@ class CorePlugin(AbstractPlugin):
 
     def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return [Label("[CORE] Delete acknowledged.")]
+
+    def get_all_exports(self) -> List[Export]:
+        """
+        Returns all exports from all plugins, including prepared hooked exports
+        """
+        exports = []
+        for p in PLUGINS:
+            exports += p.exports
+
+        for p in PLUGINS:
+            for hooked_export in p.hooked_exports:
+
+                # hideous disgusting lambda scoping rules means we have to do awful
+                # terrible no good very bad shenanigans to get the lambdas to correctly
+                # bind the values. ew!
+                exports.append(
+                    Export(
+                        "core_plugin_hook_" + hooked_export.identifier,
+                        hooked_export.display_name,
+                        lambda export_identifier=hooked_export.identifier: self.ask_custom_hook(export_identifier),
+                        lambda htmlResponse,
+                               identifier=p.identifier,
+                               export_identifier=hooked_export.identifier,
+                               producer_function=hooked_export.producer,
+                               call_first=hooked_export.call_first:
+                            self.answer_custom_hook(
+                                export_identifier,
+                                htmlResponse,
+                                data=producer_function(htmlResponse),
+                                call_first=call_first,
+                                hook_owner=identifier
+                            )
+                    )
+                )
+
+        suppressed_exports = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+        exports = [e for e in exports if e.identifier not in suppressed_exports]
+        return exports
+
+    def ask_suppress_exports(self):
+        export_identifiers = [export.identifier for export in self.get_all_exports()]
+        default_suppression = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+        export_identifiers = sorted(list(set(export_identifiers + default_suppression)))
+        for exp in self.IRREMOVABLE_EXPORTS:
+            if exp in export_identifiers:
+                export_identifiers.remove(exp)
+        return [
+            SelectorList(
+                identifier=self.config_html_ids["Suppressed Exports"],
+                title="Choose the menu options that should not be displayed",
+                defaults=default_suppression,
+                options=export_identifiers
+            )
+        ]
+
+    def answer_suppress_exports(self, htmlResponse):
+        suppressed_exports = htmlResponse[self.config_html_ids["Suppressed Exports"]]
+        for exp in self.IRREMOVABLE_EXPORTS:
+            if exp in suppressed_exports:
+                suppressed_exports.remove(exp)
+        GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = suppressed_exports
+        return [Label("[CORE] Success!")]
 
     def ask_core_plugin_create_assassin(self):
         components = []
