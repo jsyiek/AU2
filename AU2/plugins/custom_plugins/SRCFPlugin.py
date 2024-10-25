@@ -39,7 +39,7 @@ ACCESS_LOG = LOGS + "/access.log"
 EDIT_LOG = LOGS + "/edit.log"
 PUBLISH_LOG = LOGS + "/publish.log"
 
-REMOTE_WEBPAGES_PATH = ASSASSINS_PATH + "/public_html" + "/testing"  # delete "/testing" when in prod"
+REMOTE_WEBPAGES_PATH = ASSASSINS_PATH + "/public_html"
 REMOTE_BACKUP_LOCATION = AU2_DATA_PATH + "/backups"
 REMOTE_DATABASE_LOCATION = AU2_DATA_PATH + "/databases"
 
