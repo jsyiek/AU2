@@ -41,6 +41,6 @@ class Event(PersistentFile):
         if not self.__secret_id:
             self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()
         if not self.identifier:
-            self.identifier = "(" + self.__secret_id + ") " + self.headline[0:40].rstrip()
+            self.identifier = "(" + self.__secret_id + ") " + self.headline[0:25].rstrip()
 
         self.datetime = self.datetime.replace(tzinfo=None)
