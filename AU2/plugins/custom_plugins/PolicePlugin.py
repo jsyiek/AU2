@@ -55,7 +55,7 @@ NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the 
 
 
 POLICE_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "police.html"), "r", encoding="utf-32") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "police.html"), "r", encoding="utf-16") as F:
     POLICE_PAGE_TEMPLATE = F.read()
 
 
@@ -303,7 +303,7 @@ class PolicePlugin(AbstractPlugin):
         else:
             tables.append(NO_POLICE)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+", encoding="utf-32") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+", encoding="utf-16") as F:
             F.write(
                 POLICE_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),

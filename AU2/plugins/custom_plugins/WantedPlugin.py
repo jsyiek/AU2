@@ -67,7 +67,7 @@ NO_WANTED_PLAYERS = """<p xmlns="">Nobody has gone Wanted yet. What a bunch of l
 NO_DEAD_WANTED_PLAYERS = """<p xmlns="">No Wanted players have been killed... yet.</p>"""
 
 WANTED_PAGE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r", encoding="utf-16") as F:
     WANTED_PAGE = F.read()
 
 
@@ -237,7 +237,7 @@ class WantedPlugin(AbstractPlugin):
         elif not (wanted_police_deaths or wanted_player_deaths):
             tables.append(NO_DEAD_WANTED_PLAYERS)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+", encoding="utf-32") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+", encoding="utf-16") as F:
             F.write(
                 WANTED_PAGE.format(
                     CONTENT="\n".join(tables),

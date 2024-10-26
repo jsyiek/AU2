@@ -38,7 +38,7 @@ PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
 
 
 NEWS_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r", encoding="utf-32") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r", encoding="utf-16") as F:
     NEWS_TEMPLATE = F.read()
 
 
@@ -91,7 +91,7 @@ HEAD_HEADLINE_TEMPLATE = """
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
 HEAD_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r", encoding="utf-32") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r", encoding="utf-16") as F:
     HEAD_TEMPLATE = F.read()
 
 HARDCODED_COLORS = {
@@ -164,7 +164,7 @@ class PageGeneratorPlugin(AbstractPlugin):
         ]
 
     def get_color(self, pseudonym: str, dead: bool=False, incompetent: bool=False, is_police: bool=False) -> str:
-        ind = zlib.adler32(pseudonym.encode(encoding="utf-32"))
+        ind = zlib.adler32(pseudonym.encode(encoding="utf-16"))
         if dead:
             if is_police:
                 return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
@@ -302,7 +302,7 @@ class PageGeneratorPlugin(AbstractPlugin):
         for w in weeks:
             path = os.path.join(WEBPAGE_WRITE_LOCATION, f"news{w:02}.html")
 
-            with open(path, "w+", encoding="utf-32") as F:
+            with open(path, "w+", encoding="utf-16") as F:
                 F.write(weeks[w])
 
         head_days = []
@@ -318,7 +318,7 @@ class PageGeneratorPlugin(AbstractPlugin):
             CONTENT="".join(head_days),
             YEAR=str(datetime.datetime.now().year)
         )
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+", encoding="utf-32") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+", encoding="utf-16") as F:
             F.write(head_page_text)
 
         return [Label("[NEWS PAGE GENERATOR] Successfully generated the story!")]
