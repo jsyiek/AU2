@@ -338,7 +338,7 @@ class SRCFPlugin(AbstractPlugin):
 
             localpath = os.path.join(EMAIL_WRITE_LOCATION, email_file_name)
             os.makedirs(EMAIL_WRITE_LOCATION, exist_ok=True)
-            with open(localpath, "w+", encoding="utf-16") as F:
+            with open(localpath, "w+", encoding="utf-8", errors="ignore") as F:
                 F.write(email_file_contents)
 
             with self._get_ssh_client() as ssh_client:
@@ -409,7 +409,7 @@ class SRCFPlugin(AbstractPlugin):
     def ask_raw_page_edit(self, filename: str):
         contents = ""
         with self._get_client() as sftp:
-            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r", encoding="utf-16") as F:
+            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r", encoding="utf-8", errors="ignore") as F:
                 contents = F.read()
 
         return [

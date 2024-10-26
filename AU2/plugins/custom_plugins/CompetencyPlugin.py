@@ -55,7 +55,7 @@ DEAD_INCOS_TABLE_ROW_TEMPLATE = """
 NO_INCOS = """<p xmlns="">Hmm, how interesting... no one is incompetent yet.</p>"""
 
 INCOS_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "inco.html"), "r", encoding="utf-16") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "inco.html"), "r", encoding="utf-8", errors="ignore") as F:
     INCOS_PAGE_TEMPLATE = F.read()
 
 

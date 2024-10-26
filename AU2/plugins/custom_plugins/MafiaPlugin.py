@@ -327,7 +327,7 @@ class MafiaPlugin(AbstractPlugin):
         elif "O-Ren Ishii" in pseudonym:
             return MAFIA_HEX["The Crazy 88"]
 
-        ind = zlib.adler32(pseudonym.encode(encoding="utf-16"))
+        ind = zlib.adler32(pseudonym.encode(encoding="utf-8"))
         if dead:
             return DEAD_COLS[ind % len(DEAD_COLS)]
         return HEX_COLS[ind % len(HEX_COLS)]
