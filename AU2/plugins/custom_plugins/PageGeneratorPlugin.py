@@ -190,7 +190,7 @@ class PageGeneratorPlugin(AbstractPlugin):
         return string
 
     def on_page_request_generate(self) -> List[HTMLComponent]:
-        return [Label("[NEWS PAGE GENERATOR] Preparing...")]
+        return []
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
@@ -302,7 +302,7 @@ class PageGeneratorPlugin(AbstractPlugin):
         for w in weeks:
             path = os.path.join(WEBPAGE_WRITE_LOCATION, f"news{w:02}.html")
 
-            with open(path, "w+") as F:
+            with open(path, "w+", encoding="utf-32") as F:
                 F.write(weeks[w])
 
         head_days = []
@@ -318,7 +318,7 @@ class PageGeneratorPlugin(AbstractPlugin):
             CONTENT="".join(head_days),
             YEAR=str(datetime.datetime.now().year)
         )
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+", encoding="utf-32") as F:
             F.write(head_page_text)
 
         return [Label("[NEWS PAGE GENERATOR] Successfully generated the story!")]

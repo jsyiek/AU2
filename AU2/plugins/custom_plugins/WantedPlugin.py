@@ -237,7 +237,7 @@ class WantedPlugin(AbstractPlugin):
         elif not (wanted_police_deaths or wanted_player_deaths):
             tables.append(NO_DEAD_WANTED_PLAYERS)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+", encoding="utf-32") as F:
             F.write(
                 WANTED_PAGE.format(
                     CONTENT="\n".join(tables),

@@ -338,7 +338,7 @@ class SRCFPlugin(AbstractPlugin):
 
             localpath = os.path.join(EMAIL_WRITE_LOCATION, email_file_name)
             os.makedirs(EMAIL_WRITE_LOCATION, exist_ok=True)
-            with open(localpath, "w+") as F:
+            with open(localpath, "w+", encoding="utf-32") as F:
                 F.write(email_file_contents)
 
             with self._get_ssh_client() as ssh_client:
