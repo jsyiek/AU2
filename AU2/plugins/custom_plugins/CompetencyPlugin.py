@@ -175,7 +175,7 @@ class CompetencyPlugin(AbstractPlugin):
                               "regain competency, you must make a kill, or two attempted kills, or assist two " \
                               "attempts by another (or some combination thereof)."
                 else:
-                    deadline_str = competency_manager.deadlines[recipient.identifier].strftime("%Y-%m-%d %H:%M:%s")
+                    deadline_str = competency_manager.deadlines[recipient.identifier].strftime("%Y-%m-%d %H:%M")
                     content = f"Your competence deadline is at: {deadline_str}"
                 email.add_content(
                     self.identifier,
