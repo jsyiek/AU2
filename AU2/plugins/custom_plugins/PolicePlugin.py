@@ -303,7 +303,7 @@ class PolicePlugin(AbstractPlugin):
         else:
             tables.append(NO_POLICE)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+", encoding="utf-32") as F:
             F.write(
                 POLICE_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
