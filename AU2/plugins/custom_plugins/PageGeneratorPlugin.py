@@ -38,7 +38,7 @@ PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
 
 
 NEWS_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r", encoding="utf-32") as F:
     NEWS_TEMPLATE = F.read()
 
 
@@ -91,7 +91,7 @@ HEAD_HEADLINE_TEMPLATE = """
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
 HEAD_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r", encoding="utf-32") as F:
     HEAD_TEMPLATE = F.read()
 
 HARDCODED_COLORS = {

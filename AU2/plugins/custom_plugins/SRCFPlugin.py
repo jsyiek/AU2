@@ -409,7 +409,7 @@ class SRCFPlugin(AbstractPlugin):
     def ask_raw_page_edit(self, filename: str):
         contents = ""
         with self._get_client() as sftp:
-            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r") as F:
+            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r", encoding="utf-32") as F:
                 contents = F.read()
 
         return [
