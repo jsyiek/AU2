@@ -728,6 +728,8 @@ class SRCFPlugin(AbstractPlugin):
                 sftp.put(localpath, remotepath)
                 self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
             print("[SRCF Plugin] No databases were found in the SRCF, so local copies have been uploaded.")
+
+        refresh_databases()
         return []
 
     @contextlib.contextmanager
