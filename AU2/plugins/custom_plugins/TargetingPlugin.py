@@ -350,7 +350,7 @@ class TargetingPlugin(AbstractPlugin):
         The problem is constraint satisfaction so a Prolog-style "generate-and-test" is sufficient.
         """
 
-        deaths_adj = set([d for d in deaths if d in targeting_graph])
+        deaths_adj = list(set([d for d in deaths if d in targeting_graph]))
         visited = []
         for d in deaths:
             if d not in deaths_adj or d in visited:
