@@ -350,6 +350,15 @@ class TargetingPlugin(AbstractPlugin):
         The problem is constraint satisfaction so a Prolog-style "generate-and-test" is sufficient.
         """
 
+        deaths_adj = set([d for d in deaths if d in targeting_graph])
+        visited = []
+        for d in deaths:
+            if d not in deaths_adj or d in visited:
+                print(f"WARNING: {d} has been killed more than once. Skipping this player when updating graph...")
+            visited.append(d)
+
+        deaths = deaths_adj
+
         # collect a list of [non-unique] players who need new targets
         targeters = sum((targeters_graph[d] for d in deaths), start=[])
         targeters = [t for t in targeters if t not in deaths]
