@@ -71,8 +71,6 @@ class TargetingPlugin(AbstractPlugin):
             )
         ]
 
-        self.seed = GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("random_seed", 28082024)
-
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
             "Random Seed": self.identifier + "_random_seed"
@@ -157,7 +155,6 @@ class TargetingPlugin(AbstractPlugin):
     def answer_set_random_seed(self, htmlResponse):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["random_seed"] = htmlResponse[
             self.html_ids["Random Seed"]]
-        self.seed = htmlResponse[self.html_ids["Random Seed"]]
         return [Label(f"[TARGETING] Set random seed to: {self.seed}")]
 
     def answer_show_targeting_graph(self, _):
@@ -172,6 +169,10 @@ class TargetingPlugin(AbstractPlugin):
         if graph:
             print(f"Total alive players: {len(graph.keys())}")
         return []
+
+    @property
+    def seed(self):
+        return GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("random_seed", 28082024)
 
     def compute_targets(self, max_event=100000000000000000):
         """

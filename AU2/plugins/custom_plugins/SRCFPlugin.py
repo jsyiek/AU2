@@ -23,6 +23,7 @@ from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import soft_escape
 
 SRCF_WEBSITE = "shell.srcf.net"
@@ -39,7 +40,7 @@ ACCESS_LOG = LOGS + "/access.log"
 EDIT_LOG = LOGS + "/edit.log"
 PUBLISH_LOG = LOGS + "/publish.log"
 
-REMOTE_WEBPAGES_PATH = ASSASSINS_PATH + "/public_html" + "/testing"  # delete "/testing" when in prod"
+REMOTE_WEBPAGES_PATH = ASSASSINS_PATH + "/public_html"
 REMOTE_BACKUP_LOCATION = AU2_DATA_PATH + "/backups"
 REMOTE_DATABASE_LOCATION = AU2_DATA_PATH + "/databases"
 
@@ -160,7 +161,8 @@ class SRCFPlugin(AbstractPlugin):
             "email_file_name": self.identifier + "_email_file_name",
             "should_enable_raw_editor": self.identifier + "_raw_editor",
             "raw_page_contents": self.identifier + "_raw_page_contents",
-            "raw_page_filename": self.identifier + "_raw_page_filename"
+            "raw_page_filename": self.identifier + "_raw_page_filename",
+            "dry_run": self.identifier + "_dry_run"
         }
 
         self.hooks = {
@@ -262,6 +264,11 @@ class SRCFPlugin(AbstractPlugin):
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["email"]:
             return [
+                Checkbox(
+                    identifier=self.html_ids["dry_run"],
+                    title="Actually send emails? (Choosing 'No' will not send any emails but print out the contents",
+                    checked=True
+                ),
                 DefaultNamedSmallTextbox(
                     identifier=self.html_ids["email_subject"],
                     title="[SRCFPlugin] Email Subject",
@@ -287,6 +294,7 @@ class SRCFPlugin(AbstractPlugin):
             email_list: List[Email] = data
             subject = htmlResponse[self.html_ids["email_subject"]]
             message = soft_escape(htmlResponse[self.html_ids["email_message"]])
+            send_emails = htmlResponse[self.html_ids["dry_run"]]
 
             for email in email_list:
                 recipient = email.recipient
@@ -325,13 +333,13 @@ class SRCFPlugin(AbstractPlugin):
                 EMAILS="".join(email_str_list)
             )
 
-            now = datetime.datetime.now()
+            now = get_now_dt()
             email_file_name = f"email.{now.day:02}{now.month:02}{now.year}" \
                               f"_{now.hour:02}_{now.minute:02}_{now.second:02}"
 
             localpath = os.path.join(EMAIL_WRITE_LOCATION, email_file_name)
             os.makedirs(EMAIL_WRITE_LOCATION, exist_ok=True)
-            with open(localpath, "w+") as F:
+            with open(localpath, "w+", encoding="utf-8", errors="ignore") as F:
                 F.write(email_file_contents)
 
             with self._get_ssh_client() as ssh_client:
@@ -346,18 +354,21 @@ class SRCFPlugin(AbstractPlugin):
                     self._log_to(sftp, ACCESS_LOG, "Logging out of email")
                     self._log_to(sftp, PUBLISH_LOG, "Trying to send email...")
 
-                    (stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
+                    if send_emails:
+                        (stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
+
+                        if stdout:
+                            print("stdout:")
+                            # TODO: Implement proper print
+                            print(stdout)
+                        if stderr:
+                            print("stderr (useful for debugging):")
+                            # TODO: Implement proper print
+                            print(stderr)
+                    else:
+                        print(email_file_contents)
 
                     self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
-
-                    if stdout:
-                        print("stdout:")
-                        # TODO: Implement proper print
-                        print(stdout)
-                    if stderr:
-                        print("stderr (useful for debugging):")
-                        # TODO: Implement proper print
-                        print(stderr)
 
             return [Label("[SRCFPlugin] Sent!")]
         return []
@@ -399,7 +410,7 @@ class SRCFPlugin(AbstractPlugin):
     def ask_raw_page_edit(self, filename: str):
         contents = ""
         with self._get_client() as sftp:
-            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r") as F:
+            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r", encoding="utf-8", errors="ignore") as F:
                 contents = F.read()
 
         return [
@@ -515,7 +526,7 @@ class SRCFPlugin(AbstractPlugin):
         return [Label("[SRCF Plugin] Successfuly published locally generated pages and uploaded database.")]
 
     def ask_backup(self) -> List[HTMLComponent]:
-        now = datetime.datetime.now()
+        now = get_now_dt()
         folder_name = now.strftime("backup_%d-%m-%Y_%H-%M-%S")
         return [
             DefaultNamedSmallTextbox(
@@ -563,7 +574,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         if not self.logged_in:
             return
-        unix_ts = datetime.datetime.now().timestamp()
+        unix_ts = get_now_dt().timestamp()
         self._makedirs(sftp, os.path.dirname(LOCK_FILE))
         self._log_to(sftp, ACCESS_LOG, "Claimed lock.")
         with sftp.file(LOCK_FILE, "w+") as F:
@@ -595,7 +606,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         if not sftp:
             return
-        datetime_str = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S.%f]")
+        datetime_str = get_now_dt().strftime("[%Y-%m-%d %H:%M:%S.%f]")
         log_entry = f"{datetime_str} ({self.username}) {log_entry}\n"
         dir_name = os.path.dirname(log_path)
         self._makedirs(sftp, dir_name)
@@ -718,6 +729,8 @@ class SRCFPlugin(AbstractPlugin):
                 sftp.put(localpath, remotepath)
                 self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
             print("[SRCF Plugin] No databases were found in the SRCF, so local copies have been uploaded.")
+
+        refresh_databases()
         return []
 
     @contextlib.contextmanager

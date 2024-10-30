@@ -18,6 +18,7 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
+from AU2.plugins.util.date_utils import get_now_dt
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -67,7 +68,7 @@ NO_WANTED_PLAYERS = """<p xmlns="">Nobody has gone Wanted yet. What a bunch of l
 NO_DEAD_WANTED_PLAYERS = """<p xmlns="">No Wanted players have been killed... yet.</p>"""
 
 WANTED_PAGE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r", encoding="utf-8", errors="ignore") as F:
     WANTED_PAGE = F.read()
 
 
@@ -124,7 +125,7 @@ class WantedPlugin(AbstractPlugin):
         # (umpires messing with event timings could affect the canon timeline!)
         events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
 
-        now = datetime.datetime.now()
+        now = get_now_dt()
 
         police_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("PolicePlugin", False)
 
@@ -138,6 +139,7 @@ class WantedPlugin(AbstractPlugin):
             )
             for e in events:
                 police_rank_manager.add_event(e)
+            messages += police_rank_manager.generate_new_ranks_if_necessary()
 
         for e in events:
             wanted_manager.add_event(e)
@@ -177,15 +179,7 @@ class WantedPlugin(AbstractPlugin):
                 player = ASSASSINS_DATABASE.get(player_id)
                 rank = "Police"
                 if police_ranks_enabled:
-                    rank_no = police_rank_manager.get_relative_rank(player) + default_rank
-                    try:
-                        rank = ranks[rank_no]
-                    except IndexError:
-                        # Lets the user know if the ranks break due to PolicePlugin.generate_pages not generating new ranks in time.
-                        # Could maybe be avoided with a refactor of how ranks work, but I really don't want to do that now
-                        # TODO Refactor policerankmanager to also manage rank names, not just relative numbers
-                        rank = '[ERROR]'
-                        messages.append(Label("[WANTED] WARNING: Error in police ranks. Generate pages again to fix"))
+                    rank = police_rank_manager.get_rank_name(player_id)
                 rows.append(
                     POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
@@ -226,12 +220,7 @@ class WantedPlugin(AbstractPlugin):
                 player = ASSASSINS_DATABASE.get(wanted_death_event['player_id'])
                 rank = "Police"
                 if police_ranks_enabled:
-                    rank_no = police_rank_manager.get_relative_rank(player) + default_rank
-                    try:
-                        rank = ranks[rank_no]
-                    except IndexError:
-                        rank = '[ERROR]'
-                        messages.append(Label("[WANTED] WARNING: Error in police ranks. Generate pages again to fix"))
+                    rank = police_rank_manager.get_rank_name(wanted_death_event['player_id'])
                 rows.append(
                     DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
@@ -249,11 +238,11 @@ class WantedPlugin(AbstractPlugin):
         elif not (wanted_police_deaths or wanted_player_deaths):
             tables.append(NO_DEAD_WANTED_PLAYERS)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
                 WANTED_PAGE.format(
                     CONTENT="\n".join(tables),
-                    YEAR=datetime.datetime.now().year
+                    YEAR=get_now_dt().year
                 )
             )
         messages.append(Label("[WANTED] Success!"))

@@ -5,6 +5,7 @@ from typing import List, Any
 
 import inquirer
 
+from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -368,7 +369,7 @@ def render(html_component, dependency_context={}):
             validate=datetime_validator
         )]
         datetime_str = inquirer_prompt_with_abort(q)["dt"]
-        return {html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT)}
+        return {html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE)}
 
     elif isinstance(html_component, IntegerEntry):
         q = [inquirer.Text(

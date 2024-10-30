@@ -16,6 +16,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
@@ -38,7 +39,7 @@ PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
 
 
 NEWS_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r", encoding="utf-8", errors="ignore") as F:
     NEWS_TEMPLATE = F.read()
 
 
@@ -91,7 +92,7 @@ HEAD_HEADLINE_TEMPLATE = """
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
 HEAD_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r") as F:
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r", encoding="utf-8", errors="ignore") as F:
     HEAD_TEMPLATE = F.read()
 
 HARDCODED_COLORS = {
@@ -164,7 +165,7 @@ class PageGeneratorPlugin(AbstractPlugin):
         ]
 
     def get_color(self, pseudonym: str, dead: bool=False, incompetent: bool=False, is_police: bool=False) -> str:
-        ind = zlib.adler32(pseudonym.encode(encoding="utf-32"))
+        ind = zlib.adler32(pseudonym.encode(encoding="utf-8"))
         if dead:
             if is_police:
                 return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
@@ -190,7 +191,7 @@ class PageGeneratorPlugin(AbstractPlugin):
         return string
 
     def on_page_request_generate(self) -> List[HTMLComponent]:
-        return [Label("[NEWS PAGE GENERATOR] Preparing...")]
+        return []
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
@@ -296,13 +297,13 @@ class PageGeneratorPlugin(AbstractPlugin):
             weeks[w] = NEWS_TEMPLATE.format(
                 N=w,
                 DAYS="".join(outs),
-                YEAR=str(datetime.datetime.now().year)
+                YEAR=str(get_now_dt().year)
             )
 
         for w in weeks:
             path = os.path.join(WEBPAGE_WRITE_LOCATION, f"news{w:02}.html")
 
-            with open(path, "w+") as F:
+            with open(path, "w+", encoding="utf-8", errors="ignore") as F:
                 F.write(weeks[w])
 
         head_days = []
@@ -316,9 +317,9 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         head_page_text = HEAD_TEMPLATE.format(
             CONTENT="".join(head_days),
-            YEAR=str(datetime.datetime.now().year)
+            YEAR=str(get_now_dt().year)
         )
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+", encoding="utf-8", errors="ignore") as F:
             F.write(head_page_text)
 
         return [Label("[NEWS PAGE GENERATOR] Successfully generated the story!")]

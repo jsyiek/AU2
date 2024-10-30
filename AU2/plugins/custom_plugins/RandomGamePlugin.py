@@ -90,7 +90,7 @@ class RandomGamePlugin(AbstractPlugin):
         for _ in range(max(min(player_count, 500), 1)):
             ASSASSINS_DATABASE.add(self.create_random_assassin(available_pseudonyms))
 
-        game_start = datetime.datetime(year=2010, month=8, day=10, hour=0)
+        game_start = datetime.datetime(year=2010, month=8, day=10, hour=0).astimezone(TIMEZONE)
 
         EVENTS_DATABASE.add(
             Event(

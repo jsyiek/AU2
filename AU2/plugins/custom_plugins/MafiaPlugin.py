@@ -4,7 +4,7 @@ import zlib
 from html import escape
 from typing import List, Dict, Tuple, Set, Optional
 
-from AU2 import ROOT_DIR
+from AU2 import ROOT_DIR, TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Assassin, Event
@@ -20,6 +20,7 @@ from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import get_game_start
 
 MAFIAS = [
@@ -179,7 +180,7 @@ class MafiaPlugin(AbstractPlugin):
         else:
             quote_event = Event(
                 assassins={},
-                datetime=datetime.datetime(year=2010, month=1, day=1, hour=13),
+                datetime=datetime.datetime(year=2010, month=1, day=1, hour=13).astimezone(TIMEZONE),
                 headline=f"[{self.identifier}] QUOTE: {quote}",
                 reports={},
                 kills=[],
@@ -327,7 +328,7 @@ class MafiaPlugin(AbstractPlugin):
         elif "O-Ren Ishii" in pseudonym:
             return MAFIA_HEX["The Crazy 88"]
 
-        ind = zlib.adler32(pseudonym.encode(encoding="utf-32"))
+        ind = zlib.adler32(pseudonym.encode(encoding="utf-8"))
         if dead:
             return DEAD_COLS[ind % len(DEAD_COLS)]
         return HEX_COLS[ind % len(HEX_COLS)]
@@ -443,7 +444,7 @@ class MafiaPlugin(AbstractPlugin):
         current_capos = []
         activity: Set[str] = set()
         wanted: Dict[str, datetime] = {}
-        last_refresh = datetime.datetime(year=1000, month=1, day=1)
+        last_refresh = datetime.datetime(year=1000, month=1, day=1).astimezone(TIMEZONE)
 
         warnings: List[Label] = []
 
@@ -529,7 +530,7 @@ class MafiaPlugin(AbstractPlugin):
             for victim in deaths:
                 points[victim] = max(points[victim]/2, 1)
 
-        wanted = {p: d for (p, d) in wanted.items() if d >= datetime.datetime.now()}
+        wanted = {p: d for (p, d) in wanted.items() if d >= get_now_dt()}
 
         player_rows: List[str] = []
         # tuple of total points and row

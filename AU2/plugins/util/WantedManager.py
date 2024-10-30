@@ -1,9 +1,11 @@
 import datetime
 from typing import Dict, List
 
+from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event
+from AU2.plugins.util.date_utils import get_now_dt
 
 
 class WantedManager:
@@ -11,7 +13,7 @@ class WantedManager:
     (Not so) Simple manager for wantedness
     """
 
-    def __init__(self, current_time=datetime.datetime.now):
+    def __init__(self, current_time=get_now_dt()):
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("WantedPlugin", False)
         self.current_time = current_time
         # Relevent events are dicts, either {event_time: datetime.datetime, wanted_duration: days, crime: str, redemption: str},

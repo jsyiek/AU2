@@ -14,6 +14,7 @@ from AU2.html_components.Label import Label
 from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.util.date_utils import get_now_dt
 
 
 @registered_plugin
@@ -54,7 +55,7 @@ class LocalBackupPlugin(AbstractPlugin):
         ]
 
     def ask_backup(self) -> List[HTMLComponent]:
-        now = datetime.datetime.now()
+        now = get_now_dt()
         folder_name = now.strftime("backup_%d-%m-%Y_%H-%M-%S")
         return [
             DefaultNamedSmallTextbox(

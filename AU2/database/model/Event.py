@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 
-import datetime
-from dataclasses_json import dataclass_json
+import datetime as dt
+from dataclasses_json import dataclass_json, config
 from typing import Any, Dict, Tuple, List
 
+from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
 
@@ -19,7 +20,12 @@ class Event(PersistentFile):
     assassins: Dict[str, int]
 
     # time the event occurred
-    datetime: datetime.datetime
+    datetime: dt.datetime = field(
+        metadata=config(
+            encoder=dt.datetime.timestamp,
+            decoder=lambda ts: dt.datetime.fromtimestamp(ts).astimezone().astimezone(TIMEZONE)
+        )
+    )
 
     # headline of the event
     headline: str
@@ -41,6 +47,6 @@ class Event(PersistentFile):
         if not self.__secret_id:
             self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()
         if not self.identifier:
-            self.identifier = "(" + self.__secret_id + ") " + self.headline[0:40].rstrip()
+            self.identifier = "(" + self.__secret_id + ") " + self.headline[0:25].rstrip()
 
-        self.datetime = self.datetime.replace(tzinfo=None)
+        # self.datetime = self.datetime.replace(tzinfo=None)
