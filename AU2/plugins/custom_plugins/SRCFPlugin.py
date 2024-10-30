@@ -102,31 +102,31 @@ class SRCFPlugin(AbstractPlugin):
         self.password = ""
         self.__exports = [
             Export(
-                "SRCFPlugin_publish_pages",
+                "srcf_plugin_publish_pages",
                 "SRCF -> Upload database and publish pages",
                 self.ask_ignore_lock,
                 self.answer_publish_pages
             ),
             Export(
-                "SRCFPlugin_request_lock",
+                "srcf_plugin_request_lock",
                 "SRCF -> Request lock",
                 self.ask_ignore_lock,
                 self.answer_lock
             ),
             Export(
-                "SRCFPlugin_remote_backup",
+                "srcf_plugin_remote_backup",
                 "SRCF -> Remote backup",
                 self.ask_backup,
                 self.answer_backup
             ),
             Export(
-                "SRCFPlugin_restore_backup",
+                "srcf_plugin_restore_backup",
                 "SRCF -> Restore remote backup",
                 self.ask_restore_backup,
                 self.answer_restore_backup
             ),
             Export(
-                "SRCFPlugin_manual_sync",
+                "srcf_plugin_manual_sync",
                 "SRCF -> Manual database sync",
                 self.ask_ignore_lock,
                 self.answer_manual_sync

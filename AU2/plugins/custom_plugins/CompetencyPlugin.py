@@ -90,7 +90,7 @@ class CompetencyPlugin(AbstractPlugin):
 
         self.config_exports = [
             ConfigExport(
-                identifier="CompetencyPlugin_update_competency_defaults",
+                identifier="competency_plugin_update_competency_defaults",
                 display_name="Competency -> Update Default Extension",
                 ask=self.set_default_competency_deadline_ask,
                 answer=self.set_default_competency_deadline_answer

@@ -26,7 +26,7 @@ class PlayerImporterPlugin(AbstractPlugin):
 
         self.exports = [
             Export(
-                identifier="import_players",
+                identifier="player_importer_import_players",
                 display_name="Import players",
                 ask=self.ask_read_assassins_csv,
                 answer=self.answer_read_assassins_csv,

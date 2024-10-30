@@ -85,19 +85,19 @@ class PolicePlugin(AbstractPlugin):
 
         self.config_exports = [
             ConfigExport(
-                identifier="PolicePlugin_set_ranks",
+                identifier="police_plugin_set_ranks",
                 display_name="Police -> Set Ranks",
                 ask=self.ask_set_ranks,
                 answer=self.answer_set_ranks
             ),
             ConfigExport(
-                identifier="PolicePlugin_select_options",
+                identifier="police_plugin_select_options",
                 display_name="Police -> Select Ranking options",
                 ask=self.ask_select_options,
                 answer=self.answer_select_options
             ),
             ConfigExport(
-                identifier="PolicePlugin_set_special_ranks",
+                identifier="police_plugin_set_special_ranks",
                 display_name="Police -> Set Umpire/CoP",
                 ask=self.ask_set_special_ranks,
                 answer=self.answer_set_special_ranks

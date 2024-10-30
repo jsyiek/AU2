@@ -19,7 +19,7 @@ class RandomGamePlugin(AbstractPlugin):
         super().__init__("RandomGame")
         self.exports = [
             Export(
-                "RandomGame_randomize_game",
+                "random_game_randomize_game",
                 "Random Game",
                 self.ask_random_game,
                 self.answer_random_game
