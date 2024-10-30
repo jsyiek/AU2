@@ -134,7 +134,7 @@ class CorePlugin(AbstractPlugin):
                 self.answer_core_plugin_create_event
             ),
             Export(
-                "core_plugin_delete_event",
+                "core_event_delete_event",
                 "Event -> Delete",
                 self.ask_core_plugin_delete_event,
                 self.answer_core_plugin_delete_event,
