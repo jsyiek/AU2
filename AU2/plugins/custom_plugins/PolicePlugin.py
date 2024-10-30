@@ -80,13 +80,13 @@ class PolicePlugin(AbstractPlugin):
 
         self.config_exports = [
             ConfigExport(
-                "PolicePlugin_set_ranks",
+                "police_plugin_set_ranks",
                 "Police -> Set Ranks",
                 self.ask_set_ranks,
                 self.answer_set_ranks
             ),
             ConfigExport(
-                "PolicePlugin_select_options",
+                "police_plugin_select_options",
                 "Police -> Select Ranking options",
                 self.ask_select_options,
                 self.answer_select_options

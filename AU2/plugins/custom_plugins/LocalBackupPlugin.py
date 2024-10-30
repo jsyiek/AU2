@@ -34,19 +34,19 @@ class LocalBackupPlugin(AbstractPlugin):
 
         self.exports = [
             Export(
-                identifier="create_backup",
+                identifier="local_backup_create_backup",
                 display_name="Backup -> Create Backup",
                 ask=self.ask_backup,
                 answer=self.answer_backup
             ),
             Export(
-                identifier="restore_backup",
+                identifier="local_backup_restore_backup",
                 display_name="Backup -> Restore Backup",
                 ask=self.ask_restore_backup,
                 answer=self.answer_restore_backup
             ),
             Export(
-                identifier="reset_database",
+                identifier="local_backup_reset_database",
                 display_name="Reset Database",
                 ask=self.ask_reset_database,
                 answer=self.answer_reset_database

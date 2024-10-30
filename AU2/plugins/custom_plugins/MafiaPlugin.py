@@ -127,19 +127,19 @@ class MafiaPlugin(AbstractPlugin):
 
         self.exports = [
             Export(
-                "create_mafia_score_page",
+                "mafia_plugin_create_mafia_score_page",
                 "Generate page -> Scoring and player list",
                 self.ask_generate_score_page,
                 self.answer_generate_score_page
             ),
             Export(
-                "create_mafia_the_story",
+                "mafia_plugin_create_mafia_the_story",
                 "Generate page -> The Story",
                 self.ask_generate_the_story,
                 self.answer_generate_the_story
             ),
             Export(
-                "set_quote",
+                "mafia_plugin_set_quote",
                 "Set quote [MafiaPlugin]",
                 self.ask_set_quote,
                 self.answer_set_quote
