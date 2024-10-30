@@ -8,7 +8,6 @@ def valid_targets(num_players, targets):
     return True
 
 
-
 class TestTargetingPlugin:
 
     @plugin_test
@@ -41,7 +40,6 @@ class TestTargetingPlugin:
         targets = plugin.compute_targets()
         assert valid_targets(num_players - 4, targets)
 
-
     @plugin_test
     def test_lots_of_deaths(self):
         num_players = 250
@@ -57,7 +55,6 @@ class TestTargetingPlugin:
 
         targets = plugin.compute_targets()
         assert valid_targets(num_players - 100, targets)
-
 
     @plugin_test
     def test_92_5_percent_deaths(self):
@@ -83,7 +80,6 @@ class TestTargetingPlugin:
         targets = plugin.compute_targets()
         assert valid_targets(num_players - 185, targets)
 
-
     @plugin_test
     def test_ignores_police(self):
         num_players = 250
@@ -99,3 +95,17 @@ class TestTargetingPlugin:
         
         # 5 police, 1 player dead
         assert valid_targets(num_players - 5 - 1, targets)
+
+    @plugin_test
+    def test_no_crash_when_double_kill(self):
+        num_players = 250
+        p = some_players(num_players)
+        game = MockGame().having_assassins(p)
+        for a in p[1:]:
+            game.assassin(a).kills(p[0])
+
+        plugin = TargetingPlugin()
+        plugin.compute_targets()
+
+        # if doesn't crash, test passes
+
