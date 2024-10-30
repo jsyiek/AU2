@@ -1,6 +1,7 @@
 import datetime
 from html import escape
 
+from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 
 
@@ -8,7 +9,11 @@ def get_game_start() -> datetime.datetime:
     """
     Returns the start of the game.
     """
-    return datetime.datetime.fromtimestamp(GENERIC_STATE_DATABASE.arb_state.setdefault("game_start", datetime.datetime.now().timestamp()))
+    return datetime.datetime.fromtimestamp(
+        GENERIC_STATE_DATABASE.arb_state.setdefault(
+            "game_start", TIMEZONE.localize(datetime.datetime.now()).timestamp()
+        )
+    )
 
 
 def set_game_start(date: datetime.datetime):

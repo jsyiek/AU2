@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 
-import datetime
-from dataclasses_json import dataclass_json
+import datetime as dt
+from dataclasses_json import dataclass_json, config
 from typing import Any, Dict, Tuple, List
 
+from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
 
@@ -19,7 +20,12 @@ class Event(PersistentFile):
     assassins: Dict[str, int]
 
     # time the event occurred
-    datetime: datetime.datetime
+    datetime: dt.datetime = field(
+        metadata=config(
+            encoder=lambda ts: ts.replace(tzinfo=TIMEZONE).timestamp(),
+            decoder=lambda ts: TIMEZONE.localize(dt.datetime.fromtimestamp(ts))
+        )
+    )
 
     # headline of the event
     headline: str
