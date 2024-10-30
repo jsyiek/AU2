@@ -118,7 +118,7 @@ def datetime_to_time_str(event_time: datetime.datetime) -> str:
     """
     Returns a formatted timestamp suitable for the news.
     """
-    return event_time.strftime("%I:%M %p")
+    return event_time.strftime("%H:%M %p")
 
 
 @registered_plugin
