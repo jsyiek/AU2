@@ -18,6 +18,7 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
+from AU2.plugins.util.date_utils import get_now_dt
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -124,7 +125,7 @@ class WantedPlugin(AbstractPlugin):
         # (umpires messing with event timings could affect the canon timeline!)
         events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
 
-        now = datetime.datetime.now()
+        now = get_now_dt()
 
         police_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("PolicePlugin", False)
 
@@ -241,7 +242,7 @@ class WantedPlugin(AbstractPlugin):
             F.write(
                 WANTED_PAGE.format(
                     CONTENT="\n".join(tables),
-                    YEAR=datetime.datetime.now().year
+                    YEAR=get_now_dt().year
                 )
             )
         messages.append(Label("[WANTED] Success!"))

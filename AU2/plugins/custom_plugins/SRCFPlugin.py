@@ -23,6 +23,7 @@ from AU2.html_components.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import soft_escape
 
 SRCF_WEBSITE = "shell.srcf.net"
@@ -332,7 +333,7 @@ class SRCFPlugin(AbstractPlugin):
                 EMAILS="".join(email_str_list)
             )
 
-            now = datetime.datetime.now()
+            now = get_now_dt()
             email_file_name = f"email.{now.day:02}{now.month:02}{now.year}" \
                               f"_{now.hour:02}_{now.minute:02}_{now.second:02}"
 
@@ -525,7 +526,7 @@ class SRCFPlugin(AbstractPlugin):
         return [Label("[SRCF Plugin] Successfuly published locally generated pages and uploaded database.")]
 
     def ask_backup(self) -> List[HTMLComponent]:
-        now = datetime.datetime.now()
+        now = get_now_dt()
         folder_name = now.strftime("backup_%d-%m-%Y_%H-%M-%S")
         return [
             DefaultNamedSmallTextbox(
@@ -573,7 +574,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         if not self.logged_in:
             return
-        unix_ts = datetime.datetime.now().timestamp()
+        unix_ts = get_now_dt().timestamp()
         self._makedirs(sftp, os.path.dirname(LOCK_FILE))
         self._log_to(sftp, ACCESS_LOG, "Claimed lock.")
         with sftp.file(LOCK_FILE, "w+") as F:
@@ -605,7 +606,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         if not sftp:
             return
-        datetime_str = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S.%f]")
+        datetime_str = get_now_dt().strftime("[%Y-%m-%d %H:%M:%S.%f]")
         log_entry = f"{datetime_str} ({self.username}) {log_entry}\n"
         dir_name = os.path.dirname(log_path)
         self._makedirs(sftp, dir_name)

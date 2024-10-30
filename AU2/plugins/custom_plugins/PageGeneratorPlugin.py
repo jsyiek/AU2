@@ -16,6 +16,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
@@ -296,7 +297,7 @@ class PageGeneratorPlugin(AbstractPlugin):
             weeks[w] = NEWS_TEMPLATE.format(
                 N=w,
                 DAYS="".join(outs),
-                YEAR=str(datetime.datetime.now().year)
+                YEAR=str(get_now_dt().year)
             )
 
         for w in weeks:
@@ -316,7 +317,7 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         head_page_text = HEAD_TEMPLATE.format(
             CONTENT="".join(head_days),
-            YEAR=str(datetime.datetime.now().year)
+            YEAR=str(get_now_dt().year)
         )
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+", encoding="utf-8", errors="ignore") as F:
             F.write(head_page_text)

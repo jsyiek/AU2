@@ -1,11 +1,13 @@
 import datetime
 from typing import List
 
+from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import PersistentFile, Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
 from AU2.plugins.util import random_data
+from AU2.plugins.util.date_utils import get_now_dt
 
 
 def dummy_event():
@@ -19,7 +21,7 @@ def dummy_event():
     """
     return Event(
         assassins={},
-        datetime=datetime.datetime.now(),
+        datetime=get_now_dt(),
         headline="",
         reports=[],
         kills={},
@@ -103,7 +105,7 @@ class MockGame:
 
 
     def __init__(self):
-        self.date = datetime.datetime(year=2022, month=9, day=1, hour=10, minute=0, second=0)
+        self.date = datetime.datetime(year=2022, month=9, day=1, hour=10, minute=0, second=0).astimezone(TIMEZONE)
         self.assassins = list()
 
     def has_died(self, name):

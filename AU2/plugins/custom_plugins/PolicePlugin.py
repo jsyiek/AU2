@@ -19,6 +19,7 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.PoliceRankManager import DEFAULT_RANKS, PoliceRankManager, DEFAULT_POLICE_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT
+from AU2.plugins.util.date_utils import get_now_dt
 
 POLICE_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -307,7 +308,7 @@ class PolicePlugin(AbstractPlugin):
             F.write(
                 POLICE_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
-                    YEAR=datetime.datetime.now().year
+                    YEAR=get_now_dt().year
                 )
             )
         message.append(Label("[POLICE] Success!"))

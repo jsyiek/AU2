@@ -22,8 +22,8 @@ class Event(PersistentFile):
     # time the event occurred
     datetime: dt.datetime = field(
         metadata=config(
-            encoder=lambda ts: ts.replace(tzinfo=TIMEZONE).timestamp(),
-            decoder=lambda ts: TIMEZONE.localize(dt.datetime.fromtimestamp(ts))
+            encoder=dt.datetime.timestamp,
+            decoder=lambda ts: dt.datetime.fromtimestamp(ts).astimezone().astimezone(TIMEZONE)
         )
     )
 
@@ -49,4 +49,4 @@ class Event(PersistentFile):
         if not self.identifier:
             self.identifier = "(" + self.__secret_id + ") " + self.headline[0:25].rstrip()
 
-        self.datetime = self.datetime.replace(tzinfo=None)
+        # self.datetime = self.datetime.replace(tzinfo=None)
