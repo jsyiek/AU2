@@ -293,7 +293,7 @@ class SRCFPlugin(AbstractPlugin):
         if hook == self.hooks["email"]:
             email_list: List[Email] = data
             subject = htmlResponse[self.html_ids["email_subject"]]
-            message = soft_escape(htmlResponse[self.html_ids["email_message"]])
+            message = htmlResponse[self.html_ids["email_message"]]
             send_emails = htmlResponse[self.html_ids["dry_run"]]
 
             for email in email_list:
