@@ -44,12 +44,12 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 
 
 HEX_COLS = [
-    '#B1AB8A', '#75C49C', '#7BA5A2', '#B0B477', '#B6CDBC',
-    '#EC7DD2', '#B964EB', '#758FAC', '#EEABF2', '#6892B0',
-    '#00822b', '#D4A66A', '#8E7CE6', '#7CCC64', '#95B7F5',
-    '#FF81EA', '#EB82D4', '#E89F6E', '#98A0CD', '#ACC6D0'
+    '#00A6A3', '#26CCC8', '#008B8A', '#B69C1F',
+    '#D1B135', '#5B836E', '#7A9E83', '#00822b',
+    '#00A563', '#FFA44D', '#CC6C1E', '#37b717',
+    '#27B91E', '#1F9E1A', '#3DC74E', '#00c6c3',
+    '#b7a020', '#637777', '#f28110'
 ]
-
 
 DEAD_COLS = [
     '#A9756C', '#A688BF', '#A34595'
