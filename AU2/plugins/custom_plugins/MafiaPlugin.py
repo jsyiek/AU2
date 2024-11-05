@@ -65,7 +65,7 @@ CHAPTERS = {
 HEX_COLS = [
     '#B1AB8A', '#75C49C', '#7BA5A2', '#B0B477', '#B6CDBC',
     '#EC7DD2', '#B964EB', '#758FAC', '#EEABF2', '#6892B0',
-    '#D9FBBF', '#D4A66A', '#8E7CE6', '#7CCC64', '#95B7F5',
+    '#00822b', '#D4A66A', '#8E7CE6', '#7CCC64', '#95B7F5',
     '#FF81EA', '#EB82D4', '#E89F6E', '#98A0CD', '#ACC6D0'
 ]
 
