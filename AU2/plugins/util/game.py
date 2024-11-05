@@ -36,3 +36,13 @@ def soft_escape(string: str) -> str:
     if not string.startswith("<!--HTML-->"):
         return escape(string)
     return string
+
+
+def escape_format_braces(string: str) -> str:
+    """
+    Escapes { and } in a string so that they will be processed correctly by .format
+    This needs to be called on user-input strings passed as part of the message of any inquirer prompt,
+    or as part of the default of inquirer Text prompts (but not the choices or defaults of List of Checkbox prompts)
+    """
+    # need type check because, when escaping default values, `None` is sometimes passed to this function
+    return string.replace("{", "{{").replace("}", "}}") if isinstance(string, str) else string
