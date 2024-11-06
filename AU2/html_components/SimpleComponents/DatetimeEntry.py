@@ -1,7 +1,5 @@
 import datetime
-from html import escape
 
-from AU2 import TIMEZONE
 from AU2.html_components import HTMLComponent
 from AU2.plugins.util.date_utils import get_now_dt
 

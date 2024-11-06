@@ -2,8 +2,8 @@ from collections import defaultdict
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
-from AU2.html_components.Label import Label
+from AU2.database.model import Event
+from AU2.html_components.SimpleComponents.Label import Label
 
 DEFAULT_RANKS = [
     'Bog-standard Constable',  # Default police rank

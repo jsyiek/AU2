@@ -1,17 +1,16 @@
 import datetime
 import os
 import zlib
-from html import escape
-from typing import List, Tuple
+from typing import List
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.Checkbox import Checkbox
-from AU2.html_components.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.plugins.AbstractPlugin import AbstractPlugin
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CompetencyManager import CompetencyManager

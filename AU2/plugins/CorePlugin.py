@@ -8,20 +8,20 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
-from AU2.html_components.ArbitraryList import ArbitraryList
-from AU2.html_components.AssassinDependentReportEntry import AssassinDependentReportEntry
-from AU2.html_components.AssassinPseudonymPair import AssassinPseudonymPair
-from AU2.html_components.Checkbox import Checkbox
-from AU2.html_components.DatetimeEntry import DatetimeEntry
-from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.Dependency import Dependency
-from AU2.html_components.HiddenTextbox import HiddenTextbox
-from AU2.html_components.InputWithDropDown import InputWithDropDown
-from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
-from AU2.html_components.Label import Label
-from AU2.html_components.LargeTextEntry import LargeTextEntry
-from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
-from AU2.html_components.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.ArbitraryList import ArbitraryList
+from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
+from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.AvailablePlugins import __PluginMap
@@ -125,7 +125,7 @@ class CorePlugin(AbstractPlugin):
                 "Assassin -> Update",
                 self.ask_core_plugin_update_assassin,
                 self.answer_core_plugin_update_assassin,
-                (lambda: sorted([v for v in ASSASSINS_DATABASE.assassins], key=lambda n: n.lower()),)
+                ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
             ),
             Export(
                 "core_event_create_event",
