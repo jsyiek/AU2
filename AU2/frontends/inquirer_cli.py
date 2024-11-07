@@ -10,7 +10,7 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
-from AU2.html_components.SimpleComponents.ArbitraryList import ArbitraryList
+from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, ListUpdates
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
@@ -34,6 +34,7 @@ from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
+from AU2.plugins.util.date_utils import get_now_dt
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -42,6 +43,18 @@ def datetime_validator(_, current):
     try:
         if current is None:
             raise KeyboardInterrupt
+        s = datetime.datetime.strptime(current, DATETIME_FORMAT)
+    except ValueError:
+        return False
+    return True
+
+# same as above except allows blank values (for pseudonym datetimes this represents being valid forever)
+def optional_datetime_validator(_, current):
+    try:
+        if current is None:
+            raise KeyboardInterrupt
+        if current == "":
+            return True
         s = datetime.datetime.strptime(current, DATETIME_FORMAT)
     except ValueError:
         return False
@@ -137,7 +150,8 @@ def render(html_component, dependency_context={}):
         chosen_assassins = inquirer_prompt_with_abort(q)["q"]
         mappings = {}
         for player in chosen_assassins:
-            choices = [a[1] for a in html_component.assassins if a[0] == player][0]
+            values = [a[1] for a in html_component.assassins if a[0] == player][0]
+            choices = [(c, i) for i, c in enumerate(values) if c] # hide any null (i.e. deleted) pseudonyms
             if len(choices) != 1:
                 q = [
                     inquirer.List(
@@ -146,10 +160,11 @@ def render(html_component, dependency_context={}):
                         choices=choices,
                         default=html_component.default.get(player, "")
                     )]
-                pseudonym = inquirer_prompt_with_abort(q)["q"]
+                pseudonym_index = inquirer_prompt_with_abort(q)["q"]
             else:
-                pseudonym = choices[0]
-            mappings[player] = choices.index(pseudonym)
+                pseudonym_index = choices[0][1]
+            pseudonym = values[pseudonym_index]
+            mappings[player] = pseudonym_index
             print(f"Using {player}: {pseudonym}")
         return {html_component.identifier: mappings}
 
@@ -430,32 +445,106 @@ def render(html_component, dependency_context={}):
             inquirer.Text(name=html_component.identifier, message=html_component.title, default=html_component.default)]
         return inquirer_prompt_with_abort(q)
 
-    elif isinstance(html_component, ArbitraryList):
-        q = [inquirer.Checkbox(
-            name=html_component.identifier,
-            message=html_component.title,
-            choices=html_component.values + ["*Other*"],
-            default=html_component.values
-        )]
-        a = inquirer_prompt_with_abort(q)
-        if "*Other*" in a[html_component.identifier]:
-            a[html_component.identifier].remove("*Other*")
-            print("Adding new pseudonyms.")
-            print("Instructions:")
-            print("    Leave a blank string if you want to add no pseudonyms")
-            print("    Separate new pseudonyms by commas")
-            print("    E.g. Vendetta,Pyrite,Mina will generate the list ['Vendetta', 'Pyrite', 'Mina']")
-            print("    Adding *Other* as a pseudonym would be, shall we say, dumb. Don't do that.")
-            q = [inquirer.Text(
-                name="newpseudonyms",
-                message="Enter new pseudonyms",
+    # TODO: fundamentally this component is just editing a list where each entry has multiple parts to this value,
+    #       so we may want to abstract this component
+    elif isinstance(html_component, EditablePseudonymList):
+        values = html_component.values
+        old_n_values = len(values)
+        edited = {} # dict mapping index to new value
+        new_values = []
+        deleted_indices = set()
+        while True:
+            q = [inquirer.List(
+                name=html_component.identifier,
+                message=html_component.title,
+                choices=[("*CONTINUE*", -1)] + [(v.text, i) for i, v in enumerate(values) if v.text] + [("*NEW*", -2)],
             )]
-            out = inquirer_prompt_with_abort(q)["newpseudonyms"]
-            if out:
-                out = out.split(",")
-                print("New pseudonyms:", out)
-                a[html_component.identifier] = a[html_component.identifier] + out
-        return a
+            a = inquirer_prompt_with_abort(q)
+            c = a[html_component.identifier] # index of choice
+            if c == -2: # case where "*NEW*" selected
+                q = [inquirer.Text(
+                    name="newpseudonym",
+                    message="Enter a new pseudonym",
+                )]
+                try:
+                    p = inquirer_prompt_with_abort(q)["newpseudonym"]
+                except KeyboardInterrupt:
+                    continue
+                if p.strip() == "":
+                    continue
+
+                q = [inquirer.Text(
+                    name="dt",
+                    message=f"Enter start of validity (YYYY-MM-DD HH:MM) (blank if always valid)",
+                    default=get_now_dt().strftime(DATETIME_FORMAT),
+                    validate=optional_datetime_validator,
+                )]
+                try:
+                    dt_str = inquirer_prompt_with_abort(q)["dt"]
+                    valid_from = (None if dt_str == ""
+                                  else datetime.datetime.strptime(dt_str, DATETIME_FORMAT).astimezone(TIMEZONE))
+                except KeyboardInterrupt:
+                    continue
+
+                p_data = PseudonymData(p, valid_from)
+                new_values.append(p_data)
+                values.append(p_data)
+            elif c == -1: # case where "*CONTINUE*" selected
+                break
+            else:
+                v = values[c]
+                q = [inquirer.Text(
+                    name="editpseudonym",
+                    message="Enter replacement" + ("" if c == 0 else " (blank to delete)"), # cannot delete initial pseudonym
+                    default=v.text
+                )]
+                try:
+                    p = inquirer_prompt_with_abort(q)["editpseudonym"]
+                except KeyboardInterrupt:
+                    continue
+                # whitespace values => delete.
+                # could change this to some other input e.g. "-"
+                if p.strip() == "":
+                    if c == 0: # if we don't catch this case then delete_pseudonym will throw an error down the line...
+                        print("Can't delete initial pseudonym!")
+                        continue
+
+                    q = [inquirer.Confirm(
+                        name="deletepseudonym",
+                        message=f"Do you wish to delete the pseudonym {v.text}?",
+                        default=False
+                    )]
+                    try:
+                        if inquirer_prompt_with_abort(q)["deletepseudonym"]:
+                            deleted_indices.add(c)
+                            values[c] = PseudonymData("", None)
+                    finally:
+                        continue
+
+                if c == 0: # initial pseudonym should always be valid forever
+                    valid_from = v.valid_from
+                else:
+                    q = [inquirer.Text(
+                        name="dt",
+                        message=f"Enter start of validity (YYYY-MM-DD HH:MM) (blank if always valid)",
+                        default=v.valid_from.strftime(DATETIME_FORMAT) if v.valid_from else "",
+                        validate=optional_datetime_validator,
+                    )]
+                    try:
+                        dt_str = inquirer_prompt_with_abort(q)["dt"]
+                    except KeyboardInterrupt:
+                        continue
+                    valid_from = (None if dt_str == ""
+                                  else datetime.datetime.strptime(dt_str, DATETIME_FORMAT).astimezone(TIMEZONE))
+                p_data = PseudonymData(p, valid_from)
+                values[c] = p_data
+                if c < old_n_values:
+                    edited[c] = p_data
+                else:
+                    new_values[c-old_n_values] = p_data
+
+        return {html_component.identifier:
+                    ListUpdates(edited, new_values, deleted_indices)}
 
     elif isinstance(html_component, SelectorList):
         q = [

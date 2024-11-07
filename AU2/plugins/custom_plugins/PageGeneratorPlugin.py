@@ -178,13 +178,13 @@ class PageGeneratorPlugin(AbstractPlugin):
             return POLICE_COLS[ind % len(POLICE_COLS)]
         return HEX_COLS[ind % len(HEX_COLS)]
 
-    def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str) -> str:
+    def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: datetime.datetime = get_now_dt()) -> str:
         id_ = assassin._secret_id
         string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
         for i in range(len(assassin.pseudonyms)):
-            string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.pseudonyms[i])))
+            string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
         string = string.replace(f"[D{id_}]",
-                                    " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms))
+                                    " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
         string = string.replace(f"[N{id_}]",
                                     PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
         return string
@@ -221,7 +221,7 @@ class PageGeneratorPlugin(AbstractPlugin):
 
             for (assassin, pseudonym_index) in e.assassins.items():
                 assassin_model = ASSASSINS_DATABASE.get(assassin)
-                pseudonym = assassin_model.pseudonyms[pseudonym_index]
+                pseudonym = assassin_model.get_pseudonym(pseudonym_index)
 
                 # TODO: Wanted coloring
                 # TODO: Incompetent coloring
@@ -231,10 +231,10 @@ class PageGeneratorPlugin(AbstractPlugin):
                     incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
                     is_police=assassin_model.is_police
                 )
-                headline = self.substitute_pseudonyms(headline, pseudonym, assassin_model, color)
+                headline = self.substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
 
                 for (k, r) in reports.items():
-                    reports[k] = self.substitute_pseudonyms(r, pseudonym, assassin_model, color)
+                    reports[k] = self.substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
 
             report_list = []
             for ((assassin, pseudonym_index), r) in reports.items():
@@ -242,7 +242,7 @@ class PageGeneratorPlugin(AbstractPlugin):
                 # If they tell it not to, they do so at their own risk. Make sure you know what you want to do!
                 # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
                 assassin_model = ASSASSINS_DATABASE.get(assassin)
-                pseudonym = assassin_model.pseudonyms[pseudonym_index]
+                pseudonym = assassin_model.get_pseudonym(pseudonym_index)
                 color = self.get_color(
                     pseudonym,
                     dead=death_manager.is_dead(assassin_model),

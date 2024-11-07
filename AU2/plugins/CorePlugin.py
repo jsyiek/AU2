@@ -8,7 +8,7 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
-from AU2.html_components.SimpleComponents.ArbitraryList import ArbitraryList
+from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
@@ -206,7 +206,10 @@ class CorePlugin(AbstractPlugin):
     def on_assassin_request_update(self, assassin):
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            ArbitraryList(self.html_ids["Pseudonym"], "Pseudonyms", assassin.pseudonyms),
+            EditablePseudonymList(
+                self.html_ids["Pseudonym"], "Edit Pseudonyms",
+                (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
+            ),
             DefaultNamedSmallTextbox(self.html_ids["Real Name"], "Real Name", assassin.real_name),
             DefaultNamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns", assassin.pronouns),
             DefaultNamedSmallTextbox(self.html_ids["Email"], "Email", assassin.email, type_="email"),
@@ -219,7 +222,12 @@ class CorePlugin(AbstractPlugin):
         return html
 
     def on_assassin_update(self, assassin: Assassin, htmlResponse: Dict) -> List[HTMLComponent]:
-        assassin.pseudonyms = htmlResponse[self.html_ids["Pseudonym"]]
+        # process updates to the assassin's pseudonyms
+        pseudonym_updates = htmlResponse[self.html_ids["Pseudonym"]]
+        [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
+        [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
+        [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
+
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
         assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
         assassin.address = htmlResponse[self.html_ids["Address"]]
