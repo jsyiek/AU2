@@ -43,6 +43,16 @@ def escape_format_braces(string: str) -> str:
     Escapes { and } in a string so that they will be processed correctly by .format
     This needs to be called on user-input strings passed as part of the message of any inquirer prompt,
     or as part of the default of inquirer Text prompts (but not the choices or defaults of List of Checkbox prompts)
+
+    Args:
+        string: the string to escape occurrences of `{` and `}` in.
+
+    Returns:
+        `string` with all occurrences of `{` and `}` doubled.
+
+    Examples:
+        >>> escape_format_braces(":} :{")
+        ":}} :{{"
     """
     # need type check because, when escaping default values, `None` is sometimes passed to this function
-    return string.replace("{", "{{").replace("}", "}}") if isinstance(string, str) else string
+    return string.replace("{", "{{").replace("}", "}}")

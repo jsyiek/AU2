@@ -6,7 +6,7 @@ from AU2.html_components import HTMLComponent
 class LargeTextEntry(HTMLComponent):
     name: str = "LargeTextEntry"
 
-    def __init__(self, identifier: str, title: str, default: str=None):
+    def __init__(self, identifier: str, title: str, default: str=""):
         self.title = title
         self.identifier = identifier
         self.uniqueStr = self.get_unique_str()

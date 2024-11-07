@@ -263,17 +263,17 @@ def render(html_component, dependency_context={}):
                 inquirer.Text(
                     name="duration",
                     message=f"WANTED DURATION for: {escape_format_braces(a)} ",
-                    default=html_component.default.get(a, (None, None, None))[0],
+                    default=html_component.default.get(a, ("", "", ""))[0],
                     validate=integer_validator
                 ), inquirer.Text(
                     name="crime",
                     message=f"CRIME for: {escape_format_braces(a)}",
-                    default=escape_format_braces(html_component.default.get(a, (None, None, None))[1]),
+                    default=escape_format_braces(html_component.default.get(a, ("", "", ""))[1]),
                     ignore=lambda x: int(x["duration"]) <= 0
                 ), inquirer.Text(
                     name="redemption",
                     message=f"REDEMPTION for: {escape_format_braces(a)}",
-                    default=escape_format_braces(html_component.default.get(a, (None, None, None))[2]),
+                    default=escape_format_braces(html_component.default.get(a, ("", "", ""))[2]),
                     ignore=lambda x: int(x["duration"]) <= 0
                 )]
             value = inquirer_prompt_with_abort(q)
@@ -370,7 +370,7 @@ def render(html_component, dependency_context={}):
             q.append(inquirer.Text(
                 name=a,
                 message=f"Value for {escape_format_braces(a)}",
-                default=escape_format_braces(html_component.default.get(a, None))
+                default=escape_format_braces(html_component.default.get(a, ""))
             ))
         points = {}
         if q:
