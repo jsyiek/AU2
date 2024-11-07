@@ -2,11 +2,12 @@ import datetime
 import random
 from typing import List
 
+from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Assassin, Event
-from AU2.html_components.IntegerEntry import IntegerEntry
-from AU2.html_components.Label import Label
+from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
+from AU2.html_components.SimpleComponents.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES

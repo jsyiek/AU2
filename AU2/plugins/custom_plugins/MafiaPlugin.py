@@ -9,14 +9,14 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
-from AU2.html_components.AssassinDependentFloatEntry import AssassinDependentFloatEntry
-from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
-from AU2.html_components.AssassinDependentTextEntry import AssassinDependentTextEntry
-from AU2.html_components.Checkbox import Checkbox
-from AU2.html_components.Dependency import Dependency
-from AU2.html_components.InputWithDropDown import InputWithDropDown
-from AU2.html_components.Label import Label
-from AU2.html_components.LargeTextEntry import LargeTextEntry
+from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
+from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
+from AU2.html_components.DependentComponents.AssassinDependentTextEntry import AssassinDependentTextEntry
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION

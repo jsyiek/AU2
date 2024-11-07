@@ -10,27 +10,28 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
-from AU2.html_components.ArbitraryList import ArbitraryList
-from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
-from AU2.html_components.AssassinDependentFloatEntry import AssassinDependentFloatEntry
-from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
-from AU2.html_components.AssassinDependentReportEntry import AssassinDependentReportEntry
-from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
-from AU2.html_components.AssassinDependentTextEntry import AssassinDependentTextEntry
-from AU2.html_components.AssassinPseudonymPair import AssassinPseudonymPair
-from AU2.html_components.Checkbox import Checkbox
-from AU2.html_components.DatetimeEntry import DatetimeEntry
-from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.Dependency import Dependency
-from AU2.html_components.HiddenTextbox import HiddenTextbox
-from AU2.html_components.InputWithDropDown import InputWithDropDown
-from AU2.html_components.AssassinDependentKillEntry import AssassinDependentKillEntry
-from AU2.html_components.IntegerEntry import IntegerEntry
-from AU2.html_components.Label import Label
-from AU2.html_components.LargeTextEntry import LargeTextEntry
-from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
-from AU2.html_components.PathEntry import PathEntry
-from AU2.html_components.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.ArbitraryList import ArbitraryList
+from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
+from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
+from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
+from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
+from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
+from AU2.html_components.DependentComponents.AssassinDependentTextEntry import AssassinDependentTextEntry
+from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
+from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
+from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
+from AU2.html_components.SimpleComponents.PathEntry import PathEntry
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 
@@ -84,11 +85,8 @@ def render(html_component, dependency_context={}):
     dependency context is a MUTABLE DEFAULT ARGUMENT
     if you are modifying it THEN MODIFY A COPY
     TODO: don't use a mutable default arg!
-    (see in Scala, I already solved this problem with a beautiful scoping stack-map)
-    (but it's idiomatically FP and not idiomatically Python)
     """
     if isinstance(html_component, Dependency):
-
         iteration = 0
         last_step = 1
         while iteration < len(html_component.htmlComponents):
@@ -122,6 +120,8 @@ def render(html_component, dependency_context={}):
         if "skip" in out:
             del out["skip"]
         return out
+
+    # dependent component
     elif isinstance(html_component, AssassinPseudonymPair):
         assassins = [a[0] for a in html_component.assassins]
         assassins.sort()
@@ -369,7 +369,8 @@ def render(html_component, dependency_context={}):
             validate=datetime_validator
         )]
         datetime_str = inquirer_prompt_with_abort(q)["dt"]
-        return {html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE)}
+        return {
+            html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE)}
 
     elif isinstance(html_component, IntegerEntry):
         q = [inquirer.Text(
@@ -466,6 +467,34 @@ def render(html_component, dependency_context={}):
             )
         ]
         return inquirer_prompt_with_abort(q)
+
+    elif isinstance(html_component, EmailSelector):
+        q = [
+            inquirer.List(
+                name="emails",
+                message="Which assassins would you like to email?",
+                choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL POLICE", "MANUAL SELECTION"],
+                default="UPDATES ONLY",
+            )
+        ]
+        out = inquirer_prompt_with_abort(q)["emails"]
+        if out == "ALL":
+            return {html_component.identifier: html_component.assassins}
+        elif out == "ALL ALIVE":
+            return {html_component.identifier: html_component.alive_assassins}
+        elif out == "ALL POLICE":
+            return {html_component.identifier: html_component.police_assassins}
+        elif out == "UPDATES ONLY":
+            return {html_component.identifier: ["UPDATES ONLY"]}
+        else:
+            q = [
+                inquirer.Checkbox(
+                    name=html_component.identifier,
+                    message="Select assassins to send an email:",
+                    choices=html_component.assassins
+                )
+            ]
+            return inquirer_prompt_with_abort(q)
 
     else:
         raise Exception("Unknown component type:", type(html_component))

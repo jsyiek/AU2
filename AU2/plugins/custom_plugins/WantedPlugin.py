@@ -1,4 +1,3 @@
-import datetime
 import os
 from html import escape
 from typing import List
@@ -9,9 +8,9 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
-from AU2.html_components.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
-from AU2.html_components.Dependency import Dependency
-from AU2.html_components.Label import Label
+from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION

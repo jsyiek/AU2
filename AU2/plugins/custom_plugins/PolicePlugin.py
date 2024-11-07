@@ -1,4 +1,3 @@
-import datetime
 import os
 from typing import List
 
@@ -8,12 +7,12 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
-from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
-from AU2.html_components.Dependency import Dependency
-from AU2.html_components.Label import Label
-from AU2.html_components.LargeTextEntry import LargeTextEntry
-from AU2.html_components.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
+from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager

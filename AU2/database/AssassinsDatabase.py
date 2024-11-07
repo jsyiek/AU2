@@ -2,7 +2,7 @@ import os
 
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Dict
+from typing import Dict, List
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.model import PersistentFile, Assassin
@@ -18,7 +18,8 @@ class AssassinsDatabase(PersistentFile):
         """
         Adds an assassin to the database.
 
-        :param assassin:  Assassin to add
+        Parameters:
+            assassin:  Assassin to add
         """
         self.assassins[assassin.identifier] = assassin
 
@@ -26,12 +27,29 @@ class AssassinsDatabase(PersistentFile):
         """
         Removes an assassin from the database.
 
-        :param assassin: Assassin to delete (uses ID)
+        Parameters:
+            assassin: Assassin to delete (uses ID)
         """
         del self.assassins[assassin.identifier]
 
-    def get(self, identifier: str):
+    def get(self, identifier: str) -> Assassin:
+        """
+        Returns an Assassin object associated with an identifier
+
+        Parameters:
+            identifier: Identifier of assassin
+
+        Returns:
+            assassin object
+        """
         return self.assassins[identifier]
+
+    def get_identifiers(self) -> List[str]:
+        """
+        Returns:
+            list of identifiers sorted alphabetically
+        """
+        return sorted([v for v in self.assassins], key=lambda n: n.lower())
 
     def _refresh(self):
         """

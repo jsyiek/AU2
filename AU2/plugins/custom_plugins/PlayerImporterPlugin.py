@@ -5,9 +5,9 @@ from typing import List, Optional
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.model import Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.Label import Label
-from AU2.html_components.NamedSmallTextbox import NamedSmallTextbox
-from AU2.html_components.PathEntry import PathEntry
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
+from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WATER_STATUSES

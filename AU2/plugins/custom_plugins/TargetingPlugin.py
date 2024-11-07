@@ -7,9 +7,9 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
-from AU2.html_components.IntegerEntry import IntegerEntry
-from AU2.html_components.Label import Label
-from AU2.html_components.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email

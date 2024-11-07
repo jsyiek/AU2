@@ -3,19 +3,18 @@ import os
 from typing import List
 
 from AU2 import ROOT_DIR
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
-from AU2.html_components.AssassinDependentSelector import AssassinDependentSelector
-from AU2.html_components.DatetimeEntry import DatetimeEntry
-from AU2.html_components.Dependency import Dependency
-from AU2.html_components.InputWithDropDown import InputWithDropDown
-from AU2.html_components.IntegerEntry import IntegerEntry
-from AU2.html_components.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
+from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
+from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
+from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email

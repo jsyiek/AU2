@@ -10,19 +10,22 @@ import paramiko
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
+from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
 from AU2.database.model import Assassin
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
-from AU2.html_components.Checkbox import Checkbox
-from AU2.html_components.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.HiddenTextbox import HiddenTextbox
-from AU2.html_components.InputWithDropDown import InputWithDropDown
-from AU2.html_components.Label import Label
-from AU2.html_components.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
+from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
+from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import soft_escape
 
@@ -103,7 +106,7 @@ class SRCFPlugin(AbstractPlugin):
         self.__exports = [
             Export(
                 "srcf_plugin_publish_pages",
-                "SRCF -> Upload database and publish pages",
+                "SRCF -> Upload database and PUBLISH PAGES",
                 self.ask_ignore_lock,
                 self.answer_publish_pages
             ),
@@ -144,7 +147,7 @@ class SRCFPlugin(AbstractPlugin):
             HookedExport(
                 plugin_name=self.identifier,
                 identifier=self.identifier + "_email",
-                display_name="SRCF -> Send emails",
+                display_name="SRCF -> Upload database and SEND EMAILS",
                 producer=self.email_producer,
                 call_order=HookedExport.LAST
             )
@@ -210,7 +213,8 @@ class SRCFPlugin(AbstractPlugin):
             say("You really want to do this?")
             say("Ah, well, I hope you aren't making a habit out of this in the future.")
             say("I hope you know what you're doing.")
-            return [Checkbox(identifier=self.html_ids["should_enable_raw_editor"], title="Enable raw editing?", checked=False)]
+            return [Checkbox(identifier=self.html_ids["should_enable_raw_editor"], title="Enable raw editing?",
+                             checked=False)]
         except KeyboardInterrupt:
 
             print("Thank you for going back. You made the right choice. Raw page editor will be disabled.")
@@ -263,10 +267,20 @@ class SRCFPlugin(AbstractPlugin):
 
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["email"]:
+
+            death_manager = DeathManager()
+            for e in EVENTS_DATABASE.events.values():
+                death_manager.add_event(e)
+
+            alive_assassins = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if
+                               a.is_police or not death_manager.is_dead(a)]
+
+            police_assassins = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
+
             return [
                 Checkbox(
                     identifier=self.html_ids["dry_run"],
-                    title="Actually send emails? (Choosing 'No' will not send any emails but print out the contents",
+                    title="Actually send emails? (Choosing 'No' will not send any emails but print out the contents)",
                     checked=True
                 ),
                 DefaultNamedSmallTextbox(
@@ -281,20 +295,24 @@ class SRCFPlugin(AbstractPlugin):
                     identifier=self.html_ids["email_message"],
                     title="[SRCFPlugin] Add additional message?",
                 ),
-                Checkbox(
+                EmailSelector(
                     identifier=self.html_ids["email_require_send"],
-                    title="[SRCFPlugin] Do you want to mail to all players (Y) or just those with a plugin update (N)?",
-                    checked=False
+                    assassins=ASSASSINS_DATABASE.get_identifiers(),
+                    alive_assassins=alive_assassins,
+                    police_assassins=police_assassins
                 )
             ]
         return []
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
         if hook == self.hooks["email"]:
+
             email_list: List[Email] = data
             subject = htmlResponse[self.html_ids["email_subject"]]
             message = htmlResponse[self.html_ids["email_message"]]
             send_emails = htmlResponse[self.html_ids["dry_run"]]
+            recipients_list = htmlResponse[self.html_ids["email_require_send"]]
+            updates_only = "UPDATES ONLY" in recipients_list
 
             for email in email_list:
                 recipient = email.recipient
@@ -310,9 +328,13 @@ class SRCFPlugin(AbstractPlugin):
                 )
                 email.add_content(
                     plugin_name="!SRCFPlugin",
-                    content=message.replace("[P]", email.recipient.pseudonyms[0]).replace("[N]", email.recipient.real_name),
-                    require_send=htmlResponse[self.html_ids["email_require_send"]]
+                    content=message.replace("[P]", email.recipient.pseudonyms[0]).replace("[N]",
+                                                                                          email.recipient.real_name),
+                    require_send=False
                 )
+
+            for e in email_list:
+                e.send = (e.send and updates_only) or e.recipient.identifier in recipients_list
 
             email_list = [e for e in email_list if e.send]
 
@@ -369,6 +391,7 @@ class SRCFPlugin(AbstractPlugin):
                         print(email_file_contents)
 
                     self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
+                    self._publish_databases(sftp)
 
             return [Label("[SRCFPlugin] Sent!")]
         return []
@@ -410,7 +433,8 @@ class SRCFPlugin(AbstractPlugin):
     def ask_raw_page_edit(self, filename: str):
         contents = ""
         with self._get_client() as sftp:
-            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r", encoding="utf-8", errors="ignore") as F:
+            with sftp.file(f"/public/societies/assassins/public_html/{filename}", "r", encoding="utf-8",
+                           errors="ignore") as F:
                 contents = F.read()
 
         return [
@@ -516,12 +540,7 @@ class SRCFPlugin(AbstractPlugin):
                 self._log_to(sftp, PUBLISH_LOG, f"Published {page}")
                 os.remove(localpath)
 
-            for database in self._find_jsons(BASE_WRITE_LOCATION):
-                localpath = os.path.join(BASE_WRITE_LOCATION, database)
-                remotepath = REMOTE_DATABASE_LOCATION + "/" + database
-                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
-                sftp.put(localpath, remotepath)
-                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+            self._publish_databases(sftp)
 
         return [Label("[SRCF Plugin] Successfuly published locally generated pages and uploaded database.")]
 
@@ -567,6 +586,18 @@ class SRCFPlugin(AbstractPlugin):
         print("[SRCF Plugin] Found corrupted lock file. Deleting.")
         sftp.remove(LOCK_FILE)
         return None, None
+
+    def _publish_databases(self, sftp: paramiko.SFTPClient):
+        """
+        Publishes all databases
+        """
+
+        for database in self._find_jsons(BASE_WRITE_LOCATION):
+            localpath = os.path.join(BASE_WRITE_LOCATION, database)
+            remotepath = REMOTE_DATABASE_LOCATION + "/" + database
+            self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+            sftp.put(localpath, remotepath)
+            self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
 
     def _lock(self, sftp: paramiko.SFTPClient):
         """
