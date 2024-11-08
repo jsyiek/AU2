@@ -7,7 +7,12 @@ from AU2.html_components import HTMLComponent
 class SelectorList(HTMLComponent):
     name: str = "SelectorList"
 
-    def __init__(self, identifier: str, title: str, options: List[str], defaults: List[str] = []):
+    def __init__(
+            self,
+            identifier: str,
+            title: str,
+            options: List[str],
+            defaults: List[str] = []):
         self.title = escape(title)
         self.identifier = escape(identifier)
         self.uniqueStr = self.get_unique_str()

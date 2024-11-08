@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-
+import copy
 import datetime
-from typing import List, Any
+from typing import List, Any, Dict
 
 import inquirer
 
@@ -10,7 +10,8 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
-from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, ListUpdates
+from AU2.html_components.MetaComponents.ComponentOverride import ComponentOverride
+from AU2.html_components.MetaComponents.Searchable import Searchable
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
@@ -32,6 +33,7 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt
@@ -133,6 +135,17 @@ def render(html_component, dependency_context={}):
         if "skip" in out:
             del out["skip"]
         return out
+
+    elif isinstance(html_component, Searchable):
+        q = [inquirer.Text(name="q", message=f"{html_component.title} (separate with commas for each searchable)")]
+        answer = inquirer_prompt_with_abort(q)["q"]
+        filters = [candidate.strip() for candidate in answer.split(",") if candidate.strip()]
+        component_copy = copy.copy(html_component.component)
+        options = html_component.accessor(component_copy)
+        if filters:
+            options = [o for o in options if any(f.lower() in o.lower() for f in filters)]
+        html_component.setter(component_copy, options)
+        return render(component_copy, dependency_context)
 
     # dependent component
     elif isinstance(html_component, AssassinPseudonymPair):
@@ -618,6 +631,30 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
     return final
 
 
+def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}) -> List[HTMLComponent]:
+    override_map: Dict[str, ComponentOverride]
+    if not existing_overrides:
+        override_map = {o.overrides: o for o in component_list
+                        if isinstance(o, ComponentOverride)}
+    else:
+        override_map = existing_overrides
+
+    others: List[HTMLComponent] = [o for o in component_list if not isinstance(o, ComponentOverride)]
+    final = []
+
+    for component in others:
+        if isinstance(component, Dependency):
+            component.htmlComponents = replace_overrides(component.htmlComponents, override_map)
+            final.append(component)
+        elif component.identifier in override_map:
+            override_map[component.identifier].replacement_effects(component,
+                                                                   override_map[component.identifier].replace_with)
+            final.append(override_map[component.identifier].replace_with)
+        else:
+            final.append(component)
+    return final
+
+
 def main():
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
@@ -658,6 +695,7 @@ def main():
 
         inp = {}
         components = exp.ask(*params)
+        components = replace_overrides(components)
         components = merge_dependency(components)
         iteration = 0
         last_step = 1
