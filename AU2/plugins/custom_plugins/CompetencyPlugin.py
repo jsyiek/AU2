@@ -326,7 +326,7 @@ class CompetencyPlugin(AbstractPlugin):
         if not tables:
             tables = [NO_INCOS]
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "inco.html"), "w+") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "inco.html"), "w+", encoding="utf-8") as F:
             F.write(
                 INCOS_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
