@@ -35,6 +35,7 @@ from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.game import escape_format_braces
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -156,7 +157,7 @@ def render(html_component, dependency_context={}):
                 q = [
                     inquirer.List(
                         name="q",
-                        message=f"{player}: Choose pseudonym",
+                        message=f"{escape_format_braces(player)}: Choose pseudonym",
                         choices=choices,
                         default=html_component.default.get(player, "")
                     )]
@@ -201,8 +202,8 @@ def render(html_component, dependency_context={}):
             key = (r, assassins_mapping[r])
             q = [inquirer.Editor(
                 name="report",
-                message=f"Report: {r}",
-                default=default_mapping.get(key)
+                message=f"Report: {escape_format_braces(r)}",
+                default=escape_format_braces(default_mapping.get(key))
             )]
             report = inquirer_prompt_with_abort(q)["report"]
             results.append((r, assassins_mapping[r], report))
@@ -246,7 +247,7 @@ def render(html_component, dependency_context={}):
             return {html_component.identifier: {}, "skip": True}
         q = [inquirer.Checkbox(
             name="q",
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             choices=list(assassins_mapping.keys()),
             default=list(html_component.default.keys())  # default: Dict[str, int]
         )]
@@ -261,18 +262,18 @@ def render(html_component, dependency_context={}):
             q = [
                 inquirer.Text(
                     name="duration",
-                    message=f"WANTED DURATION for: {a} ",
-                    default=html_component.default.get(a, (None, None, None))[0],
+                    message=f"WANTED DURATION for: {escape_format_braces(a)} ",
+                    default=html_component.default.get(a, ("", "", ""))[0],
                     validate=integer_validator
                 ), inquirer.Text(
                     name="crime",
-                    message=f"CRIME for: {a}",
-                    default=html_component.default.get(a, (None, None, None))[1],
+                    message=f"CRIME for: {escape_format_braces(a)}",
+                    default=escape_format_braces(html_component.default.get(a, ("", "", ""))[1]),
                     ignore=lambda x: int(x["duration"]) <= 0
                 ), inquirer.Text(
                     name="redemption",
-                    message=f"REDEMPTION for: {a}",
-                    default=html_component.default.get(a, (None, None, None))[2],
+                    message=f"REDEMPTION for: {escape_format_braces(a)}",
+                    default=escape_format_braces(html_component.default.get(a, ("", "", ""))[2]),
                     ignore=lambda x: int(x["duration"]) <= 0
                 )]
             value = inquirer_prompt_with_abort(q)
@@ -290,7 +291,7 @@ def render(html_component, dependency_context={}):
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name=html_component.identifier,
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             choices=assassins,
             default=html_component.default
         )]
@@ -306,7 +307,7 @@ def render(html_component, dependency_context={}):
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             choices=assassins,
             default=list(html_component.default.keys())
         )]
@@ -315,7 +316,7 @@ def render(html_component, dependency_context={}):
         for a in selected_assassins:
             q.append(inquirer.Text(
                 name=a,
-                message=f"Value for {a}",
+                message=f"Value for {escape_format_braces(a)}",
                 default=html_component.default.get(a, None),
                 validate=float_validator
             ))
@@ -332,7 +333,7 @@ def render(html_component, dependency_context={}):
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             choices=assassins,
             default=list(html_component.default.keys())
         )]
@@ -342,7 +343,7 @@ def render(html_component, dependency_context={}):
             val_if_exists = html_component.default.get(a, None)
             q.append(inquirer.Text(
                 name=a,
-                message=f"Value for {a}",
+                message=f"Value for {escape_format_braces(a)}",
                 default=val_if_exists if val_if_exists is not None else html_component.global_default,
                 validate=integer_validator
             ))
@@ -359,7 +360,7 @@ def render(html_component, dependency_context={}):
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             choices=assassins,
             default=list(html_component.default.keys())
         )]
@@ -368,8 +369,8 @@ def render(html_component, dependency_context={}):
         for a in selected_assassins:
             q.append(inquirer.Text(
                 name=a,
-                message=f"Value for {a}",
-                default=html_component.default.get(a, None)
+                message=f"Value for {escape_format_braces(a)}",
+                default=escape_format_braces(html_component.default.get(a, ""))
             ))
         points = {}
         if q:
@@ -379,7 +380,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, DatetimeEntry):
         q = [inquirer.Text(
             name="dt",
-            message=f"{html_component.title} (YYYY-MM-DD HH:MM)",
+            message=f"{escape_format_braces(html_component.title)} (YYYY-MM-DD HH:MM)",
             default=html_component.default.strftime(DATETIME_FORMAT),
             validate=datetime_validator
         )]
@@ -390,7 +391,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, IntegerEntry):
         q = [inquirer.Text(
             name="int",
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             default=html_component.default,
             validate=integer_validator
         )]
@@ -400,7 +401,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, PathEntry):
         q = [inquirer.Path(
             name=html_component.identifier,
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             default=html_component.default
         )]
         return inquirer_prompt_with_abort(q)
@@ -413,7 +414,7 @@ def render(html_component, dependency_context={}):
         q = [
             inquirer.List(
                 name="q",
-                message=html_component.title,
+                message=escape_format_braces(html_component.title),
                 choices=["No", "Yes"],
                 default="Yes" if html_component.checked else "No"
             )]
@@ -424,25 +425,27 @@ def render(html_component, dependency_context={}):
         return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, NamedSmallTextbox):
-        q = [inquirer.Text(name=html_component.identifier, message=html_component.title)]
+        q = [inquirer.Text(name=html_component.identifier, message=escape_format_braces(html_component.title))]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, LargeTextEntry):
-        q = [inquirer.Editor(name=html_component.identifier, message=html_component.title,
-                             default=html_component.default)]
+        q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
+                             default=escape_format_braces(html_component.default))]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
         q = [inquirer.List(
             name=html_component.identifier,
-            message=html_component.title,
+            message=escape_format_braces(html_component.title),
             choices=html_component.options,
             default=html_component.selected)]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, DefaultNamedSmallTextbox):
-        q = [
-            inquirer.Text(name=html_component.identifier, message=html_component.title, default=html_component.default)]
+        q = [inquirer.Text(
+            name=html_component.identifier,
+            message=escape_format_braces(html_component.title),
+            default=escape_format_braces(html_component.default))]
         return inquirer_prompt_with_abort(q)
 
     # TODO: fundamentally this component is just editing a list where each entry has multiple parts to this value,
@@ -456,7 +459,7 @@ def render(html_component, dependency_context={}):
         while True:
             q = [inquirer.List(
                 name=html_component.identifier,
-                message=html_component.title,
+                message=escape_format_braces(html_component.title),
                 choices=[("*CONTINUE*", -1)] + [(v.text, i) for i, v in enumerate(values) if v.text] + [("*NEW*", -2)],
             )]
             a = inquirer_prompt_with_abort(q)
@@ -496,7 +499,7 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="editpseudonym",
                     message="Enter replacement" + ("" if c == 0 else " (blank to delete)"), # cannot delete initial pseudonym
-                    default=v.text
+                    default=escape_format_braces(v.text)
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["editpseudonym"]
@@ -511,7 +514,7 @@ def render(html_component, dependency_context={}):
 
                     q = [inquirer.Confirm(
                         name="deletepseudonym",
-                        message=f"Do you wish to delete the pseudonym {v.text}?",
+                        message=f"Do you wish to delete the pseudonym {escape_format_braces(v.text)}?",
                         default=False
                     )]
                     try:
@@ -550,7 +553,7 @@ def render(html_component, dependency_context={}):
         q = [
             inquirer.Checkbox(
                 name=html_component.identifier,
-                message=html_component.title,
+                message=escape_format_braces(html_component.title),
                 choices=html_component.options,
                 default=html_component.defaults
             )
