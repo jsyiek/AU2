@@ -63,6 +63,7 @@ class UIConfigPlugin(AbstractPlugin):
 
         def steal_assassins(old_comp, new_comp):
             new_comp.component.assassins = old_comp.assassins
+            new_comp.component.default = old_comp.default
 
         self.ui_changes = [
             UIChange(
@@ -98,21 +99,21 @@ class UIConfigPlugin(AbstractPlugin):
             ui_change.set_status(html_response["config"])
         return [Label("[UIConfig] Success!")]
 
-    def get_calls(self, call: Call):
+    def get_overrides_for_call(self, call: Call):
         comps = [c.get(call) for c in self.ui_changes]
         return [c for c in comps if c]
 
     def on_event_request_create(self) -> List[HTMLComponent]:
-        return self.get_calls(Call.EVENT_CREATE)
+        return self.get_overrides_for_call(Call.EVENT_CREATE)
 
     def on_event_request_update(self, _: Event) -> List[HTMLComponent]:
-        return self.get_calls(Call.EVENT_UPDATE)
+        return self.get_overrides_for_call(Call.EVENT_UPDATE)
 
     def on_event_request_delete(self, _: Event) -> List[HTMLComponent]:
-        return self.get_calls(Call.EVENT_DELETE)
+        return self.get_overrides_for_call(Call.EVENT_DELETE)
 
     def on_assassin_request_create(self) -> List[HTMLComponent]:
-        return self.get_calls(Call.ASSASSIN_CREATE)
+        return self.get_overrides_for_call(Call.ASSASSIN_CREATE)
 
     def on_assassin_request_update(self, _: Assassin) -> List[HTMLComponent]:
-        return self.get_calls(Call.ASSASSIN_UPDATE)
+        return self.get_overrides_for_call(Call.ASSASSIN_UPDATE)

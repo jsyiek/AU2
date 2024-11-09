@@ -19,7 +19,7 @@ class Searchable(HTMLComponent):
             component: Component to make searchable
             title: Message to display
             accessor: Retrieves the list of options from the component
-            setter: Given an object of the same type, sets the options appropriately.
+            setter: Given an object of the same type as component, sets the options appropriately.
         """
         self.identifier = component.identifier
         self.component = component
