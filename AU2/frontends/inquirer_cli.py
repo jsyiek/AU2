@@ -203,7 +203,7 @@ def render(html_component, dependency_context={}):
             q = [inquirer.Editor(
                 name="report",
                 message=f"Report: {escape_format_braces(r)}",
-                default=escape_format_braces(default_mapping.get(key))
+                default=escape_format_braces(default_mapping.get(key, ''))
             )]
             report = inquirer_prompt_with_abort(q)["report"]
             results.append((r, assassins_mapping[r], report))
