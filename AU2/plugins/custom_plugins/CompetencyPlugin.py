@@ -308,7 +308,9 @@ class CompetencyPlugin(AbstractPlugin):
             tables.append(
                 INCOS_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if dead_incos:
+
+        # TODO: Disabled until logic for dead incos is repaired
+        if dead_incos and False:
             dead_incos.sort(key=lambda a: (a.college, a.real_name))
             rows = []
             for a in dead_incos:
