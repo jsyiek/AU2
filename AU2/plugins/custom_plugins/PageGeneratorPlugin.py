@@ -139,7 +139,7 @@ def get_color(pseudonym: str,
     return HEX_COLS[ind % len(HEX_COLS)]
 
 
-def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: datetime.datetime = get_now_dt()) -> str:
+def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: datetime.datetime = get_now_dt()) -> str:
     id_ = assassin._secret_id
     string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
     for i in range(len(assassin.pseudonyms)):

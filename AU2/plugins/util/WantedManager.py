@@ -44,10 +44,10 @@ class WantedManager:
     def is_player_wanted(self, player_id, time=get_now_dt()):
         if not self.activated:
             return False
-        if not player_id in self.wanted_events:
+        if player_id not in self.wanted_events:
             return False
         last_event = self.wanted_events[player_id][-1]
-        if len(last_event.keys()) == 1:
+        if len(last_event) == 1:
             # if a players last event is a death, then they haven't committed a post-resurrection crime, so ignore
             return False
         # Check most recent event for wanted info. No support for multiple active wanted_events per player
