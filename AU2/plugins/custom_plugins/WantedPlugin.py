@@ -63,7 +63,7 @@ POLICE_TABLE_ROW_TEMPLATE = "<tr><td>{RANK}</td><td>{REAL_NAME}</td><td>{PSEUDON
 DEAD_PLAYER_TABLE_ROW_TEMPLATE = """<tr><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{CRIME}</td></tr>"""
 DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE = """<tr><td>{RANK}</td><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{CRIME}</td></tr>"""
 
-NO_WANTED_PLAYERS = """<p xmlns="">Nobody has gone Wanted yet. What a bunch of law-abiding assassins.</p>"""
+NO_WANTED_PLAYERS = """<p xmlns="">Nobody is Wanted at the moment. What a bunch of law-abiding assassins.</p>"""
 NO_DEAD_WANTED_PLAYERS = """<p xmlns="">No Wanted players have been killed... yet.</p>"""
 
 WANTED_PAGE: str
@@ -124,11 +124,9 @@ class WantedPlugin(AbstractPlugin):
         # (umpires messing with event timings could affect the canon timeline!)
         events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
 
-        now = get_now_dt()
-
         police_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("PolicePlugin", False)
 
-        wanted_manager = WantedManager(current_time=now)
+        wanted_manager = WantedManager()
         if police_ranks_enabled:
             police_rank_manager = PoliceRankManager(
                 auto_ranking=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get(
