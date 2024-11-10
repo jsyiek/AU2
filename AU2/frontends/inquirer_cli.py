@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-
+import copy
 import datetime
-from typing import List, Any
+from typing import List, Any, Dict
 
 import inquirer
 
@@ -10,7 +10,8 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
-from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, ListUpdates
+from AU2.html_components.MetaComponents.ComponentOverride import ComponentOverride
+from AU2.html_components.MetaComponents.Searchable import Searchable
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
@@ -32,6 +33,8 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, \
+    ListUpdates
 from AU2.plugins.AbstractPlugin import Export
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt
@@ -48,6 +51,7 @@ def datetime_validator(_, current):
     except ValueError:
         return False
     return True
+
 
 # same as above except allows blank values (for pseudonym datetimes this represents being valid forever)
 def optional_datetime_validator(_, current):
@@ -135,6 +139,30 @@ def render(html_component, dependency_context={}):
             del out["skip"]
         return out
 
+    elif isinstance(html_component, Searchable):
+        answer = ""
+        while True:
+            q = [inquirer.Text(
+                name="q",
+                default=answer,
+                message=f"{html_component.title} (separate with commas for each searchable)"
+            )]
+            answer = inquirer_prompt_with_abort(q)["q"]
+            filters = [candidate.strip() for candidate in answer.split(",") if candidate.strip()]
+            component_copy = copy.copy(html_component.component)
+            options = html_component.accessor(component_copy)
+
+            is_default = lambda o: hasattr(html_component.component, "default") \
+                                   and o in html_component.component.default
+
+            if filters:
+                options = [o for o in options if any(f.lower() in o.lower() for f in filters) or is_default(o)]
+            html_component.setter(component_copy, options)
+            try:
+                return render(component_copy, dependency_context)
+            except KeyboardInterrupt:
+                continue
+
     # dependent component
     elif isinstance(html_component, AssassinPseudonymPair):
         assassins = [a[0] for a in html_component.assassins]
@@ -152,7 +180,7 @@ def render(html_component, dependency_context={}):
         mappings = {}
         for player in chosen_assassins:
             values = [a[1] for a in html_component.assassins if a[0] == player][0]
-            choices = [(c, i) for i, c in enumerate(values) if c] # hide any null (i.e. deleted) pseudonyms
+            choices = [(c, i) for i, c in enumerate(values) if c]  # hide any null (i.e. deleted) pseudonyms
             if len(choices) != 1:
                 q = [
                     inquirer.List(
@@ -453,7 +481,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, EditablePseudonymList):
         values = html_component.values
         old_n_values = len(values)
-        edited = {} # dict mapping index to new value
+        edited = {}  # dict mapping index to new value
         new_values = []
         deleted_indices = set()
         while True:
@@ -463,8 +491,8 @@ def render(html_component, dependency_context={}):
                 choices=[("*CONTINUE*", -1)] + [(v.text, i) for i, v in enumerate(values) if v.text] + [("*NEW*", -2)],
             )]
             a = inquirer_prompt_with_abort(q)
-            c = a[html_component.identifier] # index of choice
-            if c == -2: # case where "*NEW*" selected
+            c = a[html_component.identifier]  # index of choice
+            if c == -2:  # case where "*NEW*" selected
                 q = [inquirer.Text(
                     name="newpseudonym",
                     message="Enter a new pseudonym",
@@ -492,13 +520,14 @@ def render(html_component, dependency_context={}):
                 p_data = PseudonymData(p, valid_from)
                 new_values.append(p_data)
                 values.append(p_data)
-            elif c == -1: # case where "*CONTINUE*" selected
+            elif c == -1:  # case where "*CONTINUE*" selected
                 break
             else:
                 v = values[c]
                 q = [inquirer.Text(
                     name="editpseudonym",
-                    message="Enter replacement" + ("" if c == 0 else " (blank to delete)"), # cannot delete initial pseudonym
+                    message="Enter replacement" + ("" if c == 0 else " (blank to delete)"),
+                    # cannot delete initial pseudonym
                     default=escape_format_braces(v.text)
                 )]
                 try:
@@ -508,7 +537,7 @@ def render(html_component, dependency_context={}):
                 # whitespace values => delete.
                 # could change this to some other input e.g. "-"
                 if p.strip() == "":
-                    if c == 0: # if we don't catch this case then delete_pseudonym will throw an error down the line...
+                    if c == 0:  # if we don't catch this case then delete_pseudonym will throw an error down the line...
                         print("Can't delete initial pseudonym!")
                         continue
 
@@ -524,7 +553,7 @@ def render(html_component, dependency_context={}):
                     finally:
                         continue
 
-                if c == 0: # initial pseudonym should always be valid forever
+                if c == 0:  # initial pseudonym should always be valid forever
                     valid_from = v.valid_from
                 else:
                     q = [inquirer.Text(
@@ -544,7 +573,7 @@ def render(html_component, dependency_context={}):
                 if c < old_n_values:
                     edited[c] = p_data
                 else:
-                    new_values[c-old_n_values] = p_data
+                    new_values[c - old_n_values] = p_data
 
         return {html_component.identifier:
                     ListUpdates(edited, new_values, deleted_indices)}
@@ -621,6 +650,30 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
     return final
 
 
+def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}) -> List[HTMLComponent]:
+    override_map: Dict[str, ComponentOverride]
+    if not existing_overrides:
+        override_map = {o.overrides: o for o in component_list
+                        if isinstance(o, ComponentOverride)}
+    else:
+        override_map = existing_overrides
+
+    others: List[HTMLComponent] = [o for o in component_list if not isinstance(o, ComponentOverride)]
+    final = []
+
+    for component in others:
+        if isinstance(component, Dependency):
+            component.htmlComponents = replace_overrides(component.htmlComponents, override_map)
+            final.append(component)
+        elif component.identifier in override_map:
+            override_map[component.identifier].replacement_effects(component,
+                                                                   override_map[component.identifier].replace_with)
+            final.append(override_map[component.identifier].replace_with)
+        else:
+            final.append(component)
+    return final
+
+
 def main():
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
@@ -661,6 +714,7 @@ def main():
 
         inp = {}
         components = exp.ask(*params)
+        components = replace_overrides(components)
         components = merge_dependency(components)
         iteration = 0
         last_step = 1

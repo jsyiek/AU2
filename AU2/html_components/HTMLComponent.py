@@ -5,7 +5,7 @@ class HTMLComponent:
     # Map from a component name to its decoder
     __decoders = {}
 
-    identifier: str
+    identifier: str = "UNDEFINED"
     uniqueId = 0
 
     name = "abstract_HTMLComponent"
