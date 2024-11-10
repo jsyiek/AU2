@@ -15,6 +15,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
 
@@ -43,36 +44,27 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 
 
 HEX_COLS = [
-    '#B1AB8A', '#75C49C', '#7BA5A2', '#B0B477', '#B6CDBC',
-    '#EC7DD2', '#B964EB', '#758FAC', '#EEABF2', '#6892B0',
-    '#00822b', '#D4A66A', '#8E7CE6', '#7CCC64', '#95B7F5',
-    '#FF81EA', '#EB82D4', '#E89F6E', '#98A0CD', '#ACC6D0'
+    '#00A6A3', '#26CCC8', '#008B8A', '#B69C1F',
+    '#D1B135', '#5B836E', '#7A9E83', '#00822b',
+    '#00A563', '#FFA44D', '#CC6C1E', '#37b717',
+    '#27B91E', '#1F9E1A', '#3DC74E', '#00c6c3',
+    '#b7a020', '#637777', '#f28110'
 ]
 
-
 DEAD_COLS = [
-    '#A9756C', '#A688BF', '#A34595'
+    "#A9756C", "#A688BF", "#A34595", "#8C5D56",
+    "#8E7A9E", "#873A80", "#B0978F", "#9C8FA8",
 ]
 
 
 INCO_COLS = [
-    "#FFC0CB",  # Light Pink
-    "#FFB6C1",  # Light Pink 2
-    "#FF69B4",  # Hot Pink
-    "#FF1493",  # Deep Pink
-    "#DB7093",  # Pale Violet Red
-    "#FF5A77",  # Radical Red
-    "#FF6EB4",  # Hot Pink 3
-    "#FF82AB",  # Light Pink 3
-    "#FF007F",  # Bright Pink
-    "#FF85B2"   # Ultra Pink
+    "#FF33CC", "#FF6699", "#FF3399",
+    "#E63FAE", "#D94F9F", "#FF80BF",
 ]
 
 POLICE_COLS = [
-    "#FF5733",
-    "#7433FF",
-    "#03D11C",
-    "#0066CC",
+    "#4D54E3", "#7433FF", "#3B6BD4",
+    "#0066CC", "#3366B2", "#4159E0",
 ]
 
 DEAD_POLICE_COLS = [
@@ -81,6 +73,10 @@ DEAD_POLICE_COLS = [
 
 CORRUPT_POLICE_COLS = [
     "#9999CC"
+]
+
+WANTED_COLS = [
+    "#ff0033", "#cc3333", "#ff3300"
 ]
 
 HEAD_HEADLINE_TEMPLATE = """
@@ -118,6 +114,41 @@ def datetime_to_time_str(event_time: datetime.datetime) -> str:
     Returns a formatted timestamp suitable for the news.
     """
     return event_time.strftime("%H:%M %p")
+
+
+def get_color(pseudonym: str,
+              dead: bool = False,
+              incompetent: bool = False,
+              is_police: bool = False,
+              is_wanted: bool = False) -> str:
+    ind = zlib.adler32(pseudonym.encode(encoding="utf-8"))
+    if is_wanted:
+        if is_police:
+            return CORRUPT_POLICE_COLS[ind % len(CORRUPT_POLICE_COLS)]
+        return WANTED_COLS[ind % len(WANTED_COLS)]
+    if dead:
+        if is_police:
+            return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
+        return DEAD_COLS[ind % len(DEAD_COLS)]
+    if incompetent:
+        return INCO_COLS[ind % len(INCO_COLS)]
+    if pseudonym in HARDCODED_COLORS:
+        return HARDCODED_COLORS[pseudonym]
+    if is_police:
+        return POLICE_COLS[ind % len(POLICE_COLS)]
+    return HEX_COLS[ind % len(HEX_COLS)]
+
+
+def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: datetime.datetime = get_now_dt()) -> str:
+    id_ = assassin._secret_id
+    string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
+    for i in range(len(assassin.pseudonyms)):
+        string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
+    string = string.replace(f"[D{id_}]",
+                            " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
+    string = string.replace(f"[N{id_}]",
+                            PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
+    return string
 
 
 @registered_plugin
@@ -163,32 +194,6 @@ class PageGeneratorPlugin(AbstractPlugin):
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=hidden),
         ]
 
-    def get_color(self, pseudonym: str, dead: bool=False, incompetent: bool=False, is_police: bool=False) -> str:
-        ind = zlib.adler32(pseudonym.encode(encoding="utf-8"))
-        if dead:
-            if is_police:
-                return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
-            else:
-                return DEAD_COLS[ind % len(DEAD_COLS)]
-        if incompetent:
-            return INCO_COLS[ind % len(INCO_COLS)]
-        if pseudonym in HARDCODED_COLORS:
-            return HARDCODED_COLORS[pseudonym]
-        if is_police:
-            return POLICE_COLS[ind % len(POLICE_COLS)]
-        return HEX_COLS[ind % len(HEX_COLS)]
-
-    def substitute_pseudonyms(self, string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: datetime.datetime = get_now_dt()) -> str:
-        id_ = assassin._secret_id
-        string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
-        for i in range(len(assassin.pseudonyms)):
-            string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
-        string = string.replace(f"[D{id_}]",
-                                    " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
-        string = string.replace(f"[N{id_}]",
-                                    PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
-        return string
-
     def on_page_request_generate(self) -> List[HTMLComponent]:
         return []
 
@@ -205,15 +210,18 @@ class PageGeneratorPlugin(AbstractPlugin):
         headlines_for_day = {}
         competency_manager = CompetencyManager(start_datetime)
         death_manager = DeathManager(perma_death=True)
+        wanted_manager = WantedManager()
 
         for e in events:
+            # don't skip adding hidden events to managers, in case a player dies in a hidden event, etc.
+            wanted_manager.add_event(e)
+            competency_manager.add_event(e)
+            death_manager.add_event(e)
+
             # skip hidden events
             # this is purely rendering
             if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 continue
-
-            competency_manager.add_event(e)
-            death_manager.add_event(e)
 
             headline = e.headline
 
@@ -223,18 +231,17 @@ class PageGeneratorPlugin(AbstractPlugin):
                 assassin_model = ASSASSINS_DATABASE.get(assassin)
                 pseudonym = assassin_model.get_pseudonym(pseudonym_index)
 
-                # TODO: Wanted coloring
-                # TODO: Incompetent coloring
-                color = self.get_color(
+                color = get_color(
                     pseudonym,
                     dead=death_manager.is_dead(assassin_model),
                     incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-                    is_police=assassin_model.is_police
+                    is_police=assassin_model.is_police,
+                    is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
                 )
-                headline = self.substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
+                headline = substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
 
                 for (k, r) in reports.items():
-                    reports[k] = self.substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
+                    reports[k] = substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
 
             report_list = []
             for ((assassin, pseudonym_index), r) in reports.items():
@@ -243,11 +250,12 @@ class PageGeneratorPlugin(AbstractPlugin):
                 # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
                 assassin_model = ASSASSINS_DATABASE.get(assassin)
                 pseudonym = assassin_model.get_pseudonym(pseudonym_index)
-                color = self.get_color(
+                color = get_color(
                     pseudonym,
                     dead=death_manager.is_dead(assassin_model),
                     incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-                    is_police=assassin_model.is_police
+                    is_police=assassin_model.is_police,
+                    is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
                 )
 
                 painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))

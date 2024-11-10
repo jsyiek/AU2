@@ -13,9 +13,8 @@ class WantedManager:
     (Not so) Simple manager for wantedness
     """
 
-    def __init__(self, current_time=get_now_dt()):
+    def __init__(self):
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("WantedPlugin", False)
-        self.current_time = current_time
         # Relevent events are dicts, either {event_time: datetime.datetime, wanted_duration: days, crime: str, redemption: str},
         # or {event_time}, which represents a death at event_time. This allows for multiple deaths (for police or may week)
         self.wanted_events: Dict[str, List[Dict]] = {}
@@ -37,14 +36,23 @@ class WantedManager:
         for player_id in self.wanted_events:
             if ASSASSINS_DATABASE.get(player_id).is_police != police:
                 continue
-            last_event = self.wanted_events[player_id][-1]
-            if len(last_event.keys()) == 1:
-                # if a players last event is a death, then they haven't committed a post-resurrection crime, so ignore
-                continue
-            # Check most recent event for wanted info. No support for multiple active wanted_events per player
-            if last_event['event_time'] + last_event['wanted_duration'] >= self.current_time:
+            if self.is_player_wanted(player_id):
+                last_event = self.wanted_events[player_id][-1]
                 players[player_id] = {'crime': last_event['crime'], 'redemption': last_event['redemption']}
         return players
+
+    def is_player_wanted(self, player_id, time=get_now_dt()):
+        if not self.activated:
+            return False
+        if player_id not in self.wanted_events:
+            return False
+        last_event = self.wanted_events[player_id][-1]
+        if len(last_event) == 1:
+            # if a players last event is a death, then they haven't committed a post-resurrection crime, so ignore
+            return False
+        # Check most recent event for wanted info. No support for multiple active wanted_events per player
+        if last_event['event_time'] + last_event['wanted_duration'] > time:
+            return True
 
     def get_wanted_player_deaths(self, police=False):
         wanted_deaths = []

@@ -17,7 +17,7 @@ class TestTargetingPlugin:
         """
         players = some_players(7)
         MockGame().having_assassins(players)
-        assert TargetingPlugin().compute_targets() == {}
+        assert TargetingPlugin().compute_targets([]) == {}
 
     @plugin_test
     def test_some_deaths(self):
@@ -29,7 +29,7 @@ class TestTargetingPlugin:
         game = MockGame().having_assassins(p)
 
         plugin = TargetingPlugin()
-        targets = plugin.compute_targets()
+        targets = plugin.compute_targets([])
         assert valid_targets(num_players, targets)
 
         game.assassin(p[0]).kills(p[1]) \
@@ -37,7 +37,7 @@ class TestTargetingPlugin:
             .assassin(p[4]).kills(p[5]) \
             .assassin(p[6]).kills(p[7])
 
-        targets = plugin.compute_targets()
+        targets = plugin.compute_targets([])
         assert valid_targets(num_players - 4, targets)
 
     @plugin_test
@@ -47,13 +47,13 @@ class TestTargetingPlugin:
         game = MockGame().having_assassins(p)
 
         plugin = TargetingPlugin()
-        targets = plugin.compute_targets()
+        targets = plugin.compute_targets([])
         assert valid_targets(num_players, targets)
 
         for i in range(100):
-            game.assassin(p[2*i]).kills(p[2*i+1])
+            game.assassin(p[2 * i]).kills(p[2 * i + 1])
 
-        targets = plugin.compute_targets()
+        targets = plugin.compute_targets([])
         assert valid_targets(num_players - 100, targets)
 
     @plugin_test
@@ -66,7 +66,7 @@ class TestTargetingPlugin:
         game = MockGame().having_assassins(p)
 
         plugin = TargetingPlugin()
-        targets = plugin.compute_targets()
+        targets = plugin.compute_targets([])
         assert valid_targets(num_players, targets)
 
         it = 0
@@ -74,10 +74,10 @@ class TestTargetingPlugin:
             pl = game.get_remaining_players()
             it = (it + 1) % len(pl)
             targeter = pl[it]
-            victim = pl[(it+1) % len(pl)]
+            victim = pl[(it + 1) % len(pl)]
             game.assassin(targeter).kills(victim)
 
-        targets = plugin.compute_targets()
+        targets = plugin.compute_targets([])
         assert valid_targets(num_players - 185, targets)
 
     @plugin_test
@@ -87,12 +87,12 @@ class TestTargetingPlugin:
         game = MockGame().having_assassins(p)
 
         game.assassin(p[0]).and_these(p[1], p[20], p[45], p[135]).are_police() \
-            .assassin(p[20]).with_accomplices(p[2], p[3]).kills(p[180])        \
+            .assassin(p[20]).with_accomplices(p[2], p[3]).kills(p[180]) \
             .assassin(p[25]).kills(p[20])
 
         plugin = TargetingPlugin()
-        targets = plugin.compute_targets()
-        
+        targets = plugin.compute_targets([])
+
         # 5 police, 1 player dead
         assert valid_targets(num_players - 5 - 1, targets)
 
@@ -105,7 +105,6 @@ class TestTargetingPlugin:
             game.assassin(a).kills(p[0])
 
         plugin = TargetingPlugin()
-        plugin.compute_targets()
+        plugin.compute_targets([])
 
         # if doesn't crash, test passes
-

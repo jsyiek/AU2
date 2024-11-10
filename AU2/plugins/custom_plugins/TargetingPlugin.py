@@ -80,9 +80,11 @@ class TargetingPlugin(AbstractPlugin):
         if hook == "SRCFPlugin_email":
             # if graph computation time becomes an issue, we could yield the `last_graph` and then compute
             # current_graph without needing to recompute
-            last_emailed_event = int(GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("last_emailed_event", -1))
-            last_graph = self.compute_targets(max_event=last_emailed_event)
-            current_graph = self.compute_targets()
+            response = []
+            last_emailed_event = int(
+                GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("last_emailed_event", -1))
+            last_graph = self.compute_targets(response, max_event=last_emailed_event)
+            current_graph = self.compute_targets(response)
 
             if not current_graph:
                 return []
@@ -112,9 +114,10 @@ class TargetingPlugin(AbstractPlugin):
                 )
 
                 # only send email if targets for this user have changed
-                targets_changed = any(a not in current_graph[assassin.identifier] for a in last_graph[assassin.identifier])
+                targets_changed = any(
+                    a not in current_graph[assassin.identifier] for a in last_graph[assassin.identifier])
                 targets_changed |= len(current_graph[assassin.identifier]) != len(last_graph[assassin.identifier])
-                targets_changed |= last_emailed_event == -1 # we haven't emailed anything yet
+                targets_changed |= last_emailed_event == -1  # we haven't emailed anything yet
 
                 email.add_content(
                     plugin_name="TargetingPlugin",
@@ -125,7 +128,7 @@ class TargetingPlugin(AbstractPlugin):
             if EVENTS_DATABASE.events:
                 max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
-            return []
+            return response
         return []
 
     def ask_set_seeds(self):
@@ -158,23 +161,24 @@ class TargetingPlugin(AbstractPlugin):
         return [Label(f"[TARGETING] Set random seed to: {self.seed}")]
 
     def answer_show_targeting_graph(self, _):
-        graph = self.compute_targets()
+        response = []
+        graph = self.compute_targets(response)
         for (attacker, targets) in graph.items():
-            print(attacker)
-            print(f"|________ {targets[0]}")
-            print(f"|________ {targets[1]}")
-            print(f"|________ {targets[2]}")
-            print()
+            response.append(Label(attacker))
+            response.append(Label(f"|________ {targets[0]}"))
+            response.append(Label(f"|________ {targets[1]}"))
+            response.append(Label(f"|________ {targets[2]}"))
+            response.append(Label(""))
 
         if graph:
-            print(f"Total alive players: {len(graph.keys())}")
-        return []
+            response.append(Label(f"Total alive players: {len(graph.keys())}"))
+        return response
 
     @property
     def seed(self):
         return GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("random_seed", 28082024)
 
-    def compute_targets(self, max_event=100000000000000000):
+    def compute_targets(self, response, max_event=100000000000000000):
         """
         Deterministically computes the targeting graph given current events.
 
@@ -195,7 +199,7 @@ class TargetingPlugin(AbstractPlugin):
         # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
         # last long anyway.
         if len(players) <= 7:
-            print("[TARGETING] Refusing to generate a targeting graph (too few non-police assassins).")
+            response.append(Label("[TARGETING] Refusing to generate a targeting graph (too few non-police assassins)."))
             return {}
 
         # FIRST STEP, get initial targets
@@ -299,11 +303,12 @@ class TargetingPlugin(AbstractPlugin):
 
             # try to fix with triangle elimination
             # this function has side effects
-            success = self.update_graph(targeting_graph, targeters_graph, deaths, player_seeds_set)
+            success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
             if success:
                 continue
 
             success = self.update_graph(
+                response,
                 targeting_graph,
                 targeters_graph,
                 deaths,
@@ -312,10 +317,12 @@ class TargetingPlugin(AbstractPlugin):
             )
 
             if success:
-                print("[TARGETING] WARNING: Seeding has been violated due to an unavoidable graph collapse.")
+                response.append(
+                    Label("[TARGETING] WARNING: Seeding has been violated due to an unavoidable graph collapse."))
                 continue
 
             success = self.update_graph(
+                response,
                 targeting_graph,
                 targeters_graph,
                 deaths,
@@ -325,17 +332,20 @@ class TargetingPlugin(AbstractPlugin):
             )
 
             if success:
-                print("[TARGETING] WARNING: Two assassins target each other due to an unavoidable graph collapse.")
+                response.append(
+                    Label("[TARGETING] WARNING: Two assassins target each other due to an unavoidable graph collapse."))
                 continue
 
-            print("[TARGETING] CRITICAL: The targeting graph 3-targets 3-targeting invariant cannot be maintained."
-                  " Targeting has been ABORTED. IT IS TIME TO BEGIN OPEN SEASON.")
+            response.append(
+                Label("[TARGETING] CRITICAL: The targeting graph 3-targets 3-targeting invariant cannot be maintained."
+                      " Targeting has been ABORTED. IT IS TIME TO BEGIN OPEN SEASON."))
             return {}
 
         return targeting_graph
 
     def update_graph(
             self,
+            response: List[Label],
             targeting_graph: Dict[str, List[str]],
             targeters_graph: Dict[str, List[str]],
             deaths: List[str],
@@ -354,10 +364,13 @@ class TargetingPlugin(AbstractPlugin):
         visited = []
         for d in deaths:
             if d not in deaths_adj or d in visited:
-                print(f"WARNING: {d} has been killed more than once. Skipping this player when updating graph...")
+                response.append(
+                    Label(f"WARNING: {d} has been killed more than once. Skipping this player when updating graph..."))
             visited.append(d)
 
         deaths = deaths_adj
+
+        response.append(Label("UPDATING"))
 
         # collect a list of [non-unique] players who need new targets
         targeters = sum((targeters_graph[d] for d in deaths), start=[])
@@ -378,8 +391,9 @@ class TargetingPlugin(AbstractPlugin):
             # events with a huge number of deaths can be spiral badly in extremely rare edge cases
             # thanks to the factorial function, so I've put in a check to abort instead of stalling
             if checks > limit_checks:
-                print("[TARGETING] WARNING: Aborted search check due to excessive depth. This can happen if you added "
-                      "many deaths in one event, and only exists as a safety check to avoid the app stalling.")
+                response.append(Label(
+                    "[TARGETING] WARNING: Aborted search check due to excessive depth. This can happen if you added "
+                    "many deaths in one event, and only exists as a safety check to avoid the app stalling."))
                 return False
             checks += 1
 

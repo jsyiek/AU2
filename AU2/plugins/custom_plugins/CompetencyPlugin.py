@@ -308,7 +308,9 @@ class CompetencyPlugin(AbstractPlugin):
             tables.append(
                 INCOS_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if dead_incos:
+
+        # TODO: Disabled until logic for dead incos is repaired
+        if dead_incos and False:
             dead_incos.sort(key=lambda a: (a.college, a.real_name))
             rows = []
             for a in dead_incos:
@@ -326,7 +328,7 @@ class CompetencyPlugin(AbstractPlugin):
         if not tables:
             tables = [NO_INCOS]
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "inco.html"), "w+") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "inco.html"), "w+", encoding="utf-8") as F:
             F.write(
                 INCOS_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
