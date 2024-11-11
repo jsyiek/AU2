@@ -3,6 +3,7 @@ import os
 from typing import List
 
 from AU2 import ROOT_DIR
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
@@ -14,7 +15,7 @@ from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -87,6 +88,15 @@ class CompetencyPlugin(AbstractPlugin):
             "CURRENT DEFAULT": "current_default"
         }
 
+        self.exports = [
+            Export(
+                identifier="competency_plugin_show_deadlines",
+                display_name="Competency -> Show deadlines",
+                ask=self.ask_show_inco_deadlines,
+                answer=self.answer_show_inco_deadlines
+            )
+        ]
+
         self.config_exports = [
             ConfigExport(
                 identifier="competency_plugin_update_competency_defaults",
@@ -157,10 +167,13 @@ class CompetencyPlugin(AbstractPlugin):
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
         if hook == "SRCFPlugin_email":
-            events = EVENTS_DATABASE.events
-            competency_manager = CompetencyManager(game_start=get_game_start())
+            events = list(EVENTS_DATABASE.events.values())
+            events.sort(key=lambda event: event.datetime)
+            auto_competency_bool = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Manual"
+
+            competency_manager = CompetencyManager(get_game_start(), auto_competency_bool)
             death_manager = DeathManager()
-            for e in events.values():
+            for e in events:
                 competency_manager.add_event(e)
                 death_manager.add_event(e)
 
@@ -271,6 +284,40 @@ class CompetencyPlugin(AbstractPlugin):
             identifier=self.html_ids["Datetime"],
             title="Enter date to calculate incos from"
         )]
+
+    def ask_show_inco_deadlines(self):
+        return []
+
+    def answer_show_inco_deadlines(self, _):
+        events = list(EVENTS_DATABASE.events.values())
+        events.sort(key=lambda event: event.datetime)
+        start_datetime: datetime.datetime = get_game_start()
+        auto_competency_bool = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Manual"
+
+        competency_manager = CompetencyManager(start_datetime, auto_competency_bool)
+        death_manager = DeathManager(perma_death=True)
+
+        for e in events:
+            competency_manager.add_event(e)
+            death_manager.add_event(e)
+
+        deadlines = []
+        for a in ASSASSINS_DATABASE.get_identifiers():
+            deadlines.append((a, competency_manager.get_deadline_for(ASSASSINS_DATABASE.assassins[a])))
+            if "jackson" in a.lower():
+                competency_manager.is_inco_at(ASSASSINS_DATABASE.assassins[a], get_now_dt())
+        deadlines.sort(key=lambda t: t[1])
+
+        labels = []
+
+        DATETIME_FORMAT = "%Y-%m-%d %H:%M"
+
+        labels.append(Label("__________________________________________________________________"))
+
+        for (a, d) in deadlines:
+            labels.append(Label(f"{a} -> {datetime.datetime.strftime(d, DATETIME_FORMAT)}"))
+            labels.append(Label("__________________________________________________________________"))
+        return labels
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())

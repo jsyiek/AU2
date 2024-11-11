@@ -1,7 +1,9 @@
 import datetime
 
 from collections import defaultdict
+from typing import Optional
 
+from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
@@ -82,3 +84,6 @@ class CompetencyManager:
         and the date were fastforwarded to `date`
         """
         return [a for a in ASSASSINS_DATABASE.assassins.values() if self.is_inco_at(a, date)]
+
+    def get_deadline_for(self, a: Assassin) -> Optional[datetime.datetime]:
+        return self.deadlines.get(a.identifier, datetime.datetime(year=1969, month=12, day=31, tzinfo=TIMEZONE))
