@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional, Iterator, Union
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model.PersistentFile import PersistentFile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from AU2 import TIMEZONE
 from AU2.plugins.util.date_utils import get_now_dt
@@ -61,6 +61,24 @@ class Assassin(PersistentFile):
         if not self.identifier:
             dotdotdot = "..." if len(self.pseudonyms[0]) > 15 else ""
             self.identifier = f"{self.real_name} ({self.pseudonyms[0][:15]}{dotdotdot}) ID: {self._secret_id}"
+
+    def clone(self, **changes):
+        """
+        Creates a clone of this assassin with a new identifier and specified changes.
+        This is used for resurrecting an assassin as police.
+
+        Args:
+            **changes: use keyword arguments to specify attributes of clone where they should differ from the original.
+                Setting a new identifier or _secret_id has no effect; the cloned assassin will still have these set
+                automatically.
+
+        Returns:
+            A clone of this Assassin, with a different identifier and _secret_id
+        """
+        # allow __post_init__ to generate the new identifier and _secret_id
+        changes["identifier"] = ""
+        changes["_secret_id"] = ""
+        return replace(self, **changes)
 
     def get_pseudonym(self, i: int) -> str:
         """

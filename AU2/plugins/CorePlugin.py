@@ -26,6 +26,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.util.game import get_game_start, set_game_start
+from AU2.plugins.util.DeathManager import DeathManager
 
 
 AVAILABLE_PLUGINS = {}
@@ -114,6 +115,13 @@ class CorePlugin(AbstractPlugin):
                 self.ask_core_plugin_update_assassin,
                 self.answer_core_plugin_update_assassin,
                 ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
+            ),
+            Export(
+                "core_assassin_to_police",
+                "Assassin -> Resurrect as Police",
+                self.ask_core_plugin_assassin_to_police,
+                self.answer_core_plugin_assassin_to_police,
+                (self.gather_dead_non_police,)
             ),
             Export(
                 "core_event_create_event",
@@ -216,7 +224,6 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
-            #Checkbox(self.html_ids["Police"], "Police? (y/n)", checked=assassin.is_police)
         ]
         return html
 
@@ -226,13 +233,12 @@ class CorePlugin(AbstractPlugin):
         [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
         [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
         [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
-
+        # set other attributes
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
         assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
         assassin.address = htmlResponse[self.html_ids["Address"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
-        #assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
@@ -370,8 +376,6 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_create_assassin(self):
         components = []
-        for p in PLUGINS:
-            components += p.on_assassin_request_create()
         return components
 
     def answer_core_plugin_create_assassin(self, html_response_args: Dict):
@@ -387,7 +391,7 @@ class CorePlugin(AbstractPlugin):
         return return_components
 
     def ask_core_plugin_update_assassin(self, arg: str):
-        assassin = ASSASSINS_DATABASE.assassins[arg]
+        assassin = ASSASSINS_DATABASE.get(arg)
         components = []
         for p in PLUGINS:
             components += p.on_assassin_request_update(assassin)
@@ -400,6 +404,27 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
+
+    def gather_dead_non_police(self) -> List[str]:
+        death_manager = DeathManager(perma_death=True)
+        for e in EVENTS_DATABASE.events.values():
+            death_manager.add_event(e)
+        return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_police))
+
+    def ask_core_plugin_assassin_to_police(self, ident: str):
+        components = [HiddenTextbox(identifier=self.HTML_SECRET_ID, default=ident),
+                      NamedSmallTextbox(identifier=self.html_ids["Pseudonym"], title="New initial pseudonym")]
+        return components
+
+    def answer_core_plugin_assassin_to_police(self, html_response_args: Dict):
+        ident = html_response_args[self.HTML_SECRET_ID]
+        assassin = ASSASSINS_DATABASE.get(ident)
+        new_pseudonym = html_response_args[self.html_ids["Pseudonym"]]
+        new_assassin = assassin.clone(hidden=False, is_police=True, pseudonyms=[new_pseudonym])
+        ASSASSINS_DATABASE.add(new_assassin)
+        # hide the old assassin
+        assassin.hidden = True
+        return [Label(f"[CORE] Resurrected {ident} as {new_assassin.identifier}.")]
 
     def ask_core_plugin_create_event(self):
         components = []
