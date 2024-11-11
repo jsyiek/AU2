@@ -370,8 +370,6 @@ class TargetingPlugin(AbstractPlugin):
 
         deaths = deaths_adj
 
-        response.append(Label("UPDATING"))
-
         # collect a list of [non-unique] players who need new targets
         targeters = sum((targeters_graph[d] for d in deaths), start=[])
         targeters = [t for t in targeters if t not in deaths]

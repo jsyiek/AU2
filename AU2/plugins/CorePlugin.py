@@ -443,7 +443,7 @@ class CorePlugin(AbstractPlugin):
             SelectorList(
                 self.identifier + "_config",
                 title="Enable or disable plugins",
-                options=plugins,
+                options=sorted(plugins),
                 defaults=[p for p in plugins if GENERIC_STATE_DATABASE.plugin_map[p]]
             )
         ]
