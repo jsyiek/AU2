@@ -138,7 +138,7 @@ class CorePlugin(AbstractPlugin):
                 "Event -> Delete",
                 self.ask_core_plugin_delete_event,
                 self.answer_core_plugin_delete_event,
-                (lambda: [v for v in EVENTS_DATABASE.events],)
+                (self.gather_events,)
             ),
             Export(
                 "core_event_update_event",
