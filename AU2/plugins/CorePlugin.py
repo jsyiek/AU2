@@ -1,8 +1,7 @@
 import glob
 import os.path
 
-from typing import Dict, List, Tuple
-
+from typing import Dict, List, Tuple, Any
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -23,7 +22,7 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.util.game import get_game_start, set_game_start
@@ -57,18 +56,6 @@ class CorePlugin(AbstractPlugin):
         super().__init__("CorePlugin")
         self.HTML_SECRET_ID = "CorePlugin_identifier"
 
-        self.html_ids_list = [
-            "Pseudonym",
-            "Real Name",
-            "Pronouns"
-            "Email",
-            "Address",
-            "Water Status",
-            "College",
-            "Notes",
-            "Police"
-        ]
-
         self.html_ids = {
             "Pseudonym": self.identifier + "_pseudonym",
             "Real Name": self.identifier + "_real_name",
@@ -78,7 +65,8 @@ class CorePlugin(AbstractPlugin):
             "Water Status": self.identifier + "_water_status",
             "College": self.identifier + "_college",
             "Notes": self.identifier + "_notes",
-            "Police": self.identifier + "_police"
+            "Police": self.identifier + "_police",
+            "Hidden Assassins": self.identifier + "_hidden_assassins"
         }
 
         self.params = {
@@ -168,8 +156,19 @@ class CorePlugin(AbstractPlugin):
             )
         ]
 
-        # str -> HookedExport
-        self.hooks = {}
+        self.hooks = {
+            "hide_assassins": self.identifier + "_hide_assassins",
+        }
+
+        self.hooked_exports = [
+            HookedExport(
+                plugin_name=self.identifier,
+                identifier=self.hooks["hide_assassins"],
+                display_name="Assassin -> Hide",
+                producer=lambda x: None,
+                call_order=HookedExport.LAST
+            )
+        ]
 
         self.config_exports = [
             ConfigExport(
@@ -203,7 +202,7 @@ class CorePlugin(AbstractPlugin):
     def on_assassin_create(self, assassin: Assassin, htmlResponse) -> List[HTMLComponent]:
         return [Label("[CORE] Success!")]
 
-    def on_assassin_request_update(self, assassin):
+    def on_assassin_request_update(self, assassin: Assassin):
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
             EditablePseudonymList(
@@ -237,7 +236,7 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
-        assassins = [(a.identifier, a.pseudonyms) for a in ASSASSINS_DATABASE.assassins.values()]
+        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs()
         html = [
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
@@ -256,7 +255,9 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_event_request_update(self, e: Event):
-        assassins = [(a.identifier, a.pseudonyms) for a in ASSASSINS_DATABASE.assassins.values()]
+        # include hidden assassins if they are already in the event,
+        # so that the umpire doesn't accidentally remove them from the event
+        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs(include_hidden=lambda a: a.identifier in e.assassins)
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
             Dependency(
@@ -285,6 +286,25 @@ class CorePlugin(AbstractPlugin):
 
     def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return [Label("[CORE] Delete acknowledged.")]
+
+    def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
+        if hook == self.hooks["hide_assassins"]:
+            assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda x: True)
+            hidden_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda x: False, include_hidden=lambda x: True)
+            components = [SelectorList(identifier=self.html_ids["Hidden Assassins"],
+                                       title="Select assassins to hide",
+                                       options=assassins,
+                                       defaults=hidden_assassins)]
+            return components
+
+    def on_hook_respond(self, hook: str, html_response_args: Dict[str, Any], data: Any) -> List[HTMLComponent]:
+        if hook == self.hooks["hide_assassins"]:
+            assassins_to_hide = html_response_args[self.html_ids["Hidden Assassins"]]
+            for a in ASSASSINS_DATABASE.get_filtered(include_hidden=lambda x: True):
+                a.hidden = a.identifier in assassins_to_hide
+            return_components = [Label("[Core] Set assassins' visibilities")]
+            return return_components
+
 
     def get_all_exports(self) -> List[Export]:
         """

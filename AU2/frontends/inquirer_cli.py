@@ -593,7 +593,7 @@ def render(html_component, dependency_context={}):
         q = [
             inquirer.List(
                 name="emails",
-                message="Which assassins would you like to email?",
+                message="Which assassins would you like to email? (All options exclude hidden assassins)",
                 choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL POLICE", "MANUAL SELECTION"],
                 default="UPDATES ONLY",
             )
