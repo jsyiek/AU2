@@ -169,9 +169,8 @@ class CompetencyPlugin(AbstractPlugin):
         if hook == "SRCFPlugin_email":
             events = list(EVENTS_DATABASE.events.values())
             events.sort(key=lambda event: event.datetime)
-            auto_competency_bool = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Manual"
 
-            competency_manager = CompetencyManager(get_game_start(), auto_competency_bool)
+            competency_manager = CompetencyManager(get_game_start())
             death_manager = DeathManager()
             for e in events:
                 competency_manager.add_event(e)
@@ -292,9 +291,8 @@ class CompetencyPlugin(AbstractPlugin):
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
-        auto_competency_bool = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Manual"
 
-        competency_manager = CompetencyManager(start_datetime, auto_competency_bool)
+        competency_manager = CompetencyManager(start_datetime)
         death_manager = DeathManager(perma_death=True)
 
         for e in events:
@@ -323,9 +321,8 @@ class CompetencyPlugin(AbstractPlugin):
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
-        auto_competency_bool = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Manual"
 
-        competency_manager = CompetencyManager(start_datetime, auto_competency_bool)
+        competency_manager = CompetencyManager(start_datetime)
         death_manager = DeathManager(perma_death=True)
         limit = htmlResponse[self.html_ids["Datetime"]]
         for e in events:

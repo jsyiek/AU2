@@ -19,13 +19,13 @@ class CompetencyManager:
     Simple manager for competency
     """
 
-    def __init__(self, game_start: datetime.datetime, auto_competency: bool = False):
+    def __init__(self, game_start: datetime.datetime):
         # from assassin ID to deadline
         self.deadlines = defaultdict(lambda: self.game_start + self.initial_competency_period)
         self.game_start = game_start
         self.initial_competency_period = datetime.timedelta(days=GENERIC_STATE_DATABASE.arb_int_state.get(ID_GAME_START, DEFAULT_START_COMPETENCY))
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("CompetencyPlugin", False)
-        self.auto_competency = auto_competency
+        self.auto_competency = GENERIC_STATE_DATABASE.arb_state.get("auto_competency", "Manual") != "Manual"
         self.attempts_since_kill = defaultdict(int)
 
     def add_event(self, e: Event):
