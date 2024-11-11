@@ -1,7 +1,7 @@
 import glob
 import os.path
 
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -138,14 +138,14 @@ class CorePlugin(AbstractPlugin):
                 "Event -> Delete",
                 self.ask_core_plugin_delete_event,
                 self.answer_core_plugin_delete_event,
-                (lambda: [v for v in EVENTS_DATABASE.events],)
+                (self.gather_events,)
             ),
             Export(
                 "core_event_update_event",
                 "Event -> Update",
                 self.ask_core_plugin_update_event,
                 self.answer_core_plugin_update_event,
-                (lambda: [v for v in EVENTS_DATABASE.events],)
+                (self.gather_events,)
             ),
             Export(
                 self.PLUGIN_ENABLE_EXPORT,
@@ -412,6 +412,13 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             components += p.on_event_update(event, html_response_args)
         return components
+
+    def gather_events(self) -> List[Tuple[str, str]]:
+        # headline is truncated because `inquirer` doesn't deal with overlong options well
+        return [
+                (f"[{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline[0:25].rstrip()}", identifier)
+                for identifier, event in sorted(EVENTS_DATABASE.events.items(), key=lambda x: x[1].datetime, reverse=True)
+        ]
 
     def ask_core_plugin_delete_event(self, event_id: str):
         event = EVENTS_DATABASE.get(event_id)

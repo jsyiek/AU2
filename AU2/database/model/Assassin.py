@@ -1,7 +1,7 @@
 import datetime as dt
 
 from dataclasses_json import dataclass_json, config
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional, Iterator, Union
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model.PersistentFile import PersistentFile
@@ -82,7 +82,7 @@ class Assassin(PersistentFile):
 
         return self.pseudonyms[i]
 
-    def get_pseudonym_validity(self, i: int) -> dt.datetime | None:
+    def get_pseudonym_validity(self, i: int) -> Union[dt.datetime, None]:
         """
         Fetches the start of validity for a given pseudonym, referenced by index.
         The start of validity is notionally the point in time in the game when the assassin was granted the pseudonym,
@@ -98,7 +98,7 @@ class Assassin(PersistentFile):
         """
         return self.pseudonym_datetimes[i] if i in self.pseudonym_datetimes else None
 
-    def add_pseudonym(self, val: str, valid_from: dt.datetime | None = get_now_dt()) -> int:
+    def add_pseudonym(self, val: str, valid_from: Union[dt.datetime, None] = get_now_dt()) -> int:
         """
         Adds a new pseudonym to this assassin.
 
@@ -118,7 +118,7 @@ class Assassin(PersistentFile):
         self.pseudonyms.append(val)
         return new_i
 
-    def edit_pseudonym(self, i: int, new_val: str, new_valid_from: dt.datetime | None):
+    def edit_pseudonym(self, i: int, new_val: str, new_valid_from: Union[dt.datetime, None]):
         """
         Edits a pseudonym, referenced by index, from this assassin.
         Both the new text and new start of validity must be specified.
