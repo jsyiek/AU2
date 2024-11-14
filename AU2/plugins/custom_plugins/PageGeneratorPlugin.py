@@ -1,6 +1,9 @@
 import datetime
 import os
+import re
 import zlib
+
+
 from typing import List
 
 from AU2 import ROOT_DIR
@@ -96,6 +99,8 @@ HARDCODED_COLORS = {
     "Valheru": "#03FCEC",
     "Vendetta": "#B920DB"
 }
+
+FORMAT_SPECIFIER_REGEX = r"\[[D,P,N]([0-9]+)(?:_([0-9]+))?\]"
 
 
 def weeks_and_days_to_str(start: datetime.datetime, week: int, day: int) -> str:
@@ -227,19 +232,40 @@ class PageGeneratorPlugin(AbstractPlugin):
 
             reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in e.reports}
 
-            for (assassin, pseudonym_index) in e.assassins.items():
-                assassin_model = ASSASSINS_DATABASE.get(assassin)
-                pseudonym = assassin_model.get_pseudonym(pseudonym_index)
+            candidate_pseudonyms = []
 
-                color = get_color(
-                    pseudonym,
-                    dead=death_manager.is_dead(assassin_model),
-                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-                    is_police=assassin_model.is_police,
-                    is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
-                )
+            texts_to_search = [r for r in reports.values()] + [headline]
+
+            for r in texts_to_search:
+                for match in re.findall(FORMAT_SPECIFIER_REGEX, r):
+                    assassin_secret_id = int(match[0])
+
+                    assassin_model: Assassin
+                    for a in ASSASSINS_DATABASE.assassins.values():
+                        if int(a._secret_id) == assassin_secret_id:
+                            assassin_model = a
+                            break
+                    else:
+                        continue
+
+                    if any(c[0].identifier == assassin_model.identifier for c in candidate_pseudonyms):
+                        continue
+
+                    pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
+                    pseudonym = assassin_model.get_pseudonym(pseudonym_index)
+
+                    color = get_color(
+                        pseudonym,
+                        dead=death_manager.is_dead(assassin_model),
+                        incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
+                        is_police=assassin_model.is_police,
+                        is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
+                    )
+
+                    candidate_pseudonyms.append((assassin_model, pseudonym, color))
+
+            for (assassin_model, pseudonym, color) in candidate_pseudonyms:
                 headline = substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
-
                 for (k, r) in reports.items():
                     reports[k] = substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
 
