@@ -213,6 +213,7 @@ class CorePlugin(AbstractPlugin):
     def on_assassin_request_update(self, assassin: Assassin):
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
+            Label("Assassin type: " + ("Police" if assassin.is_police else "Full Player")),
             EditablePseudonymList(
                 self.html_ids["Pseudonym"], "Edit Pseudonyms",
                 (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
