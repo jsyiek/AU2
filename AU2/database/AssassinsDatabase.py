@@ -72,7 +72,8 @@ class AssassinsDatabase(PersistentFile):
         Returns:
             list of identifiers sorted alphabetically, filtered according to the `include` and `include_hidden` functions
         """
-        return sorted([a.identifier for a in self.get_filtered(include=include, include_hidden=include_hidden)])
+        return sorted([a.identifier for a in self.get_filtered(include=include, include_hidden=include_hidden)],
+                      key=lambda x: x.lower())
 
     def get_ident_pseudonym_pairs(self, *,
                      include: Callable[[Assassin], bool] = lambda x: True,
