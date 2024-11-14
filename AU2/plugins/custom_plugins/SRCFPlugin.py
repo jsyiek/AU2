@@ -272,10 +272,11 @@ class SRCFPlugin(AbstractPlugin):
             for e in EVENTS_DATABASE.events.values():
                 death_manager.add_event(e)
 
-            alive_assassins = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if
-                               a.is_police or not death_manager.is_dead(a)]
-
-            police_assassins = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
+            # note: hidden assassins will be excluded
+            alive_assassins = ASSASSINS_DATABASE.get_identifiers(include=(
+                lambda a: a.is_police or not death_manager.is_dead(a)
+            ))
+            police_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_police)
 
             return [
                 Checkbox(
@@ -297,6 +298,7 @@ class SRCFPlugin(AbstractPlugin):
                 ),
                 EmailSelector(
                     identifier=self.html_ids["email_require_send"],
+                    # note: hidden assassins will be excluded
                     assassins=ASSASSINS_DATABASE.get_identifiers(),
                     alive_assassins=alive_assassins,
                     police_assassins=police_assassins

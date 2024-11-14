@@ -2,7 +2,7 @@ import os
 
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Dict, List
+from typing import Dict, List, Callable, Tuple, Optional
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.model import PersistentFile, Assassin
@@ -44,12 +44,54 @@ class AssassinsDatabase(PersistentFile):
         """
         return self.assassins[identifier]
 
-    def get_identifiers(self) -> List[str]:
+    def get_filtered(self, *,
+                     include: Callable[[Assassin], bool] = lambda x: True,
+                     include_hidden: Callable[[Assassin], bool] = lambda x: False) -> List[Assassin]:
         """
+        Parameters:
+            include: function that takes a non-hidden assassin and returns whether it should be included in the
+                returned list. Defaults to always return True.
+            include_hidden: function that takes a hidden Assassin object and returns whether it should be include in the
+                returned list. Defaults to always return False.
+
         Returns:
-            list of identifiers sorted alphabetically
+            list of non-hidden assassins (as Assassin objects) satisfying `include`, and hidden assassins satisfying
+                include_hidden
         """
-        return sorted([v for v in self.assassins], key=lambda n: n.lower())
+        return [a for a in self.assassins.values() if (a.hidden and include_hidden(a)) or (not a.hidden and include(a))]
+
+    def get_identifiers(self, *,
+                     include: Callable[[Assassin], bool] = lambda x: True,
+                     include_hidden: Callable[[Assassin], bool] = lambda x: False) -> List[str]:
+        """
+        Parameters:
+            include: function that takes a non-hidden assassin and returns whether it should be included in the
+                returned list. Defaults to always return True.
+            include_hidden: function that takes a hidden Assassin object and returns whether it should be include in the
+                returned list. Defaults to always return False.
+        Returns:
+            list of identifiers sorted alphabetically, filtered according to the `include` and `include_hidden` functions
+        """
+        return sorted([a.identifier for a in self.get_filtered(include=include, include_hidden=include_hidden)])
+
+    def get_ident_pseudonym_pairs(self, *,
+                     include: Callable[[Assassin], bool] = lambda x: True,
+                     include_hidden: Callable[[Assassin], bool] = lambda x: False) -> List[Tuple[str, List[str]]]:
+        """
+        Parameters:
+            include: function that takes a non-hidden assassin and returns whether it should be included in the
+                returned list. Defaults to always return True.
+            include_hidden: function that takes a hidden Assassin object and returns whether it should be include in the
+                returned list. Defaults to always return False.
+        Returns:
+            list of identifiers sorted alphabetically, filtered according to the `include` and `include_hidden` functions
+        """
+        return sorted([
+            (a.identifier, a.pseudonyms) for a in self.get_filtered(
+                include=include,
+                include_hidden=include_hidden
+            )
+        ])
 
     def _refresh(self):
         """

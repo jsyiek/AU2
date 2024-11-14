@@ -24,6 +24,10 @@ class Assassin(PersistentFile):
     college: str
     notes: str
     is_police: bool
+    # we should not delete assassins because that will break any references to that assassin.
+    # most significantly, it would mess up the targeting graph.
+    # but it is useful to hide certain assassins in interfaces (e.g. an assassin who has been cloned into police)
+    hidden: bool = False
     # almost everything that is stateful is probably best placed in an event
     # but for a few plugins, it might make sense to place the information directly onto the assassin
     # make sure you know what you're doing (modifications here can't be undone with a later event state change)
@@ -161,7 +165,7 @@ class Assassin(PersistentFile):
         if i in self.pseudonym_datetimes:
             del self.pseudonym_datetimes[i]
 
-    def pseudonyms_until(self, ts: dt.datetime = get_now_dt()) -> Iterator[str]:
+    def pseudonyms_until(self, ts: Optional[dt.datetime] = None) -> Iterator[str]:
         """
         A generator yielding all the assassin's pseudonyms valid at a given datetime.
         Pseudonyms with no datetime set are considered always valid.
@@ -173,6 +177,9 @@ class Assassin(PersistentFile):
         Yields:
             the next pseudonym of the assassin that is valid before datetime `ts`.
         """
+        if not ts:
+            ts = get_now_dt()
+        
         for (i, p) in enumerate(self.pseudonyms):
             if p and self.pseudonym_datetimes.get(i, ts) <= ts:
                 yield p

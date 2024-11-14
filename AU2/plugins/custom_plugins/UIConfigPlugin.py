@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Flag
+from collections import namedtuple
 from typing import Optional, Callable, List, Dict
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -15,19 +16,21 @@ from AU2.plugins.CorePlugin import registered_plugin
 
 
 class Call(Flag):
+    NONE = 0
     EVENT_CREATE = 1
     EVENT_UPDATE = 2
     EVENT_DELETE = 4
     ASSASSIN_CREATE = 8
     ASSASSIN_UPDATE = 16
 
+EnabledFor = namedtuple("EnabledFor", ("call", "hooks"), defaults=(Call.NONE, tuple()))
 
 @dataclass
 class UIChange:
     name: str
     replaces: str
     component: HTMLComponent
-    enabled_for: Call
+    enabled_for: EnabledFor
     replacement_effects: Callable[[HTMLComponent, HTMLComponent], None] = lambda *args: None
 
     def set_status(self, enabled: List[str]):
@@ -36,8 +39,12 @@ class UIChange:
     def is_enabled(self):
         return GENERIC_STATE_DATABASE.arb_state.get("UIChanges", {}).get(self.replaces, False)
 
-    def get(self, call: Call) -> Optional[ComponentOverride]:
-        if call & self.enabled_for and self.is_enabled():
+    def get_for_call(self, call: Call) -> Optional[ComponentOverride]:
+        if call & self.enabled_for.call and self.is_enabled():
+            return ComponentOverride(self.replaces, self.component, replacement_effects=self.replacement_effects)
+
+    def get_for_hook(self, hook: str) -> Optional[ComponentOverride]:
+        if self.is_enabled() and hook in self.enabled_for.hooks:
             return ComponentOverride(self.replaces, self.component, replacement_effects=self.replacement_effects)
 
 
@@ -65,9 +72,17 @@ class UIConfigPlugin(AbstractPlugin):
             new_comp.component.assassins = old_comp.assassins
             new_comp.component.default = old_comp.default
 
+        def filter_options(component, l):
+            component.options = [o for o in component.options if o in l or o in component.defaults]
+
+        def steal_options(old_comp, new_comp):
+            new_comp.component.options = old_comp.options
+            new_comp.component.defaults = old_comp.defaults
+            new_comp.component.title = old_comp.title
+
         self.ui_changes = [
             UIChange(
-                name="Searchable Assassins",
+                name="Searchable Assassins (Events)",
                 replaces="CorePlugin_assassin_pseudonym",
                 component=Searchable(
                     component=AssassinPseudonymPair(
@@ -79,8 +94,24 @@ class UIConfigPlugin(AbstractPlugin):
                     accessor=lambda component: sorted([a[0] for a in component.assassins]),
                     setter=filter_assassin_list
                 ),
-                enabled_for=Call.EVENT_CREATE | Call.EVENT_UPDATE,
+                enabled_for=EnabledFor(call=Call.EVENT_CREATE | Call.EVENT_UPDATE),
                 replacement_effects=steal_assassins
+            ),
+            UIChange(
+                name="Searchable Assassins (Hiding)",
+                replaces="CorePlugin_hidden_assassins",
+                component=Searchable(
+                    component=SelectorList(
+                        identifier="CorePlugin_hidden_assassins",
+                        title="",
+                        options=[]
+                    ),
+                    title="Enter assassin names to search for",
+                    accessor=lambda component: sorted(component.options),
+                    setter=filter_options
+                ),
+                enabled_for=EnabledFor(hooks=("CorePlugin_hide_assassins",)),
+                replacement_effects=steal_options
             )
         ]
 
@@ -100,7 +131,7 @@ class UIConfigPlugin(AbstractPlugin):
         return [Label("[UIConfig] Success!")]
 
     def get_overrides_for_call(self, call: Call):
-        comps = [c.get(call) for c in self.ui_changes]
+        comps = [c.get_for_call(call) for c in self.ui_changes]
         return [c for c in comps if c]
 
     def on_event_request_create(self) -> List[HTMLComponent]:
@@ -117,3 +148,7 @@ class UIConfigPlugin(AbstractPlugin):
 
     def on_assassin_request_update(self, _: Assassin) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.ASSASSIN_UPDATE)
+
+    def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
+        comps = [c.get_for_hook(hook) for c in self.ui_changes]
+        return [c for c in comps if c]
