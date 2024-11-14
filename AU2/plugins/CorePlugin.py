@@ -377,6 +377,8 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_create_assassin(self):
         components = []
+        for p in PLUGINS:
+            components += p.on_assassin_request_create()
         return components
 
     def answer_core_plugin_create_assassin(self, html_response_args: Dict):
@@ -407,7 +409,9 @@ class CorePlugin(AbstractPlugin):
         return return_components
 
     def gather_dead_non_police(self) -> List[str]:
-        death_manager = DeathManager(perma_death=True)
+        # use targeting plugin as proxy for whether we have perma-death
+        targeting_enabled = any(p.identifier == "TargetingPlugin" for p in PLUGINS)
+        death_manager = DeathManager(perma_death=targeting_enabled)
         for e in EVENTS_DATABASE.events.values():
             death_manager.add_event(e)
         return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_police))

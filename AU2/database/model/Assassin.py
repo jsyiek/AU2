@@ -195,7 +195,7 @@ class Assassin(PersistentFile):
         Yields:
             the next pseudonym of the assassin that is valid before datetime `ts`.
         """
-        if not ts:
+        if ts is None:
             ts = get_now_dt()
         
         for (i, p) in enumerate(self.pseudonyms):
