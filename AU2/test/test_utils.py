@@ -1,5 +1,5 @@
 import datetime
-from typing import List
+from typing import List, Tuple
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -107,6 +107,7 @@ class MockGame:
     def __init__(self):
         self.date = datetime.datetime(year=2022, month=9, day=1, hour=10, minute=0, second=0).astimezone(TIMEZONE)
         self.assassins = list()
+        self.all_assassins = list()
 
     def has_died(self, name):
         if name in self.assassins:
@@ -139,6 +140,7 @@ class MockGame:
             self (to facilitate chaining
         """
         self.assassins = list(names)
+        self.all_assassins = list(names)
 
         for n in names:
             a = Assassin(
@@ -163,6 +165,24 @@ class MockGame:
 
         return ProxyAssassin(self, name)
 
+    def assassin_model(self, name) -> Assassin:
+        return self.assassin(name).model(name)
+
+    def add_attempts(self, *names: str, others: List[str] = []):
+        """
+        Submits an event to the Events database where the listed assassins made attempts
+
+        Parameters:
+            names (str...): Names of assassins to make attempts
+            others (List[str]): List of names of other assassins to include in the event
+
+        Returns:
+            self (to facilitate chaining)
+        """
+        return self.assassin(names[0]).with_accomplices(*names[1:]).is_involved_in_event(assassins=tuple(others),
+                                                            pluginState={"CompetencyPlugin":
+                                                                      {"attempts": [p + " identifier" for p in names]}
+                                                                        })
 
 class ProxyAssassin:
     """
@@ -174,6 +194,9 @@ class ProxyAssassin:
 
     def __ident(self, name):
         return name + " identifier"
+
+    def model(self, name) -> Assassin:
+        return ASSASSINS_DATABASE.get(self.__ident(name))
 
     def are_police(self) -> MockGame:
         """
@@ -190,14 +213,14 @@ class ProxyAssassin:
         """
         return self.are_police()
 
-    def are_hidden(self) -> MockGame:
+    def are_hidden(self) -> "ProxyAssassin":
         """
         Makes these assassins hidden
         """
         for a in self.assassins:
             ASSASSINS_DATABASE.assassins[self.__ident(a)].hidden = True
 
-        return self.mockGame
+        return self
 
     def is_hidden(self):
         """

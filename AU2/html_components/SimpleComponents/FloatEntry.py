@@ -1,7 +1,7 @@
 from AU2.html_components import HTMLComponent
 
 
-class IntegerEntry(HTMLComponent):
+class FloatEntry(HTMLComponent):
     name: str = "IntegerEntry"
 
     def __init__(self, identifier: str, title: str, default: int):
