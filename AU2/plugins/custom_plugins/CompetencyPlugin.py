@@ -197,7 +197,7 @@ class CompetencyPlugin(AbstractPlugin):
                 Event(
                     assassins={j: 0 for j in i} | {umpire: 0},
                     datetime=htmlResponse[self.html_ids['Datetime']],
-                    headline=f"Gigabolt stage {idx+1}" if idx else headline,
+                    headline=f"Gigabolt stage {idx+1}" if (idx or not headline) else headline,
                     reports={},
                     kills=[(umpire, j) for j in i],
                     pluginState={"PageGeneratorPlugin": {"hidden_event": idx or not headline}}
