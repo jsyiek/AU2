@@ -13,8 +13,10 @@ from AU2.html_components.DependentComponents.AssassinDependentSelector import As
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -55,6 +57,14 @@ DEAD_INCOS_TABLE_ROW_TEMPLATE = """
 
 NO_INCOS = """<p xmlns="">Hmm, how interesting... no one is incompetent yet.</p>"""
 
+DEFAULT_GIGABOLT_HEADLINE = """# Write a headline for the gigabolt event
+# Use [num_players] to specify the number of players killed
+# Leave this blank for a fully hidden event
+# Lines prefixed with # will be ignored
+# 
+[num_players] assassins are eliminated for inactivity!
+"""
+
 INCOS_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "inco.html"), "r", encoding="utf-8", errors="ignore") as F:
     INCOS_PAGE_TEMPLATE = F.read()
@@ -75,7 +85,10 @@ class CompetencyPlugin(AbstractPlugin):
             "Competency": self.identifier + "_competency",
             "Datetime": self.identifier + "_datetime",
             "Auto Competency": self.identifier + "_auto_competency",
-            "Attempts": self.identifier + "_attempts"
+            "Attempts": self.identifier + "_attempts",
+            "Gigabolt": self.identifier + "_gigabolt",
+            "Headline": self.identifier + "_gigabolt_headline",
+            "Umpire": self.identifier + "_umpire"
         }
 
         self.plugin_state = {
@@ -94,6 +107,12 @@ class CompetencyPlugin(AbstractPlugin):
                 display_name="Competency -> Show deadlines",
                 ask=self.ask_show_inco_deadlines,
                 answer=self.answer_show_inco_deadlines
+            ),
+            Export(
+                identifier="competency_plugin_gigabolt",
+                display_name="Competency -> Gigabolt",
+                ask=self.gigabolt_ask,
+                answer=self.gigabolt_answer
             )
         ]
 
@@ -117,6 +136,75 @@ class CompetencyPlugin(AbstractPlugin):
                 answer=self.answer_toggle_attempt_tracking
             )
         ]
+
+    def gigabolt_ask(self):
+        active_players = []
+        questions = []
+        death_manager = DeathManager()
+        if not GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"]):
+            questions.append(Label("[WARNING] Attempt tracking not enabled. Active players may be selected"))
+        for e in list(EVENTS_DATABASE.events.values()):
+            death_manager.add_event(e)
+            for killer, _ in e.kills:
+                active_players.append(killer)
+            for player_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
+                active_players.append(player_id)
+        active_players = set(active_players)
+
+        questions.append(Label("All inactive assassins have been pre-selected"))
+        questions.append(Label("Please sanity-check this list - you don't want to eliminate active players"))
+        questions.append(SelectorList(
+            title="Select assassins to thunderbolt",
+            identifier=self.html_ids["Gigabolt"],
+            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if not (
+                    ASSASSINS_DATABASE.get(i).is_police or death_manager.is_dead(ASSASSINS_DATABASE.get(i)))],
+            defaults=[i for i in ASSASSINS_DATABASE.get_identifiers() if not (
+                    i in active_players or ASSASSINS_DATABASE.get(i).is_police
+                    or death_manager.is_dead(ASSASSINS_DATABASE.get(i)))]
+        ))
+        questions.append(InputWithDropDown(
+            title="Select the umpire, since someone needs to kill the selected players",
+            identifier=self.html_ids["Umpire"],
+            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_police]
+            # Will crash if there are no police to choose from
+        ))
+        questions.append(DatetimeEntry(
+            identifier=self.html_ids["Datetime"],
+            title="Enter date/time of event")
+        )
+        questions.append(LargeTextEntry(
+            identifier=self.html_ids["Headline"],
+            title="Headline",
+            default=DEFAULT_GIGABOLT_HEADLINE)
+        )
+
+        return questions
+
+    def gigabolt_answer(self, htmlResponse):
+        deaths = htmlResponse[self.html_ids['Gigabolt']]
+        umpire = htmlResponse[self.html_ids['Umpire']]
+        # remove lines beginning with '#'
+        headline = '\n'.join([i for i in htmlResponse[self.html_ids['Headline']].split('\n') if not i.startswith('#')])
+        headline = headline.replace('[num_players]', str(len(deaths)))
+        # TODO Adjust targeting plugin so that it can handle events with many deaths, by retargeting in chunks
+        # I don't want to mess with the targeting plugin mid-game, so making a bunch of events with n kills each works for now
+        # Number of deaths per event:
+        n = 3
+        # Brief testing showed that 5 was too large (and broke targeting). 1 makes an annoying number of events
+        subdivided_deaths = [deaths[i:i + n] for i in range(0, len(deaths), n)]
+        for idx, i in enumerate(subdivided_deaths):
+            EVENTS_DATABASE.add(
+                Event(
+                    assassins={j: 0 for j in i} | {umpire: 0},
+                    datetime=htmlResponse[self.html_ids['Datetime']],
+                    headline=f"Gigabolt stage {idx+1}" if idx else headline,
+                    reports={},
+                    kills=[(umpire, j) for j in i],
+                    pluginState={"PageGeneratorPlugin": {"hidden_event": idx or not headline}}
+                )
+            )
+
+        return [Label(f"[COMPETENCY] Gigabolt Success! {len(deaths)} players eliminated")]
 
     def set_default_competency_deadline_ask(self):
         return [
@@ -302,7 +390,7 @@ class CompetencyPlugin(AbstractPlugin):
         deadlines = []
         for a in ASSASSINS_DATABASE.get_identifiers():
             deadlines.append((a, competency_manager.get_deadline_for(ASSASSINS_DATABASE.assassins[a])))
-            if "jackson" in a.lower():
+            if "jackson" in a.lower(): # ????
                 competency_manager.is_inco_at(ASSASSINS_DATABASE.assassins[a], get_now_dt())
         deadlines.sort(key=lambda t: t[1])
 
