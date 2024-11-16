@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Dict
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -12,7 +12,9 @@ from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
+from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
@@ -69,7 +71,9 @@ class PolicePlugin(AbstractPlugin):
             "Relative Rank": self.identifier + "_rank_relative",
             "Options": self.identifier + "_options",
             "Umpires": self.identifier + "_umpires",
-            "CoP": self.identifier + "_cop"
+            "CoP": self.identifier + "_cop",
+            "Assassin": self.identifier + "_assassin",
+            "Pseudonym": self.identifier + "_pseudonym"
         }
 
         self.plugin_state = {
@@ -81,6 +85,16 @@ class PolicePlugin(AbstractPlugin):
             "Umpires": {'id': self.identifier + "_umpires", 'default': []},
             "Chief of Police": {'id': self.identifier + "_cop", 'default': []},
         }
+
+        self.exports = [
+            Export(
+                "police_plugin_assassin_to_police",
+                "Assassin -> Resurrect as Police",
+                self.ask_core_plugin_assassin_to_police,
+                self.answer_core_plugin_assassin_to_police,
+                (self.gather_dead_non_police,)
+            ),
+        ]
 
         self.config_exports = [
             ConfigExport(
@@ -111,6 +125,30 @@ class PolicePlugin(AbstractPlugin):
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]['id']] = data
+
+    def gather_dead_non_police(self) -> List[str]:
+        # if police plugin is enabled we assume perma-death is enabled (i.e. it is not May Week)
+        # even though `is_police` may be used in certain mayweek games,
+        # this plugin itself doesn't make sense to use without permadeath
+        death_manager = DeathManager(perma_death=True)
+        for e in EVENTS_DATABASE.events.values():
+            death_manager.add_event(e)
+        return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_police))
+
+    def ask_core_plugin_assassin_to_police(self, ident: str):
+        components = [HiddenTextbox(identifier=self.html_ids["Assassin"], default=ident),
+                      NamedSmallTextbox(identifier=self.html_ids["Pseudonym"], title="New initial pseudonym")]
+        return components
+
+    def answer_core_plugin_assassin_to_police(self, html_response_args: Dict):
+        ident = html_response_args[self.html_ids["Assassin"]]
+        assassin = ASSASSINS_DATABASE.get(ident)
+        new_pseudonym = html_response_args[self.html_ids["Pseudonym"]]
+        new_assassin = assassin.clone(hidden=False, is_police=True, pseudonyms=[new_pseudonym])
+        ASSASSINS_DATABASE.add(new_assassin)
+        # hide the old assassin
+        assassin.hidden = True
+        return [Label(f"[POLICE] Resurrected {ident} as {new_assassin.identifier}.")]
 
     def ask_set_special_ranks(self):
         all_police = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
