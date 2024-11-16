@@ -306,10 +306,12 @@ class CompetencyPlugin(AbstractPlugin):
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
                     htmlComponents=[
-                        AssassinDependentSelector(
+                        AssassinDependentIntegerEntry(
                             pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                             identifier=self.html_ids["Attempts"],
-                            title="Select players who made an attempt or assist",
+                            title="Add attempts/assists",
+                            default={},
+                            global_default=1
                         )
                     ]
                 )
@@ -320,7 +322,12 @@ class CompetencyPlugin(AbstractPlugin):
         if self.html_ids["Competency"] in htmlResponse:
             e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[self.html_ids["Competency"]]
         if self.html_ids["Attempts"] in htmlResponse:
-            e.pluginState.setdefault(self.identifier, {})[self.plugin_state["ATTEMPTS"]] = htmlResponse[self.html_ids["Attempts"]]
+            # This currently stores attempts as ['a', 'a'] for two attempts by player a
+            # It would be better to store as a dict {'a':2}, but I can't break the current database
+            # TODO cleanup after game end
+            e.pluginState.setdefault(self.identifier, {})[self.plugin_state["ATTEMPTS"]] = sum(
+                [[key]*value for key, value in htmlResponse[self.html_ids["Attempts"]].items()]
+            , [])
         # Store the default competency extension at the time of the event, in the event
         # This way auto competency can be calculated dynamically
         e.pluginState.setdefault(self.identifier, {})[self.plugin_state["CURRENT DEFAULT"]] = \
