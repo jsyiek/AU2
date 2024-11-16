@@ -153,19 +153,19 @@ class CompetencyPlugin(AbstractPlugin):
 
         questions.append(Label("All inactive assassins have been pre-selected"))
         questions.append(Label("Please sanity-check this list - you don't want to eliminate active players"))
+
+        available_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: not (a.is_police or death_manager.is_dead(a)))
         questions.append(SelectorList(
             title="Select assassins to thunderbolt",
             identifier=self.html_ids["Gigabolt"],
-            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if not (
-                    ASSASSINS_DATABASE.get(i).is_police or death_manager.is_dead(ASSASSINS_DATABASE.get(i)))],
-            defaults=[i for i in ASSASSINS_DATABASE.get_identifiers() if not (
-                    i in active_players or ASSASSINS_DATABASE.get(i).is_police
-                    or death_manager.is_dead(ASSASSINS_DATABASE.get(i)))]
+            options=available_assassins,
+            defaults=[i for i in available_assassins if not i in active_players]
         ))
         questions.append(InputWithDropDown(
             title="Select the umpire, since someone needs to kill the selected players",
             identifier=self.html_ids["Umpire"],
-            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_police]
+            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_police],
+            selected=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_umpires", [""])[0]
             # Will crash if there are no police to choose from
         ))
         questions.append(DatetimeEntry(
@@ -200,7 +200,7 @@ class CompetencyPlugin(AbstractPlugin):
                     headline=f"Gigabolt stage {idx+1}" if (idx or not headline) else headline,
                     reports={},
                     kills=[(umpire, j) for j in i],
-                    pluginState={"PageGeneratorPlugin": {"hidden_event": idx or not headline}}
+                    pluginState={"PageGeneratorPlugin": {"hidden_event": bool(idx) or not headline}}
                 )
             )
 

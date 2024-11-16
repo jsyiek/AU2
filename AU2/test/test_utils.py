@@ -207,19 +207,43 @@ class ProxyAssassin:
         Returns:
             MockGame: the original mock game from where this assassin was created
         """
-
-        participants = self.assassins + victims
-        e = Event(
-            assassins={self.__ident(p) : 0 for p in participants},
-            datetime=self.mockGame.new_datetime(),
-            headline="Event Headline",
-            reports=[],
-            kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in victims],
-            pluginState={"CompetencyPlugin": {"competency" : {self.__ident(a): 14 for a in self.assassins}}}
-        )
-        EVENTS_DATABASE.add(e)
+        self.mockGame = self.is_involved_in_event(assassins=victims,
+                                                  kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in
+                                                         victims],
+                                                  pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}})
 
         for v in victims:
             self.mockGame.has_died(v)
+
+        return self.mockGame
+
+    def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None):
+        """
+        Submits a generic event to the database
+
+        Parameters:
+            assassins list(str): Additional assassins
+            dt datetime.datetime: Datetime of event
+            headline str: Headline
+            reports list(str): Reports
+            kills list(tuple(str, str)): Kills
+            pluginState: dict: Plugin State
+
+        Returns:
+            MockGame: the original mock game from where this assassin was created
+        """
+        participants = self.assassins
+        if assassins is not None:
+            participants += assassins
+
+        e = Event(
+            assassins={self.__ident(p) : 0 for p in participants},
+            datetime=dt if dt is not None else self.mockGame.new_datetime(),
+            headline=headline,
+            reports=reports if reports is not None else [],
+            kills=kills if kills is not None else [],
+            pluginState=pluginState if pluginState is not None else {}
+        )
+        EVENTS_DATABASE.add(e)
 
         return self.mockGame
