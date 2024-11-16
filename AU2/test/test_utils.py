@@ -115,6 +115,14 @@ class MockGame:
     def get_remaining_players(self):
         return list(self.assassins)
 
+    def refresh_deaths_from_db(self):
+        for e in list(EVENTS_DATABASE.events.values()):
+            for (_, victim) in e.kills:
+                # Hacky trimming because MockGame.assassins stores names, not identifiers for some reason
+                victim_name = victim[:-11]
+                if victim_name in self.assassins:
+                    self.assassins.remove(victim_name)
+
     def new_datetime(self) -> datetime.datetime:
         old_date = self.date
         self.date = self.date + datetime.timedelta(minutes=1)

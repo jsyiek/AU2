@@ -171,32 +171,19 @@ class TestCompetencyPlugin:
                 .assassin(p[15]).is_involved_in_event(
             pluginState={"CompetencyPlugin": {"attempts": [p[15] + " identifier"]}})
                 .assassin(p[16]).is_involved_in_event(
-            pluginState={"CompetencyPlugin": {"attempts": [p[15] + " identifier"] * 3}}))
+            pluginState={"CompetencyPlugin": {"attempts": [p[16] + " identifier"] * 3}}))
         # TODO refactor this to use Alexei's MockGame.add_attempts() once that is merged
         plugin = CompetencyPlugin()
 
-        active_players = []
-        death_manager = DeathManager()
-        for e in list(EVENTS_DATABASE.events.values()):
-            death_manager.add_event(e)
-            for killer, _ in e.kills:
-                active_players.append(killer)
-            for player_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
-                active_players.append(player_id)
-        active_players = set(active_players)
-
         plugin.gigabolt_answer(
             htmlResponse={
-                plugin.html_ids["Gigabolt"]: ASSASSINS_DATABASE.get_identifiers(
-                    include=lambda a: not (a.is_police or death_manager.is_dead(a) or a.identifier in active_players)),
+                plugin.html_ids["Gigabolt"]: next((c.defaults for c in plugin.gigabolt_ask() if c.identifier == plugin.html_ids["Gigabolt"])),
                 plugin.html_ids["Umpire"]: p[19],
                 plugin.html_ids["Datetime"]: game.new_datetime(),
                 plugin.html_ids["Headline"]: "",
             }
         )
-        # Have to use a death manager, because the gigabolt kill events don't call MockGame.has_died
-        death_manager = DeathManager()
-        for e in list(EVENTS_DATABASE.events.values()):
-            death_manager.add_event(e)
-        live_players = [i for i in ASSASSINS_DATABASE.assassins.values() if not death_manager.is_dead(i)]
-        assert len(live_players) == 8
+
+        game.refresh_deaths_from_db()
+
+        assert len(game.get_remaining_players()) == 8
