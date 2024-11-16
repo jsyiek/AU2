@@ -156,9 +156,6 @@ class TestCompetencyPlugin:
     def test_gigabolt(self):
         """
         Test that only non-police players with no kills and no attempts will be eliminated.
-        The dangerous logic for gigabolt is in CompetencyPlugin.gigabolt_ask (i.e. the default selections),
-        while this only tests gigabolt_answer directly. It is mostly just code copy-pasted from gigabolt_ask,
-        and thus is not really a good test
         """
         p = some_players(20)
         game = (MockGame().having_assassins(p)
