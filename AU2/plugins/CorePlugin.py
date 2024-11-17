@@ -296,6 +296,7 @@ class CorePlugin(AbstractPlugin):
                                        options=assassins,
                                        defaults=hidden_assassins)]
             return components
+        return []
 
     def on_hook_respond(self, hook: str, html_response_args: Dict[str, Any], data: Any) -> List[HTMLComponent]:
         if hook == self.hooks["hide_assassins"]:
@@ -304,7 +305,7 @@ class CorePlugin(AbstractPlugin):
                 a.hidden = a.identifier in assassins_to_hide
             return_components = [Label("[Core] Set assassins' visibilities")]
             return return_components
-
+        return []
 
     def get_all_exports(self) -> List[Export]:
         """
