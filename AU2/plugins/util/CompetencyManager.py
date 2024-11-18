@@ -86,4 +86,4 @@ class CompetencyManager:
         return [a for a in ASSASSINS_DATABASE.assassins.values() if self.is_inco_at(a, date)]
 
     def get_deadline_for(self, a: Assassin) -> Optional[datetime.datetime]:
-        return self.deadlines.get(a.identifier, datetime.datetime(year=1969, month=12, day=31, tzinfo=TIMEZONE))
+        return self.deadlines.get(a.identifier, None)
