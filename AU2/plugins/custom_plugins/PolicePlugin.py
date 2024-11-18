@@ -90,8 +90,8 @@ class PolicePlugin(AbstractPlugin):
             Export(
                 "police_plugin_assassin_to_police",
                 "Assassin -> Resurrect as Police",
-                self.ask_core_plugin_assassin_to_police,
-                self.answer_core_plugin_assassin_to_police,
+                self.ask_resurrect_as_police,
+                self.answer_resurrect_as_police,
                 (self.gather_dead_non_police,)
             ),
         ]
@@ -135,16 +135,18 @@ class PolicePlugin(AbstractPlugin):
             death_manager.add_event(e)
         return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_police))
 
-    def ask_core_plugin_assassin_to_police(self, ident: str):
+    def ask_resurrect_as_police(self, ident: str):
         components = [HiddenTextbox(identifier=self.html_ids["Assassin"], default=ident),
                       NamedSmallTextbox(identifier=self.html_ids["Pseudonym"], title="New initial pseudonym")]
         return components
 
-    def answer_core_plugin_assassin_to_police(self, html_response_args: Dict):
+    # TODO: make resurrection a hook, so that plugins can decide what to do with plugin data stored in assassins
+    #       current behaviour is to copy it over.
+    def answer_resurrect_as_police(self, html_response_args: Dict):
         ident = html_response_args[self.html_ids["Assassin"]]
         assassin = ASSASSINS_DATABASE.get(ident)
         new_pseudonym = html_response_args[self.html_ids["Pseudonym"]]
-        new_assassin = assassin.clone(hidden=False, is_police=True, pseudonyms=[new_pseudonym])
+        new_assassin = assassin.clone(hidden=False, is_police=True, pseudonyms=[new_pseudonym], pseudonym_datetimes={})
         ASSASSINS_DATABASE.add(new_assassin)
         # hide the old assassin
         assassin.hidden = True

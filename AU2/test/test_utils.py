@@ -182,6 +182,21 @@ class ProxyAssassin:
         """
         return self.are_police()
 
+    def are_hidden(self) -> MockGame:
+        """
+        Makes these assassins hidden
+        """
+        for a in self.assassins:
+            ASSASSINS_DATABASE.assassins[self.__ident(a)].hidden = True
+
+        return self.mockGame
+
+    def is_hidden(self):
+        """
+        Makes this assassin hidden
+        """
+        return self.are_hidden()
+
     def with_accomplices(self, *others: str) -> "ProxyAssassin":
         """
         Adds several accomplices to the proxy assassin

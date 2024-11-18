@@ -42,7 +42,7 @@ class Assassin(PersistentFile):
     pseudonym_datetimes: Dict[int, dt.datetime] = field(
         default_factory=dict,
         metadata=config(
-            encoder=lambda d: {k: ts.timestamp() for k,ts in d.items()},
+            encoder=lambda d: {k: ts.timestamp() for k, ts in d.items()},
             decoder=lambda d: {int(k): dt.datetime.fromtimestamp(ts).astimezone().astimezone(TIMEZONE) for k,ts in d.items()}
         )
     )
