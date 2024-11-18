@@ -17,6 +17,7 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
@@ -410,21 +411,23 @@ class CompetencyPlugin(AbstractPlugin):
         ):
             d = competency_manager.get_deadline_for(a)
             datetime_str = datetime.datetime.strftime(d, DATETIME_FORMAT) if d else "n/a"
-            deadlines.append((a.identifier, datetime_str,
+            deadlines.append((a._secret_id,
+                              a.real_name,
+                              a.pseudonyms[0],
+                              datetime_str,
                               'POLICE' if a.is_police
                               else 'DEAD' if death_manager.is_dead(a)
                               else 'INCO' if competency_manager.is_inco_at(a, now)
                               else ''))
-        deadlines.sort(key=lambda t: t[1])
+        deadlines.sort(key=lambda t: t[3])
 
-        labels = []
-
-        labels.append(Label("__________________________________________________________________"))
-
-        for (a, d, comment) in deadlines:
-            labels.append(Label(f"{a} -> {d} {comment}"))
-            labels.append(Label("__________________________________________________________________"))
-        return labels
+        # our inquirer_cli rendering of Table uses the headings to determine column widths
+        headings = ("ID",
+                    "Real Name" + " "*20,
+                    "Init. Pseudonym" + " "*20,
+                    "Inco. Deadline" + " "*5,
+                    "Comment")
+        return [Table(deadlines, headings=headings)]
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
