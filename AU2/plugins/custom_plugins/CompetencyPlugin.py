@@ -410,7 +410,7 @@ class CompetencyPlugin(AbstractPlugin):
                 include=lambda x: any(t.lower() in x.identifier.lower() for t in search_terms)
         ):
             d = competency_manager.get_deadline_for(a)
-            datetime_str = datetime.datetime.strftime(d, DATETIME_FORMAT) if d else "n/a"
+            datetime_str = datetime.datetime.strftime(d, DATETIME_FORMAT)
             deadlines.append((a._secret_id,
                               a.real_name,
                               a.pseudonyms[0],
