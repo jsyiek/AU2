@@ -2,7 +2,7 @@
 import copy
 import datetime
 import tabulate
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 
 import inquirer
 
@@ -778,6 +778,24 @@ def main():
             EVENTS_DATABASE.save()
             GENERIC_STATE_DATABASE.save()  # utility database
 
+from readchar import key
+def key_addons(f):
+    """Wrapper function adding extra key handling to List.process_input or Checkbox.process_input"""
+    def g(self, pressed):
+        if pressed == key.PAGE_UP:
+            self.current = max(0, self.current - inquirer.render.console.base.half_options)
+        elif pressed == key.PAGE_DOWN:
+            self.current = min(len(self.question.choices) - 1, self.current + inquirer.render.console.base.half_options)
+        elif pressed == key.HOME:
+            self.current = 0
+        elif pressed == key.END:
+            self.current = len(self.question.choices) - 1
+        else:
+            f(self, pressed)
+    return g
+# wrap List and Checkbox input processing for PgUp, PgDown, Home and End key support
+inquirer.render.console._list.List.process_input = key_addons(inquirer.render.console._list.List.process_input)
+inquirer.render.console._checkbox.Checkbox.process_input = key_addons(inquirer.render.console._checkbox.Checkbox.process_input)
 
 if __name__ == "__main__":
     main()
