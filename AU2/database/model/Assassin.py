@@ -8,7 +8,7 @@ from AU2.database.model.PersistentFile import PersistentFile
 from dataclasses import dataclass, field, replace
 
 from AU2 import TIMEZONE
-from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.date_utils import get_now_dt, dt_to_timestamp, timestamp_to_dt
 
 
 @dataclass_json
@@ -42,8 +42,8 @@ class Assassin(PersistentFile):
     pseudonym_datetimes: Dict[int, dt.datetime] = field(
         default_factory=dict,
         metadata=config(
-            encoder=lambda d: {k: ts.timestamp() for k, ts in d.items()},
-            decoder=lambda d: {int(k): dt.datetime.fromtimestamp(ts).astimezone().astimezone(TIMEZONE) for k,ts in d.items()}
+            encoder=lambda d: {k: dt_to_timestamp(ts) for k, ts in d.items()},
+            decoder=lambda d: {int(k): timestamp_to_dt(ts) for k, ts in d.items()}
         )
     )
 

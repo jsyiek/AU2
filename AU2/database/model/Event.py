@@ -7,6 +7,7 @@ from typing import Any, Dict, Tuple, List
 from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
+from AU2.plugins.util.date_utils import dt_to_timestamp, timestamp_to_dt
 
 
 @dataclass_json
@@ -22,8 +23,8 @@ class Event(PersistentFile):
     # time the event occurred
     datetime: dt.datetime = field(
         metadata=config(
-            encoder=dt.datetime.timestamp,
-            decoder=lambda ts: dt.datetime.fromtimestamp(ts).astimezone().astimezone(TIMEZONE)
+            encoder=dt_to_timestamp,
+            decoder=timestamp_to_dt
         )
     )
 

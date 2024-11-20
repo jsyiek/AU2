@@ -22,6 +22,7 @@ from AU2.html_components.DependentComponents.AssassinDependentTextEntry import A
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
@@ -29,6 +30,7 @@ from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
+from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
@@ -418,6 +420,20 @@ def render(html_component, dependency_context={}):
         return {
             html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE)}
 
+    elif isinstance(html_component, OptionalDatetimeEntry):
+        default = html_component.default.strftime(DATETIME_FORMAT) if html_component.default else ""
+        q = [inquirer.Text(
+            name="dt",
+            message=f"{escape_format_braces(html_component.title)} (YYYY-MM-DD HH:MM)",
+            default=default,
+            validate=optional_datetime_validator
+        )]
+        datetime_str = inquirer_prompt_with_abort(q)["dt"]
+        ts = (datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE) if datetime_str
+              else None)
+        return {
+            html_component.identifier: ts}
+
     elif isinstance(html_component, IntegerEntry):
         q = [inquirer.Text(
             name="int",
@@ -427,6 +443,16 @@ def render(html_component, dependency_context={}):
         )]
         integer = inquirer_prompt_with_abort(q)["int"]
         return {html_component.identifier: int(integer)}
+
+    elif isinstance(html_component, FloatEntry):
+        q = [inquirer.Text(
+            name="float",
+            message=escape_format_braces(html_component.title),
+            default=html_component.default,
+            validate=float_validator
+        )]
+        number = inquirer_prompt_with_abort(q)["float"]
+        return {html_component.identifier: float(number)}
 
     elif isinstance(html_component, PathEntry):
         q = [inquirer.Path(
