@@ -95,7 +95,7 @@ class BountyPlugin(AbstractPlugin):
                 "Bounties -> Update bounty",
                 self.ask_update_bounty,
                 self.answer_set_bounty,
-                [self.get_bounty_ids]
+                (self.get_bounty_ids,)
             )
         ]
 
@@ -137,7 +137,7 @@ class BountyPlugin(AbstractPlugin):
             Searchable(
                 InputWithDropDown(
                     identifier=self.html_ids["placer"],
-                    title="Who is the bounty on?",
+                    title="Who is placing the bounty?",
                     options=ASSASSINS_DATABASE.get_identifiers(),
                     selected=default.placer_id
                 ),

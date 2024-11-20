@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
+import tabulate
 from typing import List, Any, Dict
 
 import inquirer
@@ -29,6 +30,7 @@ from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDrop
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
@@ -436,6 +438,11 @@ def render(html_component, dependency_context={}):
 
     elif isinstance(html_component, Label):
         print(html_component.title)
+        return {}
+
+    elif isinstance(html_component, Table):
+        print(tabulate.tabulate(html_component.rows, headers=html_component.headings,
+                                maxcolwidths=[len(h) for h in html_component.headings]))
         return {}
 
     elif isinstance(html_component, Checkbox):

@@ -17,6 +17,8 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.Table import Table
+from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -88,7 +90,8 @@ class CompetencyPlugin(AbstractPlugin):
             "Attempts": self.identifier + "_attempts",
             "Gigabolt": self.identifier + "_gigabolt",
             "Headline": self.identifier + "_gigabolt_headline",
-            "Umpire": self.identifier + "_umpire"
+            "Umpire": self.identifier + "_umpire",
+            "Search": self.identifier + "_search"
         }
 
         self.plugin_state = {
@@ -380,9 +383,14 @@ class CompetencyPlugin(AbstractPlugin):
         )]
 
     def ask_show_inco_deadlines(self):
-        return []
+        return [NamedSmallTextbox(
+            identifier=self.html_ids["Search"],
+            title="Enter assassin names to search for (separate with commas for each searchable)"
+        )]
 
-    def answer_show_inco_deadlines(self, _):
+    def answer_show_inco_deadlines(self, htmlResponse):
+        search_terms = [t.strip() for t in htmlResponse[self.html_ids["Search"]].split(",")]
+
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
@@ -394,23 +402,32 @@ class CompetencyPlugin(AbstractPlugin):
             competency_manager.add_event(e)
             death_manager.add_event(e)
 
-        deadlines = []
-        for a in ASSASSINS_DATABASE.get_identifiers():
-            deadlines.append((a, competency_manager.get_deadline_for(ASSASSINS_DATABASE.assassins[a])))
-            if "jackson" in a.lower(): # ????
-                competency_manager.is_inco_at(ASSASSINS_DATABASE.assassins[a], get_now_dt())
-        deadlines.sort(key=lambda t: t[1])
-
-        labels = []
-
         DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
-        labels.append(Label("__________________________________________________________________"))
+        now = get_now_dt()
+        deadlines = []
+        for a in ASSASSINS_DATABASE.get_filtered(
+                include=lambda x: any(t.lower() in x.identifier.lower() for t in search_terms)
+        ):
+            d = competency_manager.get_deadline_for(a)
+            datetime_str = datetime.datetime.strftime(d, DATETIME_FORMAT)
+            deadlines.append((a._secret_id,
+                              a.real_name,
+                              a.pseudonyms[0],
+                              datetime_str,
+                              'POLICE' if a.is_police
+                              else 'DEAD' if death_manager.is_dead(a)
+                              else 'INCO' if competency_manager.is_inco_at(a, now)
+                              else ''))
+        deadlines.sort(key=lambda t: t[3])
 
-        for (a, d) in deadlines:
-            labels.append(Label(f"{a} -> {datetime.datetime.strftime(d, DATETIME_FORMAT)}"))
-            labels.append(Label("__________________________________________________________________"))
-        return labels
+        # our inquirer_cli rendering of Table uses the headings to determine column widths
+        headings = ("ID",
+                    "Real Name" + " "*20,
+                    "Init. Pseudonym" + " "*20,
+                    "Inco. Deadline" + " "*5,
+                    "Comment")
+        return [Table(deadlines, headings=headings)]
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())

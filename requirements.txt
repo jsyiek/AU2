@@ -2,3 +2,4 @@ dataclasses-json
 inquirer
 datetime
 paramiko
+tabulate
