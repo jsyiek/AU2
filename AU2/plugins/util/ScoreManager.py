@@ -39,7 +39,7 @@ class ScoreManager:
         # prevent the same player giving conkers twice via different paths through the kill tree
         # (and also deals with loops. note that players can't get conkers from themselves;
         # we may wish to change this for a "revenge bonus")
-        # both of these should only happen without perma-deat
+        # both of these should only happen without perma-death
         if identifier in visited:
             return -1  # cancels out the `1 +` in this term of the sum
         else:
