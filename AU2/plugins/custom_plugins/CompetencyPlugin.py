@@ -1,6 +1,6 @@
 import datetime
 import os
-from typing import List
+from typing import List, Any, Dict
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -355,15 +355,26 @@ class CompetencyPlugin(AbstractPlugin):
             )
         ]
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
+            # need this to convert the list of attempts as stored in the db to the structure understood by
+            # AssassinDependentIntegerEntry
+            def list_to_multiset(l: List[Any]) -> Dict[Any, int]:
+                """Turns a list into a dict mapping values to how many times they appear in the list"""
+                ms = dict()
+                for item in l:
+                    ms[item] = ms.get(item, 0) + 1
+                return ms
             questions.append(
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
                     htmlComponents=[
-                        AssassinDependentSelector(
+                        AssassinDependentIntegerEntry(
                             pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                             identifier=self.html_ids["Attempts"],
-                            title="Select players who made an attempt or assist",
-                            default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["ATTEMPTS"], {}),
+                            title="Add attempts/assists",
+                            default=list_to_multiset(
+                                e.pluginState.get(self.identifier, {}).get(self.plugin_state["ATTEMPTS"], {})
+                            ),
+                            global_default=1
                         )
                     ]
                 )
@@ -373,7 +384,11 @@ class CompetencyPlugin(AbstractPlugin):
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[self.html_ids["Competency"]]
         if self.html_ids["Attempts"] in htmlResponse:
-            e.pluginState.setdefault(self.identifier, {})[self.plugin_state["ATTEMPTS"]] = htmlResponse[self.html_ids["Attempts"]]
+            # (see on_event_create)
+            e.pluginState.setdefault(self.identifier, {})[self.plugin_state["ATTEMPTS"]] = sum(
+                [[key] * value for key, value in htmlResponse[self.html_ids["Attempts"]].items()],
+                []
+            )
         return [Label("[COMPETENCY] Success!")]
 
     def on_page_request_generate(self) -> List[HTMLComponent]:
