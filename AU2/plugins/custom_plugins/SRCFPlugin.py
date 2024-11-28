@@ -51,6 +51,7 @@ EMAIL_TEMPLATE = """\
 MAIL FROM:assassins-umpire@srcf.net
 RCPT TO:{EMAIL}
 DATA
+Content-Type: text/plain; charset=UTF-8
 From: assassins-umpire@srcf.net
 Subject: {SUBJECT}
 {CONTENT}
