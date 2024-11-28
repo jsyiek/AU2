@@ -19,7 +19,7 @@ from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_times
 
 TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
-  <tr><th>Real Name</th><th>Address</th><th>College</th><th>Water Weapons Room Status</th><th>Notes</th><th>Points</th></tr>
+  <tr><th>Real Name</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Notes</th><th>Points</th></tr>
   {ROWS}
 </table>
 """
