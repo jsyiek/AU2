@@ -12,6 +12,7 @@ if os.name == "nt":
 
     pathlib_open = pathlib.Path.open
     def pathlib_open_utf8(*args, **kwargs):
-        kwargs["encoding"] = "utf-8"
+        if "b" not in kwargs.get("mode", "") and "b" not in (args[1] if len(args) > 1 else ""):
+            kwargs["encoding"] = "utf-8"
         return pathlib_open(*args, **kwargs)
     pathlib.Path.open = pathlib_open_utf8

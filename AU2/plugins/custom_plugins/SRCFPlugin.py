@@ -67,7 +67,7 @@ Your details:
                 Name: {NAME}
              College: {COLLEGE}
              Address: {ADDRESS}
-Water Weapons Status: {WATER_STATUS}
+Water Weapons Room Status: {WATER_STATUS}
                Notes: {NOTES}"""
 
 EMAIL_WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "emails")
