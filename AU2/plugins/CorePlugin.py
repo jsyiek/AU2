@@ -22,11 +22,11 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.util.game import get_game_start, set_game_start
-from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.date_utils import get_now_dt
 
 
 AVAILABLE_PLUGINS = {}
@@ -523,10 +523,16 @@ class CorePlugin(AbstractPlugin):
         Gathers the name of all ConfigExports from all plugins
         """
         names = []
-        for p in PLUGINS:
-            for c in p.config_exports:
-                names.append(c.display_name)
-        names.sort()
+        configs = (c for p in PLUGINS for c in p.config_exports)
+        for c in sorted(configs, key=lambda e: e.display_name):
+            disp = c.display_name
+            # display dangerous config options in red if the game has already started
+            if isinstance(c, DangerousConfigExport) and get_game_start() <= get_now_dt():
+                # this is kind of cheating because it's not really html compatible
+                # a `ansi2html` library does exist though,
+                # or we can create a specific HTMLcomponent to implement the colouring
+                disp = "\033[31m" + disp + "\033[0m"
+            names.append((disp, c.identifier))
         return names
 
     def ask_config(self, config_option: str):
@@ -539,7 +545,7 @@ class CorePlugin(AbstractPlugin):
 
         config: ConfigExport
         for c in all_config_exports:
-            if c.display_name == config_option:
+            if c.identifier == config_option:
                 config = c
                 break
         else:

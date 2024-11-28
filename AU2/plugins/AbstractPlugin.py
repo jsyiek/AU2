@@ -1,5 +1,7 @@
 from typing import List, Tuple
 
+import termcolor
+
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 
@@ -45,6 +47,11 @@ class ConfigExport(Export):
             answer
         )
 
+class DangerousConfigExport(ConfigExport):
+    """
+    Represents a config export which shouldn't be changed while a game is in progress
+    This is signalled to the user by colouring the option red
+    """
 
 class HookedExport:
     """

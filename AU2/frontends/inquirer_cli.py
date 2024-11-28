@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
+import os
 import tabulate
 from typing import List, Any, Dict
 
@@ -708,6 +709,16 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
 
 
 def main():
+    # allow ANSI codes to work on old Windows terminals
+    # but don't let not having the module break the program!
+    try:
+        from colorama import just_fix_windows_console
+        just_fix_windows_console()
+    except ModuleNotFoundError:
+        if os.name == "nt":
+            print("[WARNING] `colorama` is not installed; if you are using an old terminal, "
+                  "colours may not render correctly.")
+
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
         exports = core_plugin.get_all_exports()
