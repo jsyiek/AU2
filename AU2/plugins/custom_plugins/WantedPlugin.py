@@ -24,7 +24,7 @@ PLAYER_TABLE_TEMPLATE = """
     This is the <b>List of Wanted players</b>.
 </p>
 <table xmlns="" class="playerlist">
-    <tr><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
+    <tr><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
     {ROWS}
 </table>
 """
@@ -34,7 +34,7 @@ POLICE_TABLE_TEMPLATE = """
     Those that were corrupted by the dark side of the police force....
 </p>
 <table xmlns="" class="playerlist">
-    <tr><th>Rank</th><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
+    <tr><th>Rank</th><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
     {ROWS}
 </table>
 """

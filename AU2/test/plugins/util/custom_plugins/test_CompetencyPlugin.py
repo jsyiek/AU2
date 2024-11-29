@@ -4,7 +4,6 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.plugins.custom_plugins.CompetencyPlugin import CompetencyPlugin
 from AU2.plugins.util.CompetencyManager import CompetencyManager
-from AU2.plugins.util.DeathManager import DeathManager
 from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
 
 
@@ -128,21 +127,16 @@ class TestCompetencyPlugin:
         # TODO refactor this to use Alexei's MockGame.add_attempts() once that is merged
         p = some_players(5)
         game = (MockGame().having_assassins(p)
-                .assassin(p[1]).is_involved_in_event(pluginState={"CompetencyPlugin": {"attempts": [p[1] + " identifier"]}})
-                .assassin(p[2]).is_involved_in_event(
-                    pluginState={"CompetencyPlugin": {"attempts": [p[2] + " identifier"] * 2}})
-                .assassin(p[3]).is_involved_in_event(
-                    pluginState={"CompetencyPlugin": {"attempts": [p[3] + " identifier"] * 3}})
-                .assassin(p[4]).is_involved_in_event(
-                    pluginState={"CompetencyPlugin": {"attempts": [p[4] + " identifier"]}})
-                .assassin(p[4]).is_involved_in_event(
-                    pluginState={"CompetencyPlugin": {"attempts": [p[4] + " identifier"]}}))
+                .add_attempts(p[1])
+                .add_attempts(p[2], p[2])
+                .add_attempts(p[3], p[3], p[3])
+                .add_attempts(p[4])
+                .add_attempts(p[4]))
 
         manager = self.get_manager(game, auto_competency=True, initial_competency_period=0)
         query_date = manager.game_start + datetime.timedelta(days=1, seconds=30)
 
         incos = manager.get_incos_at(query_date)
-        print(EVENTS_DATABASE.events.values())
 
         for i in range(3):
             assert ASSASSINS_DATABASE.get(p[i+2] + " identifier") not in incos
@@ -165,11 +159,9 @@ class TestCompetencyPlugin:
                 .assassin(p[2]).kills(p[3])
                 .assassin(p[4]).kills(p[5])
                 .assassin(p[6]).kills(p[7])
-                .assassin(p[15]).is_involved_in_event(
-            pluginState={"CompetencyPlugin": {"attempts": [p[15] + " identifier"]}})
-                .assassin(p[16]).is_involved_in_event(
-            pluginState={"CompetencyPlugin": {"attempts": [p[16] + " identifier"] * 3}}))
-        # TODO refactor this to use Alexei's MockGame.add_attempts() once that is merged
+                .add_attempts(p[15])
+                .add_attempts(p[16], p[16], p[16]))
+
         plugin = CompetencyPlugin()
 
         plugin.gigabolt_answer(
