@@ -34,7 +34,7 @@ INCOS_TABLE_TEMPLATE = """
       This is the list of incompetents:
    </p>
 <table xmlns="" class="playerlist">
-  <tr><th>Real Name</th><th>Address</th><th>College</th><th>Water Weapons Status</th><th>Notes</th></tr>
+  <tr><th>Real Name</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Notes</th></tr>
   {ROWS}
 </table>
 """
