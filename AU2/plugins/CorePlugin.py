@@ -8,6 +8,7 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
+from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
@@ -153,7 +154,7 @@ class CorePlugin(AbstractPlugin):
                 "Plugin config -> Plugin-specific parameters",
                 self.ask_config,
                 self.answer_config,
-                (self.gather_config_names,)
+                (self.gather_config_options,)
             )
         ]
 
@@ -172,7 +173,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
         self.config_exports = [
-            ConfigExport(
+            DangerousConfigExport(
                 "core_plugin_set_game_start",
                 "CorePlugin -> Set game start",
                 self.ask_set_game_start,
@@ -518,36 +519,27 @@ class CorePlugin(AbstractPlugin):
 
         return components
 
-    def gather_config_names(self):
+    def gather_config_options(self) -> ConfigOptionsList:
         """
-        Gathers the name of all ConfigExports from all plugins
+        Gathers the name of all ConfigExports from all plugins, and returns a ConfigOptionsList
         """
-        names = []
-        configs = (c for p in PLUGINS for c in p.config_exports)
-        for c in sorted(configs, key=lambda e: e.display_name):
-            disp = c.display_name
-            # display dangerous config options in red if the game has already started
-            if isinstance(c, DangerousConfigExport) and get_game_start() <= get_now_dt():
-                # this is kind of cheating because it's not really html compatible
-                # a `ansi2html` library does exist though,
-                # or we can create a specific HTMLcomponent to implement the colouring
-                disp = "\033[31m" + disp + "\033[0m"
-            names.append((disp, c.identifier))
-        return names
+        config_options = [c for p in PLUGINS for c in p.config_exports]
+        config_options.sort(key=lambda c: c.display_name)
+        return ConfigOptionsList(identifier="config_option",
+                                 title="",
+                                 config_options=config_options)
 
-    def ask_config(self, config_option: str):
+    def ask_config(self, config_option: ConfigExport):
         """
         Opens the menu for a chosen config option
         """
-        all_config_exports = []
-        for p in PLUGINS:
-            all_config_exports += p.config_exports
-
-        config: ConfigExport
-        for c in all_config_exports:
-            if c.identifier == config_option:
-                config = c
-                break
+        if isinstance(config_option, ConfigExport):
+            return [
+                HiddenTextbox(
+                    identifier=self.identifier + "_config",
+                    default=config_option.identifier
+                )
+            ] + config_option.ask()
         else:
             return [
                 HiddenTextbox(
@@ -555,13 +547,6 @@ class CorePlugin(AbstractPlugin):
                     default=""
                 )
             ]
-
-        return [
-            HiddenTextbox(
-                identifier=self.identifier + "_config",
-                default=config.identifier
-            )
-        ] + config.ask()
 
     def answer_config(self, htmlResponse):
         all_config_exports = []

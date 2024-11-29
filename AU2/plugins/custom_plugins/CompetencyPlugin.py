@@ -132,7 +132,7 @@ class CompetencyPlugin(AbstractPlugin):
                 ask=self.ask_auto_competency,
                 answer=self.answer_auto_competency
             ),
-            ConfigExport(
+            DangerousConfigExport(
                 identifier="CompetencyPlugin_attempt_tracking",
                 display_name="Competency -> Toggle Attempt Tracking",
                 ask=lambda *args: [],
