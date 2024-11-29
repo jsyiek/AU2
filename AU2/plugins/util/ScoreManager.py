@@ -69,3 +69,13 @@ class ScoreManager:
 
     def get_score(self, a: Assassin) -> float:
         return self._score(a.identifier)
+
+    # used for stats page
+    def get_conkers(self, a: Assassin) -> int:
+        return self._conkers(a.identifier)
+
+    def get_kills(self, a: Assassin) -> int:
+        return self._kills(a.identifier)
+
+    def get_attempts(self, a: Assassin) -> int:
+        return self._attempts(a.identifier)
