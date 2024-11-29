@@ -13,18 +13,22 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.custom_plugins.PageGeneratorPlugin import get_color
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.ScoreManager import ScoreManager
+from AU2.plugins.util.CompetencyManager import CompetencyManager
+from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp
+from AU2.plugins.util.game import get_game_start
 
-TABLE_TEMPLATE = """
+OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
   <tr><th>Real Name</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Notes</th><th>Points</th></tr>
   {ROWS}
 </table>
 """
 
-ROW_TEMPLATE = """
+OPENSEASON_ROW_TEMPLATE = """
 <tr><td>{NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td><td>{POINTS:g}</tr>
 """
 
@@ -32,6 +36,30 @@ OPENSEASON_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "openseason.html"), "r", encoding="utf-8",
           errors="ignore") as F:
     OPENSEASON_PAGE_TEMPLATE = F.read()
+
+STATS_TABLE_TEMPLATE = """
+<table xmlns="" class="playerlist">
+<tr><th>Real Name</th><th>Pseudonym</th><th>Number of Attempts</th><th>Number of Kills</th><th>Conkers Score</th></tr>
+  {ROWS}
+</table>
+"""
+
+STATS_ROW_TEMPLATE = """
+<tr><td>{NAME}</td><td>{PSEUDONYMS}</td><td>{ATTEMPTS}</td><td>{KILLS}</td><td>{CONKERS}</td></tr>
+"""
+
+STATS_PAGE_TEMPLATE: str
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "stats.html"), "r", encoding="utf-8",
+          errors="ignore") as F:
+    STATS_PAGE_TEMPLATE = F.read()
+
+KILLTREE_PATH = "killtree.html"
+KILLTREE_EMBED = f"""
+<h2>Kill tree</h2>
+<iframe src="{KILLTREE_PATH}" width="100%" height="640"></iframe>
+"""
+
+DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 @registered_plugin
 class ScoringPlugin(AbstractPlugin):
@@ -61,6 +89,12 @@ class ScoringPlugin(AbstractPlugin):
                 self.ask_set_bonuses,
                 self.answer_set_bonuses,
                 (self.gather_assassins_and_bonuses,)
+            ),
+            Export(
+                "scoring_stats_page",
+                "Scoring -> Generate stats page",
+                self.ask_stats_page,
+                self.answer_stats_page,
             )
         ]
 
@@ -130,6 +164,109 @@ class ScoringPlugin(AbstractPlugin):
         ident = html_response[self.html_ids["Assassin"]]
         self.aps_set(ident, "Bonus", new_bonus)
         return [Label("[SCORING] Set bonus.")]
+
+    def ask_stats_page(self) -> List[HTMLComponent]:
+        return []
+
+    def answer_stats_page(self, htmlResponse) -> List[HTMLComponent]:
+        components = []
+        # use a score manager to count kills, conkers, and attempts
+        # don't need to set the formula because we aren't going to fetch scores
+        full_players = ASSASSINS_DATABASE.get_filtered(include=lambda a: not a.is_police,
+                                                          include_hidden=lambda a: not a.is_police)
+        score_manager = ScoreManager({a.identifier for a in full_players})
+        events = sorted(EVENTS_DATABASE.events.values(),
+                        key=lambda e: e.datetime)
+        for e in events:
+            score_manager.add_event(e)
+
+        rows = []
+        # the existing stats pages order by kills so do that here too
+        for p in sorted(full_players, key=lambda a: score_manager.get_kills(a), reverse=True):
+            rows.append(STATS_ROW_TEMPLATE.format(
+                NAME=p.real_name,
+                PSEUDONYMS=p.all_pseudonyms(),
+                KILLS=score_manager.get_kills(p),
+                CONKERS=score_manager.get_conkers(p),
+                ATTEMPTS=score_manager.get_attempts(p)
+            ))
+        table_str = STATS_TABLE_TEMPLATE.format(ROWS="".join(rows))
+
+        # kill tree visualiser
+        # skip if we don't have pyvis installed
+        try:
+            raise NotImplementedError() # skip for now
+            from pyvis.network import Network
+
+            # track competency and wantedness for edge colouring
+            competency_manager = CompetencyManager(get_game_start())
+            wanted_manager = WantedManager()
+
+            net = Network(directed=True, cdn_resources="in_line")
+            NODE_SHAPE = "box"
+            added_nodes = set()
+            for e in events:
+                # construct kill tree network
+                for (killer, victim) in e.kills:
+                    competency_manager.add_event(e)
+                    wanted_manager.add_event(e)
+                    if killer not in added_nodes:
+                        killer_model = ASSASSINS_DATABASE.get(killer)
+                        net.add_node(
+                            killer,
+                            label=killer_model.real_name + (" (Police)" if killer_model.is_police else ""),
+                            shape=NODE_SHAPE,
+                            color=get_color(killer_model.get_pseudonym(0), is_police=killer_model.is_police),
+                            title=f"{killer_model.all_pseudonyms()} ({killer_model.real_name})"
+                        )
+                        added_nodes.add(killer)
+                    victim_model = ASSASSINS_DATABASE.get(victim)
+                    if victim not in added_nodes:
+                        net.add_node(
+                            victim,
+                            label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
+                            shape=NODE_SHAPE,
+                            color=get_color(victim_model.get_pseudonym(0), is_police=victim_model.is_police),
+                            title=f"{victim_model.all_pseudonyms()} ({victim_model.real_name})"
+                        )
+                        added_nodes.add(victim)
+                    # TODO: render headlines correctly;
+                    #       I want to do this by refactoring PageGeneratorPlugin and using its code to render headlines,
+                    #       then stripping the html using `''.join(xml.etree.ElementTree.fromstring(text).itertext())`
+                    #       But this is waiting on Jamie's improvements to pseudonym rendering...
+                    net.add_edge(killer, victim,
+                                 label=e.datetime.strftime(DATETIME_FORMAT),
+                                 color=get_color(
+                                     victim_model.get_pseudonym(e.assassins.get(victim, 0)),
+                                     is_police=victim_model.is_police,
+                                     incompetent=competency_manager.is_inco_at(victim_model, e.datetime),
+                                     is_wanted=wanted_manager.is_player_wanted(victim, e.datetime)
+                                 ),
+                                 title=f"[{e.datetime.strftime(DATETIME_FORMAT)}] {e.headline}"
+                    )
+            with open(os.path.join(WEBPAGE_WRITE_LOCATION, KILLTREE_PATH), "w+", encoding="utf-8") as F:
+                F.write(net.generate_html())
+            killtree_embed = KILLTREE_EMBED
+        except ModuleNotFoundError:
+            killtree_embed = ""
+            components.append(Label("[WARNING] [SCORING] Module `pyvis` not found -- skipping kill tree visualisation."))
+        except Exception as err:
+            killtree_embed = ""
+            components.append(Label(f"[WARNING] [SCORING] Error occured while generating kill tree visualisation ({err})"
+                                    f" -- skipping."))
+
+
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "stats.html"), "w+", encoding="utf-8") as F:
+            F.write(
+                STATS_PAGE_TEMPLATE.format(
+                    YEAR=get_now_dt().year,
+                    TABLE=table_str,
+                    KILLTREE=killtree_embed
+                )
+            )
+
+        components.append(Label("[SCORING] Generated stats page."))
+        return components
 
     def ask_start_open_season(self):
         ts = self.gsdb_get("Start")
@@ -240,7 +377,7 @@ Syntax:
             rows = []
             for a in live_assassins:
                 rows.append(
-                    ROW_TEMPLATE.format(
+                    OPENSEASON_ROW_TEMPLATE.format(
                         NAME=a.real_name,
                         ADDRESS=a.address,
                         COLLEGE=a.college,
@@ -249,7 +386,7 @@ Syntax:
                         POINTS=score_manager.get_score(a)
                     )
                 )
-            table_str = TABLE_TEMPLATE.format(ROWS="".join(rows))
+            table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
 
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, "openseason.html"), "w+", encoding="utf-8") as F:
             F.write(
