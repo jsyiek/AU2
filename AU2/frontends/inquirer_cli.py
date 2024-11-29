@@ -44,10 +44,8 @@ from AU2.html_components.SpecialComponents.EditablePseudonymList import Editable
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
-from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
 from AU2.plugins.util.game import escape_format_braces
-
-DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 
 def datetime_validator(_, current):

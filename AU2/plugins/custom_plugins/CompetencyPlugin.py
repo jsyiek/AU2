@@ -26,7 +26,7 @@ from AU2.plugins.custom_plugins.SRCFPlugin import Email
 from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, DEFAULT_START_COMPETENCY, \
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start
 
 INCOS_TABLE_TEMPLATE = """
@@ -416,8 +416,6 @@ class CompetencyPlugin(AbstractPlugin):
         for e in events:
             competency_manager.add_event(e)
             death_manager.add_event(e)
-
-        DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
         now = get_now_dt()
         deadlines = []

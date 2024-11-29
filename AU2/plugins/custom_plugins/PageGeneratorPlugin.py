@@ -2,9 +2,10 @@ import datetime
 import os
 import re
 import zlib
+import itertools
 
-
-from typing import List
+from typing import List, Tuple, Optional
+from collections import namedtuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -82,9 +83,18 @@ WANTED_COLS = [
     "#ff0033", "#cc3333", "#ff3300"
 ]
 
+
+def event_url(e: Event) -> str:
+    """
+    Generates the (relative) url pointing to this event's appearance on the news pages
+    """
+    week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
+    return f"news{week:02}.html#{e._Event__secret_id}"
+
+
 HEAD_HEADLINE_TEMPLATE = """
     <div xmlns="" class="event">
-  [<a href="news{NUMBER}.html#{ID}">{TIME}</a>]
+  [<a href="{URL}">{TIME}</a>]
    <span class="headline">{HEADLINE}</span><br/></div>"""
 
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
@@ -101,6 +111,22 @@ HARDCODED_COLORS = {
 }
 
 FORMAT_SPECIFIER_REGEX = r"\[[D,P,N]([0-9]+)(?:_([0-9]+))?\]"
+
+WeekAndDay = namedtuple("WeekAndDay", ["days_since_start", "week", "day_of_week"])
+def date_to_weeks_and_days(start: datetime.date, date: datetime.date) -> WeekAndDay:
+    """
+    Converts param `date` into a namedtuple `WeekAndDay` of:
+        - days_since_start: number of days since param `start`
+        - week: week number (week starting on param `start` is week 1)
+        - day_of_week: day number in week (taking values 0 to 6 inclusive)
+    """
+    days_since_start = (date - start).days
+    week = days_since_start // 7 + 1
+    day = days_since_start % 7
+    if week < 0:
+        week = 0
+        day = days_since_start + 7
+    return WeekAndDay(days_since_start, week, day)
 
 
 def weeks_and_days_to_str(start: datetime.datetime, week: int, day: int) -> str:
@@ -154,6 +180,55 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     string = string.replace(f"[N{id_}]",
                             PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
     return string
+
+
+def render_headline_and_reports(e: Event,
+                                death_manager: DeathManager,
+                                competency_manager: CompetencyManager,
+                                wanted_manager: WantedManager) -> Tuple[str, List[str]]:
+    headline = e.headline
+
+    reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in
+               e.reports}
+
+    candidate_pseudonyms = []
+
+    texts_to_search = [r for r in itertools.chain((headline,), reports.values())]
+
+    for r in texts_to_search:
+        for match in re.findall(FORMAT_SPECIFIER_REGEX, r):
+            assassin_secret_id = int(match[0])
+
+            assassin_model: Assassin
+            for a in ASSASSINS_DATABASE.assassins.values():
+                if int(a._secret_id) == assassin_secret_id:
+                    assassin_model = a
+                    break
+            else:
+                continue
+
+            if any(c[0].identifier == assassin_model.identifier for c in candidate_pseudonyms):
+                continue
+
+            pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
+            pseudonym = assassin_model.get_pseudonym(pseudonym_index)
+
+            color = get_color(
+                pseudonym,
+                dead=death_manager.is_dead(assassin_model),
+                incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
+                is_police=assassin_model.is_police,
+                is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
+            )
+
+            candidate_pseudonyms.append((assassin_model, pseudonym, color))
+
+    for (assassin_model, pseudonym, color) in candidate_pseudonyms:
+        headline = substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
+        for (k, r) in reports.items():
+            reports[k] = substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
+
+    return headline, reports
 
 
 @registered_plugin
@@ -228,46 +303,12 @@ class PageGeneratorPlugin(AbstractPlugin):
             if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 continue
 
-            headline = e.headline
-
-            reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in e.reports}
-
-            candidate_pseudonyms = []
-
-            texts_to_search = [r for r in reports.values()] + [headline]
-
-            for r in texts_to_search:
-                for match in re.findall(FORMAT_SPECIFIER_REGEX, r):
-                    assassin_secret_id = int(match[0])
-
-                    assassin_model: Assassin
-                    for a in ASSASSINS_DATABASE.assassins.values():
-                        if int(a._secret_id) == assassin_secret_id:
-                            assassin_model = a
-                            break
-                    else:
-                        continue
-
-                    if any(c[0].identifier == assassin_model.identifier for c in candidate_pseudonyms):
-                        continue
-
-                    pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
-                    pseudonym = assassin_model.get_pseudonym(pseudonym_index)
-
-                    color = get_color(
-                        pseudonym,
-                        dead=death_manager.is_dead(assassin_model),
-                        incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-                        is_police=assassin_model.is_police,
-                        is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
-                    )
-
-                    candidate_pseudonyms.append((assassin_model, pseudonym, color))
-
-            for (assassin_model, pseudonym, color) in candidate_pseudonyms:
-                headline = substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
-                for (k, r) in reports.items():
-                    reports[k] = substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
+            headline, reports = render_headline_and_reports(
+                e,
+                death_manager=death_manager,
+                competency_manager=competency_manager,
+                wanted_manager=wanted_manager
+            )
 
             report_list = []
             for ((assassin, pseudonym_index), r) in reports.items():
@@ -289,13 +330,8 @@ class PageGeneratorPlugin(AbstractPlugin):
                 report_list.append(
                     REPORT_TEMPLATE.format(PSEUDONYM=painted_pseudonym, REPORT_COLOR=color, REPORT=r)
                 )
-            days_since_start = (e.datetime.date() - start_date).days
 
-            week = days_since_start // 7 + 1
-            day = days_since_start % 7
-            if week < 0:
-                week = 0
-                day = days_since_start + 7
+            days_since_start, week, day = date_to_weeks_and_days(start_date, e.datetime.date())
             events_for_chapter.setdefault(week, {})
 
             report_text = "".join(report_list)
@@ -309,8 +345,7 @@ class PageGeneratorPlugin(AbstractPlugin):
             events_for_chapter[week].setdefault(day, []).append(event_text)
 
             headline_text = HEAD_HEADLINE_TEMPLATE.format(
-                NUMBER=f"{week:02}",
-                ID=e._Event__secret_id,
+                URL=event_url(e),
                 TIME=time_str,
                 HEADLINE=headline
             )

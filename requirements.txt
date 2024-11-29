@@ -3,4 +3,6 @@ inquirer
 datetime
 paramiko
 tabulate
-colorama # optional -- only needed if using an old Windows terminal
+colorama  # optional -- only needed if using an old Windows terminal
+pyvis  # optional -- only needed when generating graph visualisations
+lxml  # optional -- only needed when generating a kill-graph visualisation

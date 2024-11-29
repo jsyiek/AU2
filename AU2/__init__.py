@@ -1,15 +1,14 @@
 import os
+import pathlib
 
 import pytz
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 BASE_WRITE_LOCATION = os.path.expanduser("~/database")
 TIMEZONE = pytz.timezone("Europe/London")
 
 # Sets the encoding to utf-8 for pyinquirer on Windows machines, since that isn't the default for some reason
 if os.name == "nt":
-    import pathlib
-
     pathlib_open = pathlib.Path.open
     def pathlib_open_utf8(*args, **kwargs):
         # 'b' means to open a file in 'byte' mode, so we can't use an encoding in this case

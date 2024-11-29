@@ -1,8 +1,10 @@
 import functools
+import datetime
 from collections import defaultdict
 from typing import Dict, List, Set, Optional
 
 from AU2.database.model import Event, Assassin
+from AU2.plugins.util.date_utils import dt_to_timestamp, get_now_dt
 # TODO: from ??? import calculate_formula
 
 
@@ -11,13 +13,16 @@ class ScoreManager:
                  assassin_ids: List[str],
                  formula: str = "",
                  bonuses: Dict[str, int] = {},
-                 perma_death=True):
-        self.kill_tree: Dict[str, List[str]] = {}
+                 perma_death=True,
+                 game_end: Optional[datetime.datetime] = None):
+        self.kill_tree: Dict[str, List[str]] = defaultdict(list)
         self.attempt_counter: Dict[str, int] = {}
         self.live_assassins = set(assassin_ids)
         self.formula = formula
         self.bonuses = bonuses
         self.perma_death = perma_death
+        self.game_end = game_end
+        self.deaths: Dict[str, List[Event]] = defaultdict(list)
 
     def add_event(self, e: Event):
         # adding an event invalidates the cache
@@ -27,7 +32,8 @@ class ScoreManager:
             # and dead players will be pruned as events are added
             if victim not in self.live_assassins:
                 continue
-            self.kill_tree.setdefault(killer, []).append(victim)
+            self.kill_tree[killer].append(victim)
+            self.deaths[victim].append(e)
             if self.perma_death:
                 self.live_assassins.discard(victim)
         for assassin_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
@@ -47,7 +53,7 @@ class ScoreManager:
         return sum((1 + self._conkers(v, visited) for v in self.kill_tree.get(identifier, [])))
 
     def _kills(self, identifier: str) -> int:
-        return len(self.kill_tree.get(identifier, []))
+        return len(self.kill_tree[identifier])
 
     def _attempts(self, identifier: str) -> int:
         return self.attempt_counter.get(identifier, 0)
@@ -64,8 +70,39 @@ class ScoreManager:
         b = self._bonus(identifier)
         a = self._attempts(identifier)
         import math
-        score = eval(self.formula)
+        score = eval(self.formula) if self.formula else c
         return score
 
     def get_score(self, a: Assassin) -> float:
         return self._score(a.identifier)
+
+    # used for stats page
+    def get_conkers(self, a: Assassin) -> int:
+        return self._conkers(a.identifier)
+
+    def get_kills(self, a: Assassin) -> int:
+        return self._kills(a.identifier)
+
+    def get_attempts(self, a: Assassin) -> int:
+        return self._attempts(a.identifier)
+
+    def get_death_events(self, a: Assassin) -> List:
+        return self.deaths[a.identifier]
+
+    def get_rating(self, a: Assassin) -> float:
+        """
+        'Rating' is used for the AU1-style ordering of players.
+        Under this ordering, players are ranked by their time of death.
+        However, to prevent duellists being ranked below non-duellists,
+        all players who survived open season are instead ranked according to score.
+        This is achieved by assigning a 'rating' to each player,
+        which for players who died before the end of open season is just the timestamp of their death,
+        but for players who survived open season,
+        a player's rating is the timestamp of the end of open season plus that player's score.
+        """
+        game_end = self.game_end or get_now_dt()
+        deaths = self.deaths[a.identifier]
+        if deaths and (game_end is None or deaths[-1].datetime < game_end):
+            return dt_to_timestamp(deaths[-1].datetime)
+        else:
+            return dt_to_timestamp(game_end) + self._score(a.identifier)
