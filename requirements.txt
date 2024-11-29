@@ -3,4 +3,6 @@ inquirer
 datetime
 paramiko
 tabulate
-colorama # optional -- only needed if using an old Windows terminal
+colorama  # optional -- only needed if using an old Windows terminal
+pyvis
+lxml

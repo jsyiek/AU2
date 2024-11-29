@@ -4,7 +4,7 @@ import re
 import zlib
 
 
-from typing import List
+from typing import List, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -156,6 +156,55 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     return string
 
 
+def render_headline_and_reports(e: Event,
+                                death_manager: DeathManager,
+                                competency_manager: CompetencyManager,
+                                wanted_manager: WantedManager) -> Tuple[str, List[str]]:
+    headline = e.headline
+
+    reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in
+               e.reports}
+
+    candidate_pseudonyms = []
+
+    texts_to_search = [r for r in reports.values()] + [headline]
+
+    for r in texts_to_search:
+        for match in re.findall(FORMAT_SPECIFIER_REGEX, r):
+            assassin_secret_id = int(match[0])
+
+            assassin_model: Assassin
+            for a in ASSASSINS_DATABASE.assassins.values():
+                if int(a._secret_id) == assassin_secret_id:
+                    assassin_model = a
+                    break
+            else:
+                continue
+
+            if any(c[0].identifier == assassin_model.identifier for c in candidate_pseudonyms):
+                continue
+
+            pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
+            pseudonym = assassin_model.get_pseudonym(pseudonym_index)
+
+            color = get_color(
+                pseudonym,
+                dead=death_manager.is_dead(assassin_model),
+                incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
+                is_police=assassin_model.is_police,
+                is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
+            )
+
+            candidate_pseudonyms.append((assassin_model, pseudonym, color))
+
+    for (assassin_model, pseudonym, color) in candidate_pseudonyms:
+        headline = substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
+        for (k, r) in reports.items():
+            reports[k] = substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
+
+    return headline, reports
+
+
 @registered_plugin
 class PageGeneratorPlugin(AbstractPlugin):
     def __init__(self):
@@ -228,46 +277,12 @@ class PageGeneratorPlugin(AbstractPlugin):
             if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 continue
 
-            headline = e.headline
-
-            reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in e.reports}
-
-            candidate_pseudonyms = []
-
-            texts_to_search = [r for r in reports.values()] + [headline]
-
-            for r in texts_to_search:
-                for match in re.findall(FORMAT_SPECIFIER_REGEX, r):
-                    assassin_secret_id = int(match[0])
-
-                    assassin_model: Assassin
-                    for a in ASSASSINS_DATABASE.assassins.values():
-                        if int(a._secret_id) == assassin_secret_id:
-                            assassin_model = a
-                            break
-                    else:
-                        continue
-
-                    if any(c[0].identifier == assassin_model.identifier for c in candidate_pseudonyms):
-                        continue
-
-                    pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
-                    pseudonym = assassin_model.get_pseudonym(pseudonym_index)
-
-                    color = get_color(
-                        pseudonym,
-                        dead=death_manager.is_dead(assassin_model),
-                        incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-                        is_police=assassin_model.is_police,
-                        is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
-                    )
-
-                    candidate_pseudonyms.append((assassin_model, pseudonym, color))
-
-            for (assassin_model, pseudonym, color) in candidate_pseudonyms:
-                headline = substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
-                for (k, r) in reports.items():
-                    reports[k] = substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
+            headline, reports = render_headline_and_reports(
+                e,
+                death_manager=death_manager,
+                competency_manager=competency_manager,
+                wanted_manager=wanted_manager
+            )
 
             report_list = []
             for ((assassin, pseudonym_index), r) in reports.items():
