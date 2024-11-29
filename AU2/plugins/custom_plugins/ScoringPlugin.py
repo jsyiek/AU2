@@ -204,7 +204,7 @@ class ScoringPlugin(AbstractPlugin):
         # kill tree visualiser
         # skip if we don't have pyvis installed
         try:
-            #raise NotImplementedError() # skip for now
+            #raise NotImplementedError()
             from pyvis.network import Network
 
             # track competency and wantedness for edge colouring
@@ -263,7 +263,7 @@ class ScoringPlugin(AbstractPlugin):
         except ModuleNotFoundError:
             killtree_embed = ""
             components.append(Label("[WARNING] [SCORING] Module `pyvis` not found -- skipping kill tree visualisation."))
-        except Exception as err:
+        except:
             killtree_embed = ""
             components.append(Label(f"[WARNING] [SCORING] Error occured while generating kill tree visualisation ({err})"
                                     f" -- skipping."))
