@@ -19,7 +19,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -126,13 +126,13 @@ class CompetencyPlugin(AbstractPlugin):
                 ask=self.set_default_competency_deadline_ask,
                 answer=self.set_default_competency_deadline_answer
             ),
-            ConfigExport(
+            DangerousConfigExport(
                 identifier="CompetencyPlugin_auto_competency",
                 display_name="Competency -> Change Auto Competency",
                 ask=self.ask_auto_competency,
                 answer=self.answer_auto_competency
             ),
-            ConfigExport(
+            DangerousConfigExport(
                 identifier="CompetencyPlugin_attempt_tracking",
                 display_name="Competency -> Toggle Attempt Tracking",
                 ask=lambda *args: [],

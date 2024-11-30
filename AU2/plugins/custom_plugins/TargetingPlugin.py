@@ -10,7 +10,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -57,13 +57,13 @@ class TargetingPlugin(AbstractPlugin):
         ]
 
         self.config_exports = [
-            ConfigExport(
+            DangerousConfigExport(
                 "targeting_set_player_seeds",
                 "Targeting Graph -> Set player seeds",
                 self.ask_set_seeds,
                 self.answer_set_seeds
             ),
-            ConfigExport(
+            DangerousConfigExport(
                 "targeting_set_random_seed",
                 "Targeting Graph -> Set random seed",
                 self.ask_set_random_seed,

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
+import os
+import random
 import tabulate
 from typing import List, Any, Dict, Optional
 
@@ -39,7 +41,8 @@ from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, \
     ListUpdates
-from AU2.plugins.AbstractPlugin import Export
+from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
+from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import escape_format_braces
@@ -650,6 +653,27 @@ def render(html_component, dependency_context={}):
             ]
             return inquirer_prompt_with_abort(q)
 
+    elif isinstance(html_component, ConfigOptionsList):
+        # render dangerous config exports in red
+        choices = [("\033[31m" + c.display_name + "\033[0m", c) if isinstance(c, DangerousConfigExport)
+                   else (c.display_name, c)
+                   for c in html_component.config_options]
+        selection = inquirer.list_input(
+                message=escape_format_braces(html_component.title),
+                choices=["*EXIT*"] + choices
+        )
+        if selection == "*EXIT*":
+            raise KeyboardInterrupt
+
+        if isinstance(selection, DangerousConfigExport):
+            # give explanation of why confirmation needed
+            print(selection.explanation)
+            i = random.randint(0, 1000000)
+            if str(i) != inquirer.text(f"Type {i} to access this config option"):
+                raise KeyboardInterrupt
+
+        return {html_component.identifier: selection}
+
     else:
         raise Exception("Unknown component type:", type(html_component))
 
@@ -708,6 +732,16 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
 
 
 def main():
+    # allow ANSI codes to work on old Windows terminals
+    # but don't let not having the module break the program!
+    try:
+        from colorama import just_fix_windows_console
+        just_fix_windows_console()
+    except ModuleNotFoundError:
+        if os.name == "nt":
+            print("[WARNING] `colorama` is not installed; if you are using an old terminal, "
+                  "colours may not render correctly.")
+
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
         exports = core_plugin.get_all_exports()
@@ -729,24 +763,35 @@ def main():
                 break
 
         params = []
-        qs = []
-        i = 0
+        kwargs = {}
+        abort = False
         for f in exp.options_functions:
-            qs.append(inquirer.List(name=i, choices=["*EXIT*"] + f(),
-                                    ignore=lambda x: any(a[j] == "*EXIT*" for j in range(i))))
-            i += 1
-        if qs:
+            options = f(*params)
+            fallback = isinstance(options, list)
+            if fallback:
+                options = InputWithDropDown(identifier="options",
+                                            title="",
+                                            options=["*EXIT*"] + options)
             try:
-                a = inquirer_prompt_with_abort(qs)
+                result = render(options)
             except KeyboardInterrupt:
-                continue
-            if any(a[k] == "*EXIT*" for k in range(i)):
-                continue
-            for k in range(i):
-                params.append(a[k])
+                abort = True
+                break
+
+            if fallback:
+                selection = result["options"]
+                abort = selection == "*EXIT*"
+                if abort:
+                    break
+                params.append(selection)
+            else:
+                kwargs.update(result)
+
+        if abort:
+            continue
 
         inp = {}
-        components = exp.ask(*params)
+        components = exp.ask(*params, **kwargs)
         components = replace_overrides(components)
         components = merge_dependency(components)
         iteration = 0

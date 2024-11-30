@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Union, Any, Callable
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
@@ -9,13 +9,28 @@ class Export:
     Represents an HTML callback
     """
 
-    def __init__(self, identifier: str, display_name: str, ask, answer, options_functions: Tuple = tuple()):
+    def __init__(self, identifier: str, display_name: str, ask, answer,
+                 options_functions: Tuple[Callable[
+                     [...],
+                     Union[
+                         List[Union[str, Tuple[str, Any]]],
+                         HTMLComponent
+                     ]
+                 ]] = tuple()):
         """
-        :param identifier: internal identifier for the callback
-        :param display_name: html-visible display name
-        :param ask: function that generates a list of HTML components
-        :param answer: function that takes a dictionary of arg -> str and actions the output
-        :param options: list of options to include alongside the export (will result in a string being passed as an arg)
+        Args:
+            identifier: internal identifier for the callback
+            display_name: html-visible display name
+            ask: function that generates a list of HTML components
+            answer: function that takes a dictionary of arg -> str and actions the output
+            options_functions: tuple of functions each returning either a HTMLComponent or a list of options;
+                The functions are executed in the order that they appear in this tuple. If a HTMLComponent is returned,
+                this will be rendered, and the result passed as a keyword argument based on the identifier to subsequent
+                functions in the tuple as well as the `ask` function.
+                If a list is returned then we fall back to rendering a selection from the options in that list, and the
+                result is passed as a positional argument to subsequent functions in the tuple as well as the `ask`
+                function.
+
         """
         self.identifier = identifier
         self.display_name = display_name
@@ -24,12 +39,15 @@ class Export:
         self.options_functions = options_functions
 
 
+DEFAULT_DCE_EXPLANATION = "This config option is dangerous to modify after a game has started."
+
 class ConfigExport(Export):
     """
     Represents a callback for a configuration parameter.
     """
 
-    def __init__(self, identifier: str, display_name: str, ask, answer):
+    def __init__(self, identifier: str, display_name: str, ask, answer,
+                 explanation: str = DEFAULT_DCE_EXPLANATION):
         """
         Unlike Export, this bans the options function as there are only two stages to Config.
 
@@ -37,7 +55,9 @@ class ConfigExport(Export):
         :param display_name: html-visible display name
         :param ask: function that generates a list of HTML components
         :param answer: function that takes a dictionary of arg -> str and actions the output
+
         """
+        self.explanation = explanation
         super().__init__(
             identifier,
             display_name,
@@ -45,6 +65,11 @@ class ConfigExport(Export):
             answer
         )
 
+class DangerousConfigExport(ConfigExport):
+    """
+    Represents a config export which shouldn't be changed while a game is in progress
+    This is signalled to the user by colouring the option red
+    """
 
 class HookedExport:
     """
