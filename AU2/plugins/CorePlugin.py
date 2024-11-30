@@ -25,6 +25,7 @@ from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
+from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start
 from AU2.plugins.util.DeathManager import DeathManager
 
@@ -429,6 +430,7 @@ class CorePlugin(AbstractPlugin):
     def answer_core_plugin_update_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
         event = EVENTS_DATABASE.get(ident)
+        event.pluginState["sanity_checks"] = []
         components = []
         for p in PLUGINS:
             components += p.on_event_update(event, html_response_args)
@@ -471,12 +473,100 @@ class CorePlugin(AbstractPlugin):
 
     def ask_generate_pages(self):
         components = []
+        event_count = 0
+        for e in EVENTS_DATABASE.events.values():
+            must_check = False
+            sanity_check_count = 0
+            explanations = []
+            for sanity_check_identifier, sanity_check in SANITY_CHECKS.items():
+                if sanity_check.has_marked(e):
+                    continue
+                changes = sanity_check.suggest_event_fixes(e)
+                if not changes:
+                    continue
+                if not must_check:
+                    must_check = True
+                    components.append(
+                        HiddenTextbox(
+                            identifier=f"SanityCheck_{event_count}",
+                            default=e.identifier
+                        )
+                    )
+
+                components.append(
+                    HiddenTextbox(
+                        identifier=f"SanityCheck_{event_count}_{sanity_check_count}",
+                        default=sanity_check_identifier
+                    )
+                )
+
+                for i, suggestion in enumerate(changes):
+                    components.append(
+                        HiddenTextbox(
+                            identifier=f"SanityCheck_{event_count}_{sanity_check_count}_{i}_identifier",
+                            default=suggestion.identifier
+                        )
+                    )
+                    components.append(
+                        HiddenTextbox(
+                            identifier=f"SanityCheck_{event_count}_{sanity_check_count}_{i}_explanation",
+                            default=suggestion.explanation
+                        )
+                    )
+                    explanations.append(suggestion.explanation)
+
+                sanity_check_count += 1
+
+            if explanations:
+                components.append(
+                    SelectorList(
+                        identifier=f"SanityCheck_{event_count}_explanations",
+                        title=f"[SANITY CHECK] {e.identifier}",
+                        options=explanations,
+                        defaults=explanations
+                    )
+                )
+            if must_check:
+                event_count += 1
+
+        if components:
+            components.insert(0, Label("[SANITY CHECK] Potential errors detected. Select changes to make."))
+
         for p in PLUGINS:
             components += p.on_page_request_generate()
         return components
 
     def answer_generate_pages(self, html_response_args: Dict):
+
         components = []
+
+        events_count = 0
+        while f"SanityCheck_{events_count}" in html_response_args:
+            event_id = html_response_args[f"SanityCheck_{events_count}"]
+            for sanity_check in SANITY_CHECKS.values():
+                sanity_check.mark(EVENTS_DATABASE.events[event_id])
+            sanity_check_count = 0
+            selected_changes = html_response_args[f"SanityCheck_{events_count}_explanations"]
+            while f"SanityCheck_{events_count}_{sanity_check_count}" in html_response_args:
+                sanity_check_str = f"SanityCheck_{events_count}_{sanity_check_count}"
+                sanity_check_id = html_response_args[sanity_check_str]
+                suggestion_count = 0
+                requested_ids = []
+                while f"{sanity_check_str}_{suggestion_count}_identifier" in html_response_args:
+                    base = f"{sanity_check_str}_{suggestion_count}"
+                    suggestion_id = html_response_args[f"{base}_identifier"]
+                    explanation = html_response_args[f"{base}_explanation"]
+                    if explanation in selected_changes:
+                        requested_ids.append(suggestion_id)
+                    suggestion_count += 1
+                if requested_ids:
+                    components += SANITY_CHECKS[sanity_check_id].fix_event(
+                        EVENTS_DATABASE.events[event_id],
+                        requested_ids
+                    )
+                sanity_check_count += 1
+            events_count += 1
+
         for p in PLUGINS:
             components += p.on_page_generate(html_response_args)
         return components
