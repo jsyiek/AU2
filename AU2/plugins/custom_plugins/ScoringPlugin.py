@@ -54,9 +54,18 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
     STATS_PAGE_TEMPLATE = F.read()
 
 KILLTREE_PATH = "killtree.html"
-KILLTREE_EMBED = f"""
+KILLTREE_EMBED = """
 <h2>Kill tree</h2>
-<iframe src="{KILLTREE_PATH}" width="100%" height="640"></iframe>
+<script type="text/javascript">
+  function iframeLoaded() {
+      var iFrameID = document.getElementById('idIframe');
+      if(iFrameID) {
+            iFrameID.height = iFrameID.contentWindow.document.body.scrollHeight + "px";
+      }   
+  }
+</script>   
+""" + f"""
+<iframe src="{KILLTREE_PATH}" width="100%" style="border: none; aspect-ratio: 4 / 3" scrolling="no" id="idIframe" onload="iframeLoaded()"></iframe>
 """
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
@@ -195,46 +204,50 @@ class ScoringPlugin(AbstractPlugin):
         # kill tree visualiser
         # skip if we don't have pyvis installed
         try:
-            raise NotImplementedError() # skip for now
+            #raise NotImplementedError() # skip for now
             from pyvis.network import Network
 
             # track competency and wantedness for edge colouring
             competency_manager = CompetencyManager(get_game_start())
             wanted_manager = WantedManager()
 
-            net = Network(directed=True, cdn_resources="in_line")
-            NODE_SHAPE = "box"
+            net = Network(directed=True, cdn_resources="in_line", height="calc(100vh - 90px)", select_menu=True)
+            NODE_SHAPE = "dot"
             added_nodes = set()
             for e in events:
                 # construct kill tree network
                 for (killer, victim) in e.kills:
                     competency_manager.add_event(e)
                     wanted_manager.add_event(e)
+                    killer_model = ASSASSINS_DATABASE.get(killer)
+                    victim_model = ASSASSINS_DATABASE.get(victim)
+                    killer_searchable = f"{killer_model.all_pseudonyms()} ({killer_model.real_name})"
+                    victim_searchable = f"{victim_model.all_pseudonyms()} ({victim_model.real_name})"
                     if killer not in added_nodes:
-                        killer_model = ASSASSINS_DATABASE.get(killer)
                         net.add_node(
-                            killer,
+                            killer_searchable,
                             label=killer_model.real_name + (" (Police)" if killer_model.is_police else ""),
                             shape=NODE_SHAPE,
                             color=get_color(killer_model.get_pseudonym(0), is_police=killer_model.is_police),
-                            title=f"{killer_model.all_pseudonyms()} ({killer_model.real_name})"
+                            title=killer_searchable,
+                            value=1+score_manager.get_conkers(killer_model)
                         )
                         added_nodes.add(killer)
-                    victim_model = ASSASSINS_DATABASE.get(victim)
                     if victim not in added_nodes:
                         net.add_node(
-                            victim,
+                            victim_searchable,
                             label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
                             shape=NODE_SHAPE,
                             color=get_color(victim_model.get_pseudonym(0), is_police=victim_model.is_police),
-                            title=f"{victim_model.all_pseudonyms()} ({victim_model.real_name})"
+                            title=victim_searchable,
+                            value=1+score_manager.get_conkers(victim_model)
                         )
                         added_nodes.add(victim)
                     # TODO: render headlines correctly;
                     #       I want to do this by refactoring PageGeneratorPlugin and using its code to render headlines,
                     #       then stripping the html using `''.join(xml.etree.ElementTree.fromstring(text).itertext())`
                     #       But this is waiting on Jamie's improvements to pseudonym rendering...
-                    net.add_edge(killer, victim,
+                    net.add_edge(killer_searchable, victim_searchable,
                                  label=e.datetime.strftime(DATETIME_FORMAT),
                                  color=get_color(
                                      victim_model.get_pseudonym(e.assassins.get(victim, 0)),
