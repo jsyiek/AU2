@@ -26,10 +26,9 @@ def set_game_start(date: datetime.datetime):
     """
     GENERIC_STATE_DATABASE.arb_state["game_start"] = date.timestamp()
 
-
 def soft_escape(string: str) -> str:
     """
-    Escapes only if not prefixed by HTML_REPORT_PREFIX
+    Escapes html and adds <br /> to newlines only if not prefixed by HTML_REPORT_PREFIX
     """
 
     # umpires may regret allowing this
@@ -37,7 +36,7 @@ def soft_escape(string: str) -> str:
     # please spare the umpire any headaches
     # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
     if not string.startswith(HTML_REPORT_PREFIX):
-        return escape(string)
+        return escape(string).replace("\n", "<br />\n")
     return string
 
 
