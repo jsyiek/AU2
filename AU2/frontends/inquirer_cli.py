@@ -732,15 +732,13 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
 
 
 def main():
-    # allow ANSI codes to work on old Windows terminals
-    # but don't let not having the module break the program!
+    # this fixes rendering of ANSI codes in old Windows terminals
+    # if it fails we don't want it to cause a crash though
     try:
         from colorama import just_fix_windows_console
         just_fix_windows_console()
-    except ModuleNotFoundError:
-        if os.name == "nt":
-            print("[WARNING] `colorama` is not installed; if you are using an old terminal, "
-                  "colours may not render correctly.")
+    except Exception:
+        pass
 
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
