@@ -6,14 +6,20 @@ from AU2.html_components import HTMLComponent
 from AU2.plugins.sanity_checks.model.SanityCheck import SanityCheck
 from AU2.plugins.sanity_checks.model.SanityCheck import Suggestion
 
+
 class IncorrectPseudonymFormatter(SanityCheck):
+    """
+    Finds and detects cases where the umpire writes pseudonysm as
+    [X] instead of [PX] and corrects them.
+    """
 
     identifier = "Incorrect_Pseudonym_Formatter"
 
     def _fix(self, string: str, fixes: Dict[str, str]):
-        search_pattern = r"\[([0-9]+)\]"
+        # Matches any number of white space, one word, then [X], then one word and space
+        search_pattern = r"(\S*[^\w\n]*)\[([0-9]+)\]([^\w\n]*\S*)"
         for match in re.findall(search_pattern, string):
-            fixes[f"[{match}]"] = f"[P{match}]"
+            fixes[f"{match[0]}[{match[1]}]{match[2]}"] = f"{match[0]}[P{match[1]}]{match[2]}"
 
     def _gather_fixes(self, e: Event):
         output = {}
