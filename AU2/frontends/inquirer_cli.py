@@ -745,7 +745,7 @@ def main():
         exports = core_plugin.get_all_exports()
 
         q = [inquirer.List(name="mode", message="Select mode",
-                           choices=["Exit"] + sorted([e.display_name for e in exports]))]
+                           choices=["Exit"] + [(e.display_name, e) for e in exports])]
         try:
             a = inquirer_prompt_with_abort(q)["mode"]
         except KeyboardInterrupt:
@@ -754,11 +754,7 @@ def main():
             print("Have a good day!")
             exit()
 
-        exp: Export = None
-        for e in exports:
-            if e.display_name == a:
-                exp = e
-                break
+        exp: Export = a
 
         params = []
         kwargs = {}
