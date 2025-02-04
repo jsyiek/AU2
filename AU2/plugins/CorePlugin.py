@@ -316,7 +316,7 @@ class CorePlugin(AbstractPlugin):
             return return_components
         return []
 
-    def get_all_exports(self) -> List[Export]:
+    def get_all_exports(self, include_suppressed: bool = False) -> List[Export]:
         """
         Returns all exports from all plugins, including prepared hooked exports, sorted by display name
         """
@@ -351,33 +351,39 @@ class CorePlugin(AbstractPlugin):
                 )
 
         suppressed_exports = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
-        exports = [e for e in exports if e.identifier not in suppressed_exports]
+        exports = [e for e in exports if include_suppressed or e.identifier not in suppressed_exports]
         export_priorities = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
         exports.sort(key=lambda e: (-export_priorities.get(e.identifier, 0), e.display_name))
         return exports
 
     def ask_suppress_exports(self):
-        export_identifiers = [export.identifier for export in self.get_all_exports()]
+        export_name_id_pairs = [(export.display_name, export.identifier)
+                                for export in self.get_all_exports(include_suppressed=True)
+                                if export.identifier not in self.IRREMOVABLE_EXPORTS]
         default_suppression = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
-        export_identifiers = sorted(list(set(export_identifiers + default_suppression)))
-        for exp in self.IRREMOVABLE_EXPORTS:
-            if exp in export_identifiers:
-                export_identifiers.remove(exp)
         return [
             SelectorList(
                 identifier=self.config_html_ids["Suppressed Exports"],
                 title="Choose the menu options that should not be displayed",
                 defaults=default_suppression,
-                options=export_identifiers
+                options=export_name_id_pairs
             )
         ]
 
     def answer_suppress_exports(self, htmlResponse):
-        suppressed_exports = htmlResponse[self.config_html_ids["Suppressed Exports"]]
-        for exp in self.IRREMOVABLE_EXPORTS:
-            if exp in suppressed_exports:
-                suppressed_exports.remove(exp)
-        GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = suppressed_exports
+        new_suppressed_exports = set(htmlResponse[self.config_html_ids["Suppressed Exports"]])
+        current_suppression = set(GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", []))
+        # only update suppression for exports of loaded plugins
+        for exp_id in (exp.identifier for exp in self.get_all_exports(include_suppressed=True)):
+            if exp_id in new_suppressed_exports:
+                current_suppression.add(exp_id)
+            else:
+                current_suppression.discard(exp_id)
+
+        for exp_id in self.IRREMOVABLE_EXPORTS:
+            current_suppression.discard(exp_id)
+
+        GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = list(current_suppression)
         return [Label("[CORE] Success!")]
 
     def ask_reorder_exports(self) -> List[HTMLComponent]:
