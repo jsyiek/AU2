@@ -4,7 +4,7 @@ import datetime
 import os
 import random
 import tabulate
-from typing import List, Any, Dict, Optional
+from typing import List, Any, Dict, Optional, Tuple
 
 import inquirer
 
@@ -743,18 +743,18 @@ def main():
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
         exports = core_plugin.get_all_exports()
-
+        exit_option: List[Tuple[str, Optional[Export]]] = [("Exit", None)]
         q = [inquirer.List(name="mode", message="Select mode",
-                           choices=["Exit"] + [(e.display_name, e) for e in exports])]
+                           choices=exit_option + [(e.display_name, e) for e in exports])]
         try:
-            a = inquirer_prompt_with_abort(q)["mode"]
+            exp: Optional[Export] = inquirer_prompt_with_abort(q)["mode"]
         except KeyboardInterrupt:
-            a = "Exit"
-        if a == "Exit":
+            exp = None
+        if exp is None:
             print("Have a good day!")
             exit()
 
-        exp: Export = a
+        exp: Export
 
         params = []
         kwargs = {}
