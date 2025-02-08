@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
-import os
+import itertools
 import random
 import tabulate
 from typing import List, Any, Dict, Optional, Tuple
@@ -743,14 +743,15 @@ def main():
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
         exports = core_plugin.get_all_exports()
-        exit_option: List[Tuple[str, Optional[Export]]] = [("Exit", None)]
+        exit_val = None
+        exit_option: List[Tuple[str, Optional[Export]]] = [("Exit", exit_val)]
         q = [inquirer.List(name="mode", message="Select mode",
                            choices=exit_option + [(e.display_name, e) for e in exports])]
         try:
             exp: Optional[Export] = inquirer_prompt_with_abort(q)["mode"]
         except KeyboardInterrupt:
-            exp = None
-        if exp is None:
+            exp = exit_val
+        if exp == exit_val:
             print("Have a good day!")
             exit()
 
