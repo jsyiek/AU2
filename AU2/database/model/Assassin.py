@@ -203,4 +203,4 @@ class Assassin(PersistentFile):
                 yield p
 
     def all_pseudonyms(self) -> str:
-        return " AKA ".join(self.pseudonyms)
+        return " AKA ".join(p for p in self.pseudonyms if p)
