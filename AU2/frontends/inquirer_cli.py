@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
-import itertools
 import random
 import tabulate
 from typing import List, Any, Dict, Optional, Tuple

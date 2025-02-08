@@ -28,7 +28,6 @@ from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start
-from AU2.plugins.util.date_utils import get_now_dt
 
 
 AVAILABLE_PLUGINS = {}
