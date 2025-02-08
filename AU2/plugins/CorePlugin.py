@@ -28,7 +28,6 @@ from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start
-from AU2.plugins.util.date_utils import get_now_dt
 
 
 AVAILABLE_PLUGINS = {}
@@ -101,7 +100,8 @@ class CorePlugin(AbstractPlugin):
         }
 
         self.config_html_ids = {
-            "Suppressed Exports": self.identifier + "_suppressed_exports"
+            "Suppressed Exports": self.identifier + "_suppressed_exports",
+            "Pinned Exports": self.identifier + "_pinned_exports"
         }
 
         self.exports = [
@@ -185,6 +185,12 @@ class CorePlugin(AbstractPlugin):
                 "CorePlugin -> Hide menu options",
                 self.ask_suppress_exports,
                 self.answer_suppress_exports
+            ),
+            ConfigExport(
+                "core_plugin_reorder_exports",
+                "CorePlugin -> Pin menu options",
+                self.ask_reorder_exports,
+                self.answer_reorder_exports
             )
         ]
 
@@ -309,9 +315,9 @@ class CorePlugin(AbstractPlugin):
             return return_components
         return []
 
-    def get_all_exports(self) -> List[Export]:
+    def get_all_exports(self, include_suppressed: bool = False) -> List[Export]:
         """
-        Returns all exports from all plugins, including prepared hooked exports
+        Returns all exports from all plugins, including prepared hooked exports, sorted by display name
         """
         exports = []
         for p in PLUGINS:
@@ -344,31 +350,74 @@ class CorePlugin(AbstractPlugin):
                 )
 
         suppressed_exports = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
-        exports = [e for e in exports if e.identifier not in suppressed_exports]
+        exports = [e for e in exports if include_suppressed or e.identifier not in suppressed_exports]
+        export_priorities = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+        exports.sort(key=lambda e: (-export_priorities.get(e.identifier, 0), e.display_name))
         return exports
 
     def ask_suppress_exports(self):
-        export_identifiers = [export.identifier for export in self.get_all_exports()]
+        export_name_id_pairs = [(export.display_name, export.identifier)
+                                for export in self.get_all_exports(include_suppressed=True)
+                                if export.identifier not in self.IRREMOVABLE_EXPORTS]
         default_suppression = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
-        export_identifiers = sorted(list(set(export_identifiers + default_suppression)))
-        for exp in self.IRREMOVABLE_EXPORTS:
-            if exp in export_identifiers:
-                export_identifiers.remove(exp)
         return [
             SelectorList(
                 identifier=self.config_html_ids["Suppressed Exports"],
                 title="Choose the menu options that should not be displayed",
                 defaults=default_suppression,
-                options=export_identifiers
+                options=export_name_id_pairs
             )
         ]
 
     def answer_suppress_exports(self, htmlResponse):
-        suppressed_exports = htmlResponse[self.config_html_ids["Suppressed Exports"]]
-        for exp in self.IRREMOVABLE_EXPORTS:
-            if exp in suppressed_exports:
-                suppressed_exports.remove(exp)
-        GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = suppressed_exports
+        new_suppressed_exports = set(htmlResponse[self.config_html_ids["Suppressed Exports"]])
+        current_suppression = set(GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", []))
+        # only update suppression for exports of loaded plugins
+        for exp in self.get_all_exports(include_suppressed=True):
+            exp_id = exp.identifier
+            if exp_id in new_suppressed_exports:
+                current_suppression.add(exp_id)
+            else:
+                current_suppression.discard(exp_id)
+
+        # should be necessary since
+        for exp_id in self.IRREMOVABLE_EXPORTS:
+            current_suppression.discard(exp_id)
+
+        GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = list(current_suppression)
+        return [Label("[CORE] Success!")]
+
+    def ask_reorder_exports(self) -> List[HTMLComponent]:
+        """
+        Config option to re-order how Exports are displayed in the main menu.
+        Currently it is only possible to 'pin' certain exports, but this is purely a frontend issue:
+        each export is assigned a different "priority" value and they are sorted based on this.
+        With the current 'pinning' interface, these take values 0 and 1 only.
+        """
+        export_name_id_pairs = [(export.display_name, export.identifier) for export in self.get_all_exports()]
+        default_priorities = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+        default_pinned = [export_id for export_id, priority in default_priorities.items() if priority > 0]
+        return [
+            SelectorList(
+                identifier=self.config_html_ids["Pinned Exports"],
+                title="Choose menu items to pin to the top of the main menu",
+                defaults=default_pinned,
+                options=export_name_id_pairs
+            )
+        ]
+
+    def answer_reorder_exports(self, htmlResponse: dict[str, Any]) -> List[HTMLComponent]:
+        pinned_exports = set(htmlResponse[self.config_html_ids["Pinned Exports"]])
+        # leave any hidden/unloaded exports' priorities intact,
+        # and keep any priorities that are not 0 or 1 intact if they prioritise the correct exports
+        # (this is for forwards-compatibility)
+        current_priorities = GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {}).setdefault("export_priorities", {})
+        for e in self.get_all_exports():
+            old_prio = current_priorities.get(e.identifier, 0)
+            if e.identifier not in pinned_exports and old_prio > 0:
+                current_priorities[e.identifier] = 0
+            elif e.identifier in pinned_exports and old_prio <= 0:
+                current_priorities[e.identifier] = 1
         return [Label("[CORE] Success!")]
 
     def ask_core_plugin_create_assassin(self):
