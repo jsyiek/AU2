@@ -217,7 +217,6 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
-            #Checkbox(self.html_ids["Police"], "Police? (y/n)", checked=assassin.is_police)
         ]
         return html
 
@@ -230,10 +229,11 @@ class CorePlugin(AbstractPlugin):
 
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
         assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
+        assassin.email = htmlResponse[self.html_ids["Email"]]
         assassin.address = htmlResponse[self.html_ids["Address"]]
+        assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
-        #assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
