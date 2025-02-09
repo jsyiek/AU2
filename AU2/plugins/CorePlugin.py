@@ -238,7 +238,9 @@ class CorePlugin(AbstractPlugin):
         # set other attributes
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
         assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
+        assassin.email = htmlResponse[self.html_ids["Email"]]
         assassin.address = htmlResponse[self.html_ids["Address"]]
+        assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
         return [Label("[CORE] Success!")]
