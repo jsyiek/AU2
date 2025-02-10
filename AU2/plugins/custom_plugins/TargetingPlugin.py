@@ -7,6 +7,7 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
@@ -68,12 +69,20 @@ class TargetingPlugin(AbstractPlugin):
                 "Targeting Graph -> Set random seed",
                 self.ask_set_random_seed,
                 self.answer_set_random_seed
+            ),
+            # TODO: DebugConfigExport only accessible in 'developer mode'
+            DangerousConfigExport(
+                "targeting_disable_initial_seeding",
+                "Targeting Graph -> Seed only for updates",
+                self.ask_set_initial_seeding,
+                self.answer_set_initial_seeding
             )
         ]
 
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
-            "Random Seed": self.identifier + "_random_seed"
+            "Random Seed": self.identifier + "_random_seed",
+            "Initial Seeding": self.identifier + "_initial_seeding"
         }
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
@@ -160,6 +169,21 @@ class TargetingPlugin(AbstractPlugin):
             self.html_ids["Random Seed"]]
         return [Label(f"[TARGETING] Set random seed to: {self.seed}")]
 
+    def ask_set_initial_seeding(self):
+        return [
+            Checkbox(
+                identifier=self.html_ids["Initial Seeding"],
+                title="Seed only for updates?",
+                checked=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("use_seeds_for_updates_only", False)
+            )
+        ]
+
+    def answer_set_initial_seeding(self, htmlResponse):
+        use_seeds_for_updates_only = htmlResponse[self.html_ids["Initial Seeding"]]
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["use_seeds_for_updates_only"] = use_seeds_for_updates_only
+        answer = "won't" if use_seeds_for_updates_only else "will"
+        return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
+
     def answer_show_targeting_graph(self, _):
         response = []
         graph = self.compute_targets(response)
@@ -210,8 +234,11 @@ class TargetingPlugin(AbstractPlugin):
         # We must respect any seeding constraints.
         player_seeds = [p for p in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])]
 
+        use_seeds_for_updates_only = GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(
+            "use_seeds_for_updates_only", False)
+
         def seed_shuffle(chain):
-            if not player_seeds:
+            if not player_seeds or use_seeds_for_updates_only:
                 random.shuffle(chain)
                 return chain
 
