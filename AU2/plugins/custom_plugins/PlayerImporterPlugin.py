@@ -43,6 +43,21 @@ class PlayerImporterPlugin(AbstractPlugin):
             )
         ]
 
+    def required_fields_explanation(self) -> List[HTMLComponent]:
+        return [
+            Label(
+                title="Required fields:"
+            ),
+            Label(
+                title=", ".join(self.expected_columns)
+            ),
+            Label(title="('is_police' will check if the answer is 'yes' and set police accordingly)"),
+            Label(
+                title="NOTE: If you don't do this, the player importer will make a best effort attempt to "
+                      "guess what your fields mean"
+            )
+        ]
+
     def ask_read_assassins_csv(self) -> List[HTMLComponent]:
         return [
             Label(
@@ -51,17 +66,7 @@ class PlayerImporterPlugin(AbstractPlugin):
             Label(
                 title="Must use comma separation"
             ),
-            Label(
-                title="Required fields:"
-            ),
-            Label(
-                title="     real_name,pseudonym,pronouns,email,college,address,water_status,notes,is_police"
-            ),
-            Label(title="('is_police' will check if the answer is 'yes' in lower case and set police accordingly)"),
-            Label(
-                title="NOTE: If you don't do this, the player importer will make a best effort attempt to "
-                      "guess what your fields mean"
-            ),
+        ] + self.required_fields_explanation() + [
             NamedSmallTextbox(
                 title="Answer anything to this textbox to confirm you've read what is said above.",
                 identifier="doesntmatter"
@@ -149,6 +154,8 @@ class PlayerImporterPlugin(AbstractPlugin):
         csv_path = os.path.expanduser(csv_path)
         if not os.path.exists(csv_path):
             return [Label(title=f"[IMPORTER] ERROR: File not found: {csv_path}")]
+        if os.path.isdir(csv_path):  # shouldn't be necessary, but you never know...
+            return [Label(title=f"[IMPORTER] ERROR: Path is a directory: {csv_path}")]
 
         rows: list
         try:
@@ -164,20 +171,12 @@ class PlayerImporterPlugin(AbstractPlugin):
             Label(
                 title="This player importer requires a specific spreadsheet format."
             ),
-            Label(
-                title="Required fields:"
-            ),
-            Label(
-                title="     real_name,pseudonym,pronouns,email,college,address,water_status,notes,is_police"
-            ),
-            Label(title="('is_police' will check if the answer is 'yes' in lower case and set police accordingly)"),
-            Label(
-                title="NOTE: If you don't do this, the player importer will make a best effort attempt to "
-                      "guess what your fields mean"
-            ),
+        ] + self.required_fields_explanation() + [
             Label(
                 title="The spreadsheet must be publicly accessible for AU2 to import from it."
-                      "After AU2 has imported players you can set it to private again."
+            ),
+            Label(
+                title="After AU2 has imported players you can set the sheet to private again."
             ),
             NamedSmallTextbox(
                 title="Answer anything to this textbox to confirm you've read what is said above.",
