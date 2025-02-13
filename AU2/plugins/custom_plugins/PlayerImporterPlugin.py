@@ -1,5 +1,7 @@
 import csv
+import urllib.request
 import os
+import re
 from typing import List, Optional
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -12,6 +14,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WATER_STATUSES
 
+GSHEET_SHARE_LINK_PATTERN = re.compile(r"docs.google.com/spreadsheets/d/([^/]+)/")
 
 @registered_plugin
 class PlayerImporterPlugin(AbstractPlugin):
@@ -19,7 +22,8 @@ class PlayerImporterPlugin(AbstractPlugin):
     def __init__(self):
         super().__init__("PlayerImporterPlugin")
         self.html_ids = {
-            "CSV Path": self.identifier + "_csv"
+            "CSV Path": self.identifier + "_csv",
+            "GSheets URL": self.identifier + "_gsheet_url"
         }
 
         self.expected_columns = ["real_name", "pseudonym", "pronouns", "email", "college", "address", "water_status", "notes", "is_police"]
@@ -27,9 +31,30 @@ class PlayerImporterPlugin(AbstractPlugin):
         self.exports = [
             Export(
                 identifier="player_importer_import_players",
-                display_name="Import players",
+                display_name="Import players from CSV file",
                 ask=self.ask_read_assassins_csv,
                 answer=self.answer_read_assassins_csv,
+            ),
+            Export(
+                identifier="player_importer_google_sheets",
+                display_name="Import players from Google Sheets",
+                ask=self.ask_read_assassins_gsheets,
+                answer=self.answer_read_assassins_gsheets,
+            )
+        ]
+
+    def required_fields_explanation(self) -> List[HTMLComponent]:
+        return [
+            Label(
+                title="Required fields:"
+            ),
+            Label(
+                title=", ".join(self.expected_columns)
+            ),
+            Label(title="('is_police' will check if the answer is 'yes' and set police accordingly)"),
+            Label(
+                title="NOTE: If you don't do this, the player importer will make a best effort attempt to "
+                      "guess what your fields mean"
             )
         ]
 
@@ -41,17 +66,7 @@ class PlayerImporterPlugin(AbstractPlugin):
             Label(
                 title="Must use comma separation"
             ),
-            Label(
-                title="Required fields:"
-            ),
-            Label(
-                title="     real_name,pseudonym,pronouns,email,college,address,water_status,notes,is_police"
-            ),
-            Label(title="('is_police' will check if the answer is 'yes' in lower case and set police accordingly)"),
-            Label(
-                title="NOTE: If you don't do this, the player importer will make a best effort attempt to "
-                      "guess what your fields mean"
-            ),
+        ] + self.required_fields_explanation() + [
             NamedSmallTextbox(
                 title="Answer anything to this textbox to confirm you've read what is said above.",
                 identifier="doesntmatter"
@@ -93,29 +108,25 @@ class PlayerImporterPlugin(AbstractPlugin):
             return WATER_STATUSES[2]
         return WATER_STATUSES[0]
 
-    def answer_read_assassins_csv(self, htmlResponse) -> List[HTMLComponent]:
-        csv_path = htmlResponse[self.html_ids["CSV Path"]]
-        csv_path = os.path.expanduser(csv_path)
-        if not os.path.exists(csv_path):
-            return [Label(title=f"[IMPORTER] ERROR: File not found: {csv_path}")]
-
-        rows: list
-        with open(csv_path, "r") as F:
-            rows = [r for r in csv.reader(F)]
-
-        headers = rows[0]
+    def read_assassins(self, rows: List[List[str]]) -> List[HTMLComponent]:
         index_mapping = {}
-        for h in headers:
-            field = self.guess_field(h)
-            if field is not None:
-                index_mapping[field] = headers.index(h)
+
+        # ignore any empty rows above the header
+        header_row = 0
+        while len(index_mapping) == 0 and header_row < len(rows):
+            headers = rows[header_row]
+            for h in headers:
+                field = self.guess_field(h)
+                if field is not None:
+                    index_mapping[field] = headers.index(h)
+            header_row += 1
 
         if len(index_mapping) != len(self.expected_columns):
             failures = ', '.join([e for e in self.expected_columns if e not in index_mapping])
             return [Label(title=f"[IMPORTER] ERROR: Failed to identify these fields: {failures}")]
 
         assassins = []
-        for r in rows[1:]:
+        for r in rows[header_row:]:
             params = {}
             try:
                 for (e, i) in index_mapping.items():
@@ -138,3 +149,55 @@ class PlayerImporterPlugin(AbstractPlugin):
 
         return [Label(title="[IMPORTER] Success!")]
 
+    def answer_read_assassins_csv(self, htmlResponse) -> List[HTMLComponent]:
+        csv_path = htmlResponse[self.html_ids["CSV Path"]]
+        csv_path = os.path.expanduser(csv_path)
+        if not os.path.exists(csv_path):
+            return [Label(title=f"[IMPORTER] ERROR: File not found: {csv_path}")]
+        if os.path.isdir(csv_path):  # shouldn't be necessary, but you never know...
+            return [Label(title=f"[IMPORTER] ERROR: Path is a directory: {csv_path}")]
+
+        rows: list
+        try:
+            with open(csv_path, "r") as F:
+                rows = [r for r in csv.reader(F)]
+        except PermissionError:
+            return [Label(title=f"[IMPORTER] ERROR: Lacking permission for: {csv_path}")]
+
+        return self.read_assassins(rows)
+
+    def ask_read_assassins_gsheets(self) -> List[HTMLComponent]:
+        return [
+            Label(
+                title="This player importer requires a specific spreadsheet format."
+            ),
+        ] + self.required_fields_explanation() + [
+            Label(
+                title="The spreadsheet must be publicly accessible for AU2 to import from it."
+            ),
+            Label(
+                title="After AU2 has imported players you can set the sheet to private again."
+            ),
+            NamedSmallTextbox(
+                title="Answer anything to this textbox to confirm you've read what is said above.",
+                identifier="doesntmatter"
+            ),
+            NamedSmallTextbox(
+                identifier=self.html_ids["GSheets URL"],
+                title="URL of Google sheet to import players from"
+            )
+        ]
+
+    def answer_read_assassins_gsheets(self, htmlResponse) -> List[HTMLComponent]:
+        gsheet_url = htmlResponse[self.html_ids["GSheets URL"]]
+        matches = GSHEET_SHARE_LINK_PATTERN.findall(gsheet_url)
+        if len(matches) == 0:
+            return [Label(title=f"[IMPORTER] ERROR: Invalid Google Sheet URL.")]
+        gsheet_id = matches[0]
+        try:
+            response = urllib.request.urlopen(f"https://docs.google.com/spreadsheets/export?exportFormat=csv&id={gsheet_id}")
+        except Exception as e:
+            return [Label(title=f"[IMPORTER] ERROR: Could not access sheet. Found error: {e}")]
+        lines = [l.decode('utf-8') for l in response.readlines()]
+        rows = [r for r in csv.reader(lines)]
+        return self.read_assassins(rows)
