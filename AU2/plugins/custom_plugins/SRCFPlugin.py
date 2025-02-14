@@ -74,6 +74,29 @@ Room Water Weapons Status: {WATER_STATUS}
 EMAIL_WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "emails")
 REMOTE_EMAIL_WRITE_LOCATION = ASSASSINS_PATH + "/" + "emails"
 
+BACKUP_DATE_PATTERN1 = re.compile(r"\d{2}-\d{2}-\d{4}")
+BACKUP_DATE_PATTERN2 = re.compile(r"\d{4}-\d{2}-\d{2}")
+BACKUP_TIME_PATTERN = re.compile(r"(?<!\d)\d{2}-\d{2}-\d{2}(?!\d)")
+BACKUP_DATE_FORMAT1 = "%d-%m-%Y"
+BACKUP_DATE_FORMAT2 = "%Y-%m-%d"
+BACKUP_TIME_FORMAT = "%H-%M-%S"
+def backup_sort_key(backup_name: str) -> (float, str):
+    """
+    Sorts backups by extracting the date and timestamps from their names,
+    and sorts in reverse-chronological order.
+    Backups with no date stamps are put at the end of the list.
+    """
+    backup_date = datetime.date.min
+    backup_time = datetime.time.min
+    if m := BACKUP_DATE_PATTERN1.search(backup_name):
+        backup_date = datetime.datetime.strptime(m[0], BACKUP_DATE_FORMAT1).date()
+    elif m := BACKUP_DATE_PATTERN2.search(backup_name):
+        backup_date = backup_date = datetime.datetime.strptime(m[0], BACKUP_DATE_FORMAT2).date()
+
+    if m := BACKUP_TIME_PATTERN.search(backup_name):
+        backup_time = datetime.datetime.strptime(m[0], BACKUP_TIME_FORMAT).time()
+    return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+
 
 class Email:
     def __init__(self, recipient: Assassin):
@@ -479,7 +502,7 @@ class SRCFPlugin(AbstractPlugin):
 
     def ask_restore_backup(self) -> List[HTMLComponent]:
         with self._get_client() as sftp:
-            backups = sftp.listdir(REMOTE_BACKUP_LOCATION)
+            backups = sorted(sftp.listdir(REMOTE_BACKUP_LOCATION), key=backup_sort_key)
         return [
                    InputWithDropDown(
                        identifier=self.html_ids["backup_name"],
@@ -569,19 +592,23 @@ class SRCFPlugin(AbstractPlugin):
     def _autobackup(self, sftp) -> str:
         """
         Creates a REMOTE backup of the (local) database with an auto-generated name.
-        The name is of the format "autobackup_<username>_<datetime>"
+        The name is of the format "backup_<date>_<time>_<username>",
+        where <date> is in YYYY-MM-DD format,
+        <time> is in HH-MM-SS format
+        and <username> is the username that was used to log into SRCF.
+        The reason for this format is so that the backups will be ordered correctly when sorting by name.
 
         Returns:
             Name of backup created
         """
         now = get_now_dt()
-        folder_name = f"autobackup_{self.username}_{now:%d-%m-%Y_%H-%M-%S}"
+        folder_name = f"backup_{now:%Y-%m-%d_%H-%M-%S}_{self.username}_auto"
         self._backup_to_remote(sftp, folder_name)
         return folder_name
 
     def ask_backup(self) -> List[HTMLComponent]:
         now = get_now_dt()
-        folder_name = now.strftime("backup_%d-%m-%Y_%H-%M-%S")
+        folder_name = f"backup_{now:%Y-%m-%d_%H-%M-%S}_{self.username}"
         return [
             DefaultNamedSmallTextbox(
                 identifier=self.html_ids["backup_name"],
