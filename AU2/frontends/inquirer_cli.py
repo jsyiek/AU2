@@ -521,7 +521,7 @@ def render(html_component, dependency_context={}):
             q = [inquirer.List(
                 name=html_component.identifier,
                 message=escape_format_braces(html_component.title),
-                choices=[("*CONTINUE*", -1)] + [(v.text, i) for i, v in enumerate(values) if v.text] + [("*NEW*", -2)],
+                choices=[("*CONTINUE*", -1)] + [(f"{i}: {v.text}", i) for i, v in enumerate(values) if v.text] + [("*NEW*", -2)],
             )]
             a = inquirer_prompt_with_abort(q)
             c = a[html_component.identifier]  # index of choice
