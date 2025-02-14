@@ -74,6 +74,29 @@ Room Water Weapons Status: {WATER_STATUS}
 EMAIL_WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "emails")
 REMOTE_EMAIL_WRITE_LOCATION = ASSASSINS_PATH + "/" + "emails"
 
+BACKUP_DATE_PATTERN1 = re.compile(r"\d{2}-\d{2}-\d{4}")
+BACKUP_DATE_PATTERN2 = re.compile(r"\d{4}-\d{2}-\d{2}")
+BACKUP_TIME_PATTERN = re.compile(r"(?<!\d)\d{2}-\d{2}-\d{2}(?!\d)")
+BACKUP_DATE_FORMAT1 = "%d-%m-%Y"
+BACKUP_DATE_FORMAT2 = "%Y-%m-%d"
+BACKUP_TIME_FORMAT = "%H-%M-%S"
+def backup_sort_key(backup_name: str) -> (float, str):
+    """
+    Sorts backups by extracting the date and timestamps from their names,
+    and sorts in reverse-chronological order.
+    Backups with no date stamps are put at the end of the list.
+    """
+    backup_date = datetime.date.min
+    backup_time = datetime.time.min
+    if m := BACKUP_DATE_PATTERN1.search(backup_name):
+        backup_date = datetime.datetime.strptime(m[0], BACKUP_DATE_FORMAT1).date()
+    elif m := BACKUP_DATE_PATTERN2.search(backup_name):
+        backup_date = backup_date = datetime.datetime.strptime(m[0], BACKUP_DATE_FORMAT2).date()
+
+    if m := BACKUP_TIME_PATTERN.search(backup_name):
+        backup_time = datetime.datetime.strptime(m[0], BACKUP_TIME_FORMAT).time()
+    return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+
 
 class Email:
     def __init__(self, recipient: Assassin):
@@ -308,6 +331,7 @@ class SRCFPlugin(AbstractPlugin):
         return []
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
+        components = []
         if hook == self.hooks["email"]:
 
             email_list: List[Email] = data
@@ -342,8 +366,9 @@ class SRCFPlugin(AbstractPlugin):
             email_list = [e for e in email_list if e.send]
 
             if not email_list:
-                print("[SRCFPlugin] No emails need to be sent, aborting.")
-                return []
+                components.append(Label("[SRCFPlugin] No emails need to be sent, aborting."))
+                return components
+            # should this be a Label?
             print(f"[SRCFPlugin] Found {len(email_list)} emails to send.")
 
             email_str_list = [
@@ -390,14 +415,18 @@ class SRCFPlugin(AbstractPlugin):
                             print("stderr (useful for debugging):")
                             # TODO: Implement proper print
                             print(stderr)
+
+                        components.append(Label("[SRCFPlugin] Sent emails!"))
                     else:
+                        # should this be a HTMLComponent?
                         print(email_file_contents)
 
                     self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
                     self._publish_databases(sftp)
-
-            return [Label("[SRCFPlugin] Sent!")]
-        return []
+                    components.append(f"[SRCFPlugin] Uploaded database.")
+                    autobackup_name = self._autobackup(sftp)
+                    components.append(f"[SRCFPlugin] Created remote backup {autobackup_name}")
+        return components
 
     def ask_ignore_lock(self) -> List[HTMLComponent]:
         with self._get_client() as sftp:
@@ -473,7 +502,7 @@ class SRCFPlugin(AbstractPlugin):
 
     def ask_restore_backup(self) -> List[HTMLComponent]:
         with self._get_client() as sftp:
-            backups = sftp.listdir(REMOTE_BACKUP_LOCATION)
+            backups = sorted(sftp.listdir(REMOTE_BACKUP_LOCATION), key=backup_sort_key)
         return [
                    InputWithDropDown(
                        identifier=self.html_ids["backup_name"],
@@ -544,12 +573,42 @@ class SRCFPlugin(AbstractPlugin):
                 os.remove(localpath)
 
             self._publish_databases(sftp)
+            automatic_backup = self._autobackup(sftp)
 
-        return [Label("[SRCF Plugin] Successfuly published locally generated pages and uploaded database.")]
+        return [
+            Label("[SRCF Plugin] Successfuly published locally generated pages and uploaded database."),
+            Label(f"[SRCF Plugin] Automatically created backup {automatic_backup}")
+        ]
+
+    def _backup_to_remote(self, sftp, backup_name: str):
+        backup_path = REMOTE_BACKUP_LOCATION + "/" + backup_name
+        self._makedirs(sftp, backup_path)
+        self._log_to(sftp, EDIT_LOG, f"Creating backup at {backup_path}")
+        for f in self._find_jsons(BASE_WRITE_LOCATION):
+            localpath = os.path.join(BASE_WRITE_LOCATION, f)
+            remotepath = backup_path + "/" + f
+            sftp.put(localpath, remotepath)
+
+    def _autobackup(self, sftp) -> str:
+        """
+        Creates a REMOTE backup of the (local) database with an auto-generated name.
+        The name is of the format "backup_<date>_<time>_<username>",
+        where <date> is in YYYY-MM-DD format,
+        <time> is in HH-MM-SS format
+        and <username> is the username that was used to log into SRCF.
+        The reason for this format is so that the backups will be ordered correctly when sorting by name.
+
+        Returns:
+            Name of backup created
+        """
+        now = get_now_dt()
+        folder_name = f"backup_{now:%Y-%m-%d_%H-%M-%S}_{self.username}_auto"
+        self._backup_to_remote(sftp, folder_name)
+        return folder_name
 
     def ask_backup(self) -> List[HTMLComponent]:
         now = get_now_dt()
-        folder_name = now.strftime("backup_%d-%m-%Y_%H-%M-%S")
+        folder_name = f"backup_{now:%Y-%m-%d_%H-%M-%S}_{self.username}"
         return [
             DefaultNamedSmallTextbox(
                 identifier=self.html_ids["backup_name"],
@@ -559,15 +618,9 @@ class SRCFPlugin(AbstractPlugin):
         ]
 
     def answer_backup(self, htmlResponse) -> List[HTMLComponent]:
-        backup_path = REMOTE_BACKUP_LOCATION + "/" + htmlResponse[self.html_ids["backup_name"]]
-
+        backup_name = htmlResponse[self.html_ids["backup_name"]]
         with self._get_client() as sftp:
-            self._makedirs(sftp, backup_path)
-            self._log_to(sftp, EDIT_LOG, f"Creating backup at {backup_path}")
-            for f in self._find_jsons(BASE_WRITE_LOCATION):
-                localpath = os.path.join(BASE_WRITE_LOCATION, f)
-                remotepath = backup_path + "/" + f
-                sftp.put(localpath, remotepath)
+            self._backup_to_remote(sftp, backup_name)
         return [Label("[SRCF Plugin] Success!")]
 
     def _read_lock_file(self, sftp: paramiko.SFTPClient) -> (Optional[str], Optional[datetime.datetime]):
@@ -594,7 +647,6 @@ class SRCFPlugin(AbstractPlugin):
         """
         Publishes all databases
         """
-
         for database in self._find_jsons(BASE_WRITE_LOCATION):
             localpath = os.path.join(BASE_WRITE_LOCATION, database)
             remotepath = REMOTE_DATABASE_LOCATION + "/" + database
