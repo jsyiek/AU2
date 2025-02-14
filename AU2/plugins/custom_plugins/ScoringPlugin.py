@@ -2,6 +2,7 @@ import os
 import pathlib
 import datetime
 from typing import List, Optional, Tuple, Any, Dict, Iterable
+from collections import namedtuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -27,6 +28,7 @@ from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start
+from AU2.plugins.util.types import Try, Success, Failure
 
 OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
@@ -101,13 +103,11 @@ KILLTREE_LINK = f"""
 """
 
 NODE_SHAPE = "dot"
-def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManager) -> str:
-    # local import because importing pyvis every time impacts performance significantly
-    try:
-        from pyvis.network import Network
-        import lxml.html
-    except ModuleNotFoundError:
-        return "Skipping killtree visualisation due to missing modules -- check `requirements.txt`."
+KilltreeHTML = namedtuple("KilltreeHTML", ["link", "embed"])
+def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManager) -> KilltreeHTML:
+    # local import because importing pyvis every time AU2 starts up impacts performance significantly
+    from pyvis.network import Network
+    import lxml.html
 
     # track competency and wantedness for edge colouring
     competency_manager = CompetencyManager(get_game_start())
@@ -163,7 +163,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                          )
     with open(os.path.join(WEBPAGE_WRITE_LOCATION, KILLTREE_PATH), "w+", encoding="utf-8") as F:
         F.write(net.generate_html())
-    return "" # empty string indicates success
+    return KilltreeHTML(KILLTREE_LINK, KILLTREE_EMBED)
 
 
 @registered_plugin
@@ -352,17 +352,15 @@ class ScoringPlugin(AbstractPlugin):
             ))
         table_str = stats_table_template(columns).format(ROWS="".join(rows))
 
-        # kill tree visualiser
-        killtree_embed = ""
         killtree_link = ""
+        killtree_embed = ""
         if generate_killtree:
-            msg = generate_killtree_visualiser(events, score_manager)
-            if msg:
-                components.append(Label(f"[WARNING] [SCORING] {msg}"))
-            else:
-                killtree_link = KILLTREE_LINK
-                killtree_embed = KILLTREE_EMBED
-                components.append(Label("[SCORING] Generated killtree page."))
+            try_killtree = Try.from_call(lambda: generate_killtree_visualiser(events, score_manager))
+            killtree_link, killtree_embed = try_killtree.get_or_else(lambda err: (killtree_link, killtree_embed))
+            try_killtree.map(lambda _: components.append(Label("[SCORING] Generated killtree page.")))
+            try_killtree.map_failure(lambda err: components.append(
+                Label(f"[WARNING] [SCORING] Kill-graph visualiser skipped due to: {err}")
+            ))
 
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, "stats.html"), "w+", encoding="utf-8") as F:
             F.write(

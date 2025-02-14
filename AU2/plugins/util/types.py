@@ -7,6 +7,15 @@ TransformT = TypeVar("TransformT")
 
 
 class Try(abc.ABC, Generic[ResultT, ErrorT]):
+    @classmethod
+    def from_call(cls, call: Callable[[], ResultT]) -> "Try[ResultT, ErrorT]":
+        try:
+            val = call()
+        except Exception as err:
+            return Failure(err)
+        else:
+            return Success(val)
+
     def get_or_else(self, or_else: Callable[[ErrorT], ResultT]) -> ResultT:
         """
         If contains success, then returns held result, else invokes passed callable
@@ -40,13 +49,7 @@ class Success(Try):
         return self.value
 
     def map(self, fn: Callable[[ResultT], TransformT]) -> Try[TransformT, ErrorT]:
-        val = self.value
-        try:
-            result = fn(val)
-        except Exception as err:
-            return Failure(err)
-        else:
-            return Success(result)
+        return Try.from_call(lambda: fn(self.value))
 
     def map_failure(self, fn: Callable[[ErrorT], None]) -> None:
         pass
@@ -65,8 +68,8 @@ class Failure(Try):
     def map(self, fn: Callable[[ResultT], TransformT]) -> Try[TransformT, ErrorT]:
         return self
 
-    def map_failure(self, fn: Callable[[ErrorT], None]) -> None:
-        fn(self.err)
+    def map_failure(self, fn: Callable[[ErrorT], TransformT]) -> TransformT:
+        return fn(self.err)
 
     def or_throw(self, fn: Callable[[ErrorT], Exception]) -> None:
         raise fn(self.err)
