@@ -298,7 +298,8 @@ class PolicePlugin(AbstractPlugin):
 
         message += police_rank_manager.generate_new_ranks_if_necessary()
 
-        police: List[Assassin] = [a for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
+        # note: police who are hidden using `Assassin -> Hide` will not be included
+        police: List[Assassin] = ASSASSINS_DATABASE.get_filtered(include=lambda a: a.is_police)
         dead_police: List[Assassin] = [i for i in police if i.identifier in death_manager.get_dead()]
         alive_police: List[Assassin] = [i for i in police if i not in dead_police]
 
