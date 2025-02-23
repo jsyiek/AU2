@@ -648,7 +648,7 @@ class CorePlugin(AbstractPlugin):
         components = []
 
         if call_first:
-            PLUGINS.plugins[hook_owner].on_hook_respond(hook, htmlResponse, data)
+            components += PLUGINS.plugins[hook_owner].on_hook_respond(hook, htmlResponse, data)
 
         for p in PLUGINS:
             if p.identifier == hook_owner:
@@ -656,7 +656,7 @@ class CorePlugin(AbstractPlugin):
             components += p.on_hook_respond(hook, htmlResponse, data)
 
         if not call_first:
-            PLUGINS.plugins[hook_owner].on_hook_respond(hook, htmlResponse, data)
+            components += PLUGINS.plugins[hook_owner].on_hook_respond(hook, htmlResponse, data)
 
         return components
 
