@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Container
+from typing import List, Dict, Set
 
 from AU2.database.model import Event
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -17,7 +17,7 @@ class PlayerNotDead(SanityCheck):
 
     identifier = "Player_Not_Dead"
 
-    def _find_incorrect(self, string: str, dead_secret_ids: Container[str], fixes: Dict[str, str]):
+    def _find_incorrect(self, string: str, dead_secret_ids: Set[str], fixes: Dict[str, str]):
         # matches either [DX] or [NX]
         for match in DX_NX_PATTERN.findall(string):
             X = match[1]
@@ -25,7 +25,7 @@ class PlayerNotDead(SanityCheck):
                 fixes[match[0]] = X
 
     def _gather_incorrect(self, e: Event):
-        dead_secret_ids = {ASSASSINS_DATABASE.get(victim_id)._secret_id for _, victim_id in e.kills}
+        dead_secret_ids = set(ASSASSINS_DATABASE.get(victim_id)._secret_id for _, victim_id in e.kills)
         output = {}
         for (_, _, report) in e.reports:
             self._find_incorrect(report, dead_secret_ids, output)
@@ -36,10 +36,9 @@ class PlayerNotDead(SanityCheck):
         suggestions = []
         to_fix = self._gather_incorrect(e)
         for original, secret_id in to_fix.items():
-            alist = ASSASSINS_DATABASE.get_filtered(include=lambda a: a._secret_id == secret_id,
-                                                    include_hidden=lambda a: a._secret_id == secret_id)
-            if len(alist) > 0:
-                assert len(alist) == 1
+            assassin_match = lambda a: a._secret_id == secret_id
+            alist = ASSASSINS_DATABASE.get_filtered(include=assassin_match, include_hidden=assassin_match)
+            if len(alist) == 1:
                 a = alist[0]
                 suggestions.append(
                     Suggestion(
