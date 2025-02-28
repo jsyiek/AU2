@@ -14,6 +14,8 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.MetaComponents.ComponentOverride import ComponentOverride
 from AU2.html_components.MetaComponents.Searchable import Searchable
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.MetaComponents.ForEach import ForEach
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
@@ -25,7 +27,6 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -142,6 +143,23 @@ def render(html_component, dependency_context={}):
         if "skip" in out:
             del out["skip"]
         return out
+
+    elif isinstance(html_component, ForEach):
+        if not html_component.options:
+            return {html_component.identifier: {}, "skip": True}
+        q = [
+            inquirer.Checkbox(
+                name="q",
+                message=escape_format_braces(html_component.title),
+                choices=html_component.options,
+                default=list(html_component.defaults.keys())
+            )]
+        chosen_options = inquirer_prompt_with_abort(q)["q"]
+        mappings = {}
+        for c in chosen_options:
+            # TODO: catch KeyboardInterrupts properly
+            mappings[c] = render_components(html_component.subcomponents_factory(c, html_component.defaults))
+        return {html_component.identifier: mappings}
 
     elif isinstance(html_component, Searchable):
         answer = ""
