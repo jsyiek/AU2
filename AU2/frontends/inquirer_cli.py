@@ -728,6 +728,31 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
     return final
 
 
+def render_components(components: List[HTMLComponent]) -> Dict:
+    inp = {}
+    iteration = 0
+    last_step = 1
+    while iteration < len(components):
+        if iteration == -1:
+            # signals that the components were not fully rendered
+            raise KeyboardInterrupt()
+        try:
+            if last_step == -1 and components[iteration].noInteraction:
+                iteration -= 1
+                continue
+            result = render(components[iteration])
+            if result.get("skip", False) and last_step == -1:
+                iteration -= 1
+                continue
+            inp.update(result)
+            iteration += 1
+            last_step = 1
+        except KeyboardInterrupt:
+            iteration -= 1
+            last_step = -1
+    return inp
+
+
 def main():
     # this fixes rendering of ANSI codes in old Windows terminals
     # if it fails we don't want it to cause a crash though
@@ -782,30 +807,14 @@ def main():
         if abort:
             continue
 
-        inp = {}
         components = exp.ask(*params, **kwargs)
         components = replace_overrides(components)
         components = merge_dependency(components)
-        iteration = 0
-        last_step = 1
-        while iteration < len(components):
-            try:
-                if iteration == -1:
-                    break
-                if last_step == -1 and components[iteration].noInteraction:
-                    iteration -= 1
-                    continue
-                result = render(components[iteration])
-                if result.get("skip", False) and last_step == -1:
-                    iteration -= 1
-                    continue
-                inp.update(result)
-                iteration += 1
-                last_step = 1
-            except KeyboardInterrupt:
-                iteration -= 1
-                last_step = -1
-        if iteration != -1:
+        try:
+            inp = render_components(components)
+        except KeyboardInterrupt:
+            continue
+        else:
             components = exp.answer(inp)
             for component in components:
                 render(component)
