@@ -129,7 +129,7 @@ def date_to_weeks_and_days(start: datetime.date, date: datetime.date) -> WeekAnd
     return WeekAndDay(days_since_start, week, day)
 
 
-def weeks_and_days_to_str(start: datetime.datetime, week: int, day: int) -> str:
+def weeks_and_days_to_str(start: datetime.date, week: int, day: int) -> str:
     """
     Converts a 1-indexed week and a 0-indexed day into a string for news webpage
 
@@ -185,7 +185,7 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
 def render_headline_and_reports(e: Event,
                                 death_manager: DeathManager,
                                 competency_manager: CompetencyManager,
-                                wanted_manager: WantedManager) -> Tuple[str, List[str]]:
+                                wanted_manager: WantedManager) -> (str, List[str]):
     headline = e.headline
 
     reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in
@@ -229,6 +229,57 @@ def render_headline_and_reports(e: Event,
             reports[k] = substitute_pseudonyms(r, pseudonym, assassin_model, color, e.datetime)
 
     return headline, reports
+
+
+def render_event(e: Event,
+                 death_manager: DeathManager,
+                 competency_manager: CompetencyManager,
+                 wanted_manager: WantedManager) -> (str, str):
+    """
+    Renders the full HTML for the event, including headline and reports
+    Also gives the HTML rendering of the headline for the headlines page.
+    """
+    headline, reports = render_headline_and_reports(
+        e,
+        death_manager=death_manager,
+        competency_manager=competency_manager,
+        wanted_manager=wanted_manager
+    )
+    report_list = []
+    for ((assassin, pseudonym_index), r) in reports.items():
+        # Umpires must tell AU to NOT escape HTML
+        # If they tell it not to, they do so at their own risk. Make sure you know what you want to do!
+        # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
+        assassin_model = ASSASSINS_DATABASE.get(assassin)
+        pseudonym = assassin_model.get_pseudonym(pseudonym_index)
+        color = get_color(
+            pseudonym,
+            dead=death_manager.is_dead(assassin_model),
+            incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
+            is_police=assassin_model.is_police,
+            is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
+        )
+
+        painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
+
+        report_list.append(
+            REPORT_TEMPLATE.format(PSEUDONYM=painted_pseudonym, REPORT_COLOR=color, REPORT=r)
+        )
+
+    report_text = "".join(report_list)
+    time_str = datetime_to_time_str(e.datetime)
+    event_text = EVENT_TEMPLATE.format(
+        ID=e._Event__secret_id,
+        TIME=time_str,
+        HEADLINE=headline,
+        REPORTS=report_text
+    )
+    headline_text = HEAD_HEADLINE_TEMPLATE.format(
+        URL=event_url(e),
+        TIME=time_str,
+        HEADLINE=headline
+    )
+    return event_text, headline_text
 
 
 @registered_plugin
@@ -303,52 +354,17 @@ class PageGeneratorPlugin(AbstractPlugin):
             if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
                 continue
 
-            headline, reports = render_headline_and_reports(
+            days_since_start, week, day = date_to_weeks_and_days(start_date, e.datetime.date())
+            events_for_chapter.setdefault(week, {})
+
+            event_text, headline_text = render_event(
                 e,
                 death_manager=death_manager,
                 competency_manager=competency_manager,
                 wanted_manager=wanted_manager
             )
 
-            report_list = []
-            for ((assassin, pseudonym_index), r) in reports.items():
-                # Umpires must tell AU to NOT escape HTML
-                # If they tell it not to, they do so at their own risk. Make sure you know what you want to do!
-                # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
-                assassin_model = ASSASSINS_DATABASE.get(assassin)
-                pseudonym = assassin_model.get_pseudonym(pseudonym_index)
-                color = get_color(
-                    pseudonym,
-                    dead=death_manager.is_dead(assassin_model),
-                    incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-                    is_police=assassin_model.is_police,
-                    is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
-                )
-
-                painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
-
-                report_list.append(
-                    REPORT_TEMPLATE.format(PSEUDONYM=painted_pseudonym, REPORT_COLOR=color, REPORT=r)
-                )
-
-            days_since_start, week, day = date_to_weeks_and_days(start_date, e.datetime.date())
-            events_for_chapter.setdefault(week, {})
-
-            report_text = "".join(report_list)
-            time_str = datetime_to_time_str(e.datetime)
-            event_text = EVENT_TEMPLATE.format(
-                ID=e._Event__secret_id,
-                TIME=time_str,
-                HEADLINE=headline,
-                REPORTS=report_text
-            )
             events_for_chapter[week].setdefault(day, []).append(event_text)
-
-            headline_text = HEAD_HEADLINE_TEMPLATE.format(
-                URL=event_url(e),
-                TIME=time_str,
-                HEADLINE=headline
-            )
             headlines_for_day.setdefault(days_since_start, []).append(headline_text)
 
         weeks = {}
