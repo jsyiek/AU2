@@ -29,6 +29,7 @@ from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalD
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
@@ -116,19 +117,17 @@ def render(html_component, dependency_context={}):
             if iteration == -1:
                 raise KeyboardInterrupt
             try:
+                h = html_component.htmlComponents[iteration]
+                if h.noInteraction and last_step == -1:
+                    iteration -= 1
+                    continue
                 if iteration == 0:
-                    # we can guarantee the necessary context is at front of Dependency
-                    needed = html_component.htmlComponents[0]
                     # if this fails check the sorting function (merge_dependency)
-                    assert (needed.identifier == html_component.dependentOn)
-                    out = render(needed, dependency_context)
+                    assert (h.identifier == html_component.dependentOn)
+                    out = render(h, dependency_context)
                     new_dependency = dependency_context.copy()
                     new_dependency.update(out)
                 elif iteration > 0:
-                    h = html_component.htmlComponents[iteration]
-                    if h.noInteraction and last_step == -1:
-                        iteration -= 1
-                        continue
                     value = render(h, new_dependency)
                     if value.get("skip", False) and last_step == -1:
                         iteration -= 1
@@ -501,6 +500,9 @@ def render(html_component, dependency_context={}):
         return {html_component.identifier: a["q"] == "Yes"}
 
     elif isinstance(html_component, HiddenTextbox):
+        return {html_component.identifier: html_component.default}
+
+    elif isinstance(html_component, HiddenJSON):
         return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, NamedSmallTextbox):

@@ -13,13 +13,13 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
-from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.MetaComponents.ForEach import ForEach
@@ -252,8 +252,7 @@ class CorePlugin(AbstractPlugin):
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
-                    # TODO: create a HiddenJSON component for storing the dict
-                    HiddenTextbox(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
                 ]
@@ -274,7 +273,7 @@ class CorePlugin(AbstractPlugin):
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
-                    HiddenTextbox(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
                 ]
