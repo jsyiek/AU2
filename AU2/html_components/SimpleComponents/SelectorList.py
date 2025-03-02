@@ -1,8 +1,9 @@
 from html import escape
-from typing import List
+from typing import List, Union, Tuple, TypeVar, Any
 
 from AU2.html_components import HTMLComponent
 
+T_ = TypeVar("T_")
 
 class SelectorList(HTMLComponent):
     name: str = "SelectorList"
@@ -11,8 +12,8 @@ class SelectorList(HTMLComponent):
             self,
             identifier: str,
             title: str,
-            options: List[str],
-            defaults: List[str] = []):
+            options: List[T_ := Union[str, Tuple[str, Any]]],
+            defaults: List[T_] = []):
         self.title = escape(title)
         self.identifier = escape(identifier)
         self.uniqueStr = self.get_unique_str()

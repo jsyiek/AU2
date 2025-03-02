@@ -19,8 +19,6 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
-from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.MetaComponents.ForEach import ForEach
 from AU2.plugins import CUSTOM_PLUGINS_DIR
@@ -277,21 +275,29 @@ class CorePlugin(AbstractPlugin):
         )]
 
     def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
-        def report_entry_factory(identifier: str, defaults: Dict[str, str]) -> List[HTMLComponent]:
+        def report_entry_factory(identifier: str, _) -> List[HTMLComponent]:
             pseudonym_id = assassin_pseudonyms[identifier]
             return [
                 LargeTextEntry(
                     identifier=str(pseudonym_id),
                     title=f"Report: {identifier}",
-                    default=defaults.get((identifier, pseudonym_id), '')
                 )
             ]
+
+        assassins = list(assassin_pseudonyms.keys())
+        potential_kills = []
+        for a1 in assassins:
+            for a2 in assassins:
+                if a1 != a2:
+                    potential_kills.append(
+                        (f"{a1} kills {a2}", (a1, a2))
+                    )
 
         html = [
             ForEach(
                 identifier=self.event_html_ids["Reports"],
                 title="Reports (select players with reports)",
-                options=list(assassin_pseudonyms.keys()),
+                options=assassins,
                 subcomponents_factory=report_entry_factory,
                 explanation=[
                     "FORMATTING ADVICE",
@@ -305,11 +311,15 @@ class CorePlugin(AbstractPlugin):
                     for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
                 ]
             ),
+            SelectorList(
+                identifier=self.event_html_ids["Kills"],
+                title="Select kills",
+                options=potential_kills
+            ),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
@@ -341,6 +351,18 @@ class CorePlugin(AbstractPlugin):
                     default=defaults.get(identifier, {}).get(pseudonym_id, '')
                 )
             ]
+
+        assassins = list(assassin_pseudonyms.keys())
+        potential_kills = []
+        default_kills = []
+        for a1 in assassins:
+            for a2 in assassins:
+                if a1 != a2:
+                    kill_option = (f"{a1} kills {a2}", (a1, a2))
+                    potential_kills.append(kill_option)
+                    if (a1, a2) in e.kills:
+                        default_kills.append(kill_option)
+
         # convert the report format as stored in events to the format required by `ForEach`
         # i.e. from a list of tuples (assassin identifier, pseudonym index, report)
         # to a dict mapping assassin identifiers to dicts mapping pseudonym indices to report text
@@ -353,7 +375,7 @@ class CorePlugin(AbstractPlugin):
             ForEach(
                 identifier=self.event_html_ids["Reports"],
                 title="Reports (select players with reports)",
-                options=list(assassin_pseudonyms.keys()),
+                options=assassins,
                 subcomponents_factory=report_entry_factory,
                 explanation=[
                                 "FORMATTING ADVICE",
@@ -368,11 +390,16 @@ class CorePlugin(AbstractPlugin):
                             ],
                 defaults=report_defaults
             ),
+            SelectorList(
+                identifier=self.event_html_ids["Kills"],
+                title="Select kills",
+                options=potential_kills,
+                defaults=default_kills
+            ),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
