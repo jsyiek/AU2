@@ -96,7 +96,6 @@ class CorePlugin(AbstractPlugin):
             self.event_html_ids["Assassin Pseudonym"]: "assassins",
             self.event_html_ids["Datetime"]: "datetime",
             self.event_html_ids["Headline"]: "headline",
-            self.event_html_ids["Reports"]: "reports",
             self.event_html_ids["Kills"]: "kills"
         }
 
@@ -264,22 +263,52 @@ class CorePlugin(AbstractPlugin):
                     default=choices[0][1]
                 )]
 
-        assassin_pseudonyms = e.assassins if e is not None else {}
+        defaults = e.assassins if e is not None else {}
+        # include hidden assassins if they are already in the event,
+        # so that the umpire doesn't accidentally remove them from the event
+        assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda a: a.identifier in defaults)
+
         return [ForEach(
-            "assassin_selection",
-            "Choose which assassins are in this event",
-            ASSASSINS_DATABASE.get_identifiers(),
-            assassin_pseudonyms,
-            pseudonym_list_factory
+            identifier="assassin_selection",
+            title="Choose which assassins are in this event",
+            options=assassins,
+            defaults=defaults,
+            subcomponents_factory=pseudonym_list_factory
         )]
 
     def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
+        def report_entry_factory(identifier: str, defaults: Dict[str, str]) -> List[HTMLComponent]:
+            pseudonym_id = assassin_pseudonyms[identifier]
+            return [
+                LargeTextEntry(
+                    identifier=str(pseudonym_id),
+                    title=f"Report: {identifier}",
+                    default=defaults.get((identifier, pseudonym_id), '')
+                )
+            ]
+
         html = [
+            ForEach(
+                identifier=self.event_html_ids["Reports"],
+                title="Reports (select players with reports)",
+                options=list(assassin_pseudonyms.keys()),
+                subcomponents_factory=report_entry_factory,
+                explanation=[
+                    "FORMATTING ADVICE",
+                    "    [PX] Renders pseudonym of assassin with ID X (if in the event)",
+                    "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)",
+                    "    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)",
+                    "    [NX] Renders real name of assassin with ID X (if in the event)",
+                    "ASSASSIN IDENTIFIERS"
+                ] + [
+                    f"    ({a._secret_id}) {a.real_name}"
+                    for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
+                ]
+            ),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
                 ]
             ),
@@ -288,19 +317,61 @@ class CorePlugin(AbstractPlugin):
         ]
         return html
 
-    def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
+    def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
+        # process the response of the report entry component:
+        # it returns a dict mapping assassin identifiers to dicts mapping (stringified) pseudonym ids to reports,
+        # whereas the database has reports stored as a list of tuples (assassin identifier, pseudonym index, report)
+        reports: List[Tuple[str, int, str]] = []
+        for a_id, p_to_r in htmlResponse[self.event_html_ids["Reports"]].items():
+            for p_index_str, r in p_to_r.items():
+                reports.append(
+                    (a_id, int(p_index_str), r)
+                )
+        e.reports = reports
+
         return [Label("[CORE] Success!")]
 
     def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]):
-        # include hidden assassins if they are already in the event,
-        # so that the umpire doesn't accidentally remove them from the event
+        def report_entry_factory(identifier: str, defaults: Dict[str, str]) -> List[HTMLComponent]:
+            pseudonym_id = str(assassin_pseudonyms[identifier])
+            return [
+                LargeTextEntry(
+                    identifier=pseudonym_id,
+                    title=f"Report: {identifier}",
+                    default=defaults.get(identifier, {}).get(pseudonym_id, '')
+                )
+            ]
+        # convert the report format as stored in events to the format required by `ForEach`
+        # i.e. from a list of tuples (assassin identifier, pseudonym index, report)
+        # to a dict mapping assassin identifiers to dicts mapping pseudonym indices to report text
+        report_defaults: Dict[str, Dict[str, str]] = {}
+        for t in e.reports:
+            report_defaults.setdefault(t[0], {})[str(t[1])] = t[2]
+
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
+            ForEach(
+                identifier=self.event_html_ids["Reports"],
+                title="Reports (select players with reports)",
+                options=list(assassin_pseudonyms.keys()),
+                subcomponents_factory=report_entry_factory,
+                explanation=[
+                                "FORMATTING ADVICE",
+                                "    [PX] Renders pseudonym of assassin with ID X (if in the event)",
+                                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)",
+                                "    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)",
+                                "    [NX] Renders real name of assassin with ID X (if in the event)",
+                                "ASSASSIN IDENTIFIERS"
+                            ] + [
+                                f"    ({a._secret_id}) {a.real_name}"
+                                for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
+                            ],
+                defaults=report_defaults
+            ),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
                 ]
             ),
@@ -313,8 +384,18 @@ class CorePlugin(AbstractPlugin):
         event.assassins = htmlResponse[self.event_html_ids["Assassin Pseudonym"]]
         event.datetime = htmlResponse[self.event_html_ids["Datetime"]]
         event.headline = htmlResponse[self.event_html_ids["Headline"]]
-        event.reports = htmlResponse[self.event_html_ids["Reports"]]
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
+        # process the response of the report entry component:
+        # it returns a dict mapping assassin identifiers to dicts mapping (stringified) pseudonym ids to reports,
+        # whereas the database has reports stored as a list of tuples (assassin identifier, pseudonym index, report)
+        reports: List[Tuple[str, int, str]] = []
+        for a_id, p_to_r in htmlResponse[self.event_html_ids["Reports"]].items():
+            for p_index_str, r in p_to_r.items():
+                reports.append(
+                    (a_id, int(p_index_str), r)
+                )
+        event.reports = reports
+
         return [Label("[CORE] Success!")]
 
     def on_event_request_delete(self, e: Event) -> List[HTMLComponent]:
@@ -511,6 +592,8 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             return_components += p.on_event_create(event, html_response_args)
         EVENTS_DATABASE.add(event)
+
+        print(event)
         return return_components
 
     def ask_core_plugin_update_event(self, event_id: str, assassin_selection: Dict[str, Dict[str, int]]) -> List[HTMLComponent]:

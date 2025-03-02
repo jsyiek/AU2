@@ -32,10 +32,10 @@ class Event(PersistentFile):
     headline: str
 
     # from assassin ID and their pseudonym ID to their report
-    reports: List[Tuple[str, int, str]]
+    reports: List[Tuple[str, int, str]] = field(default_factory=list)
 
     # Map from killer to victim
-    kills: List[Tuple[str, str]]
+    kills: List[Tuple[str, str]] = field(default_factory=list)
 
     # to allow plugins to make notes on the event
     pluginState: Dict[str, Any] = field(default_factory=dict)

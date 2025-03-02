@@ -159,6 +159,13 @@ def render(html_component, dependency_context={}):
                     default=list(html_component.defaults.keys())
                 )]
             chosen_options = inquirer_prompt_with_abort(q)["q"]
+
+            # the lines are stored in a list,
+            # rather than as a single string,
+            # for the sake of the (potential) HTML frontend
+            for line in html_component.explanation:
+                print(line)
+
             try:
                 mappings = render_components([
                     _ComponentGroup(c, html_component.subcomponents_factory(c, html_component.defaults))
