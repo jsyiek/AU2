@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union, Any, Callable
+from typing import List, Tuple, Union, Any, Callable, Dict
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
@@ -131,13 +131,13 @@ class AbstractPlugin:
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         return []
 
     def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return []
 
-    def on_event_request_update(self, _: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, _: Event, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         return []
 
     def on_event_update(self, _: Event, htmlResponse) -> List[HTMLComponent]:

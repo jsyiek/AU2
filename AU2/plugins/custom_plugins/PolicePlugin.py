@@ -233,7 +233,7 @@ class PolicePlugin(AbstractPlugin):
             self.gsdb_set(i, i in answer)
         return [Label("[POLICE] Success!")]
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, *_) -> List[HTMLComponent]:
         # TODO Make a selector with police filtering
         if not self.gsdb_get("Manual Rank"):
             return []
@@ -259,7 +259,7 @@ class PolicePlugin(AbstractPlugin):
             e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
         return [Label("[POLICE] Success!")]
 
-    def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
         # TODO Make a selector with police filtering
         if not self.gsdb_get("Manual Rank"):
             return []

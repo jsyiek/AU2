@@ -82,7 +82,7 @@ class WantedPlugin(AbstractPlugin):
             "Wanted": self.identifier + "_wanted"
         }
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, *_) -> List[HTMLComponent]:
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
@@ -100,7 +100,7 @@ class WantedPlugin(AbstractPlugin):
         e.pluginState[self.identifier] = htmlResponse[self.event_html_ids["Wanted"]]
         return [Label("[WANTED] Success!")]
 
-    def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",

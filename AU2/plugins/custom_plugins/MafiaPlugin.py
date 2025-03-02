@@ -229,7 +229,7 @@ class MafiaPlugin(AbstractPlugin):
         a.plugin_state[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
         return [Label(f"[MAFIA] Mafia set to {mafia}!")]
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, *_) -> List[HTMLComponent]:
         return [
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=False),
             Dependency(
@@ -272,7 +272,7 @@ class MafiaPlugin(AbstractPlugin):
 
         return [Label("[MAFIA] Success!")]
 
-    def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
         capodecina = e.pluginState.get(self.identifier, {}).get(self.plugin_state["CAPODECINA"], None)
         points = e.pluginState.get(self.identifier, {}).get(self.plugin_state["POINTS"], None)
         permanent_points = e.pluginState.get(self.identifier, {}).get(self.plugin_state["PERMANENT POINTS"], None)

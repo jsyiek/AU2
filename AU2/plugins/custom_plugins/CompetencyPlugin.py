@@ -287,7 +287,7 @@ class CompetencyPlugin(AbstractPlugin):
                 )
         return []
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, *_) -> List[HTMLComponent]:
         questions = []
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Full Auto":
             questions.append(
@@ -337,7 +337,7 @@ class CompetencyPlugin(AbstractPlugin):
             GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
         return [Label("[COMPETENCY] Success!")]
 
-    def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
         # Allow competency editing on event update even if full auto competency enabled.
         # TODO Make a selector that pre-filters to non-police players
         questions = [

@@ -747,11 +747,13 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
 
 
 def render_components(components: List[HTMLComponent]) -> Dict:
+    components = replace_overrides(components)
+    components = merge_dependency(components)
     inp = {}
     iteration = 0
     last_step = 1
     while iteration < len(components):
-        if iteration == -1:
+        if iteration < 0:
             # signals that the components were not fully rendered
             raise KeyboardInterrupt()
         try:
@@ -826,8 +828,6 @@ def main():
             continue
 
         components = exp.ask(*params, **kwargs)
-        components = replace_overrides(components)
-        components = merge_dependency(components)
         try:
             inp = render_components(components)
         except KeyboardInterrupt:

@@ -1,7 +1,7 @@
 import glob
 import os.path
 
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Union
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -9,19 +9,20 @@ from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
-from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
-from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
-from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
+from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
+from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.MetaComponents.ForEach import ForEach
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport
 from AU2.plugins.AvailablePlugins import __PluginMap
@@ -122,7 +123,8 @@ class CorePlugin(AbstractPlugin):
                 "core_event_create_event",
                 "Event -> Create",
                 self.ask_core_plugin_create_event,
-                self.answer_core_plugin_create_event
+                self.answer_core_plugin_create_event,
+                (self.gather_assassin_pseudonym_pairs,)
             ),
             Export(
                 "core_event_delete_event",
@@ -136,7 +138,7 @@ class CorePlugin(AbstractPlugin):
                 "Event -> Update",
                 self.ask_core_plugin_update_event,
                 self.answer_core_plugin_update_event,
-                (self.gather_events,)
+                (self.gather_events, self.gather_assassin_pseudonym_pairs)
             ),
             Export(
                 self.PLUGIN_ENABLE_EXPORT,
@@ -245,13 +247,13 @@ class CorePlugin(AbstractPlugin):
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_create(self):
-        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs()
+    def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         html = [
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
-                    AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
+                    # TODO: create a HiddenJSON component for storing the dict
+                    HiddenTextbox(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
                 ]
@@ -264,16 +266,15 @@ class CorePlugin(AbstractPlugin):
     def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return [Label("[CORE] Success!")]
 
-    def on_event_request_update(self, e: Event):
+    def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]):
         # include hidden assassins if they are already in the event,
         # so that the umpire doesn't accidentally remove them from the event
-        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs(include_hidden=lambda a: a.identifier in e.assassins)
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
-                    AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
+                    HiddenTextbox(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
                     AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
                 ]
@@ -455,13 +456,46 @@ class CorePlugin(AbstractPlugin):
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
 
-    def ask_core_plugin_create_event(self):
+    def gather_assassin_pseudonym_pairs(self, e_id: str = None) -> HTMLComponent:
+        """
+        Returns the component for selecting the assassins involved in an event and then their pseudonyms.
+        This appears in the `options_functions` of both Event -> Create and Event -> Update.
+        """
+        def pseudonym_list_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+            assassin = ASSASSINS_DATABASE.get(identifier)
+            choices = [(c, i) for i, c in enumerate(assassin.pseudonyms) if c]  # hide any null (i.e. deleted) pseudonyms
+            if len(choices) != 1:
+                return [InputWithDropDown(
+                    identifier="pseudonym",
+                    title=f"{identifier}: Choose pseudonym",
+                    options=choices,
+                    selected=defaults.get(identifier, "")
+                )]
+            else:
+                return [HiddenTextbox(
+                    identifier="pseudonym",
+                    default=choices[0][1]
+                )]
+
+        assassin_pseudonyms = EVENTS_DATABASE.get(e_id).assassins if e_id is not None else {}
+        return ForEach(
+            "assassin_selection",
+            "Choose which assassins are in this event",
+            ASSASSINS_DATABASE.get_identifiers(),
+            assassin_pseudonyms,
+            pseudonym_list_factory
+        )
+
+    def ask_core_plugin_create_event(self, assassin_selection: Dict[str, Dict[str, int]]) -> List[HTMLComponent]:
+        # each value of `assassin_selection` is a dict with a single key "pseudonym"
+        # so convert this into a direct mapping
+        assassin_pseudonyms = {a_id: info["pseudonym"] for a_id, info in assassin_selection.items()}
         components = []
         for p in PLUGINS:
-            components += p.on_event_request_create()
+            components += p.on_event_request_create(assassin_pseudonyms)
         return components
 
-    def answer_core_plugin_create_event(self, html_response_args: Dict):
+    def answer_core_plugin_create_event(self, html_response_args: Dict) -> List[HTMLComponent]:
         params = {}
         for p in self.event_params:
             params[self.event_params[p]] = html_response_args[p]
@@ -472,14 +506,17 @@ class CorePlugin(AbstractPlugin):
         EVENTS_DATABASE.add(event)
         return return_components
 
-    def ask_core_plugin_update_event(self, event_id: str):
+    def ask_core_plugin_update_event(self, event_id: str, assassin_selection: Dict[str, Dict[str, int]]) -> List[HTMLComponent]:
         event = EVENTS_DATABASE.get(event_id)
+        # each value of `assassin_selection` is a dict with a single key "pseudonym"
+        # so convert this into a direct mapping
+        assassin_pseudonyms = {a_id: info["pseudonym"] for a_id, info in assassin_selection.items()}
         components = []
         for p in PLUGINS:
-            components += p.on_event_request_update(event)
+            components += p.on_event_request_update(event, assassin_pseudonyms)
         return components
 
-    def answer_core_plugin_update_event(self, html_response_args: Dict):
+    def answer_core_plugin_update_event(self, html_response_args: Dict) -> List[HTMLComponent]:
         ident = html_response_args[self.HTML_SECRET_ID]
         event = EVENTS_DATABASE.get(ident)
         event.pluginState["sanity_checks"] = []
