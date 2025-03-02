@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Flag
 from collections import namedtuple
-from typing import Optional, Callable, List, Dict
+from typing import Optional, Callable, List, Union
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
@@ -9,6 +9,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.MetaComponents.ComponentOverride import ComponentOverride
 from AU2.html_components.MetaComponents.Searchable import Searchable
+from AU2.html_components.MetaComponents.ForEach import ForEach
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
@@ -22,6 +23,7 @@ class Call(Flag):
     EVENT_DELETE = 4
     ASSASSIN_CREATE = 8
     ASSASSIN_UPDATE = 16
+    GATHER_ASSASSIN_PSEUDONYM_PAIRS = 32
 
 EnabledFor = namedtuple("EnabledFor", ("call", "hooks"), defaults=(Call.NONE, tuple()))
 
@@ -29,9 +31,8 @@ EnabledFor = namedtuple("EnabledFor", ("call", "hooks"), defaults=(Call.NONE, tu
 class UIChange:
     name: str
     replaces: str
-    component: HTMLComponent
+    replacement_factory: Callable[[HTMLComponent], HTMLComponent]
     enabled_for: EnabledFor
-    replacement_effects: Callable[[HTMLComponent, HTMLComponent], None] = lambda *args: None
 
     def set_status(self, enabled: List[str]):
         GENERIC_STATE_DATABASE.arb_state.setdefault("UIChanges", {})[self.replaces] = self.name in enabled
@@ -41,11 +42,11 @@ class UIChange:
 
     def get_for_call(self, call: Call) -> Optional[ComponentOverride]:
         if call & self.enabled_for.call and self.is_enabled():
-            return ComponentOverride(self.replaces, self.component, replacement_effects=self.replacement_effects)
+            return ComponentOverride(self.replaces, replacement_factory=self.replacement_factory)
 
     def get_for_hook(self, hook: str) -> Optional[ComponentOverride]:
         if self.is_enabled() and hook in self.enabled_for.hooks:
-            return ComponentOverride(self.replaces, self.component, replacement_effects=self.replacement_effects)
+            return ComponentOverride(self.replaces, replacement_factory=self.replacement_factory)
 
 
 @registered_plugin
@@ -65,53 +66,29 @@ class UIConfigPlugin(AbstractPlugin):
             )
         ]
 
-        def filter_assassin_list(component, l):
-            component.assassins = [a for a in component.assassins if a[0] in l]
-
-        def steal_assassins(old_comp, new_comp):
-            new_comp.component.assassins = old_comp.assassins
-            new_comp.component.default = old_comp.default
-
-        def filter_options(component, l):
+        def filter_options(component: Union[SelectorList, ForEach], l: List[str]):
             component.options = [o for o in component.options if o in l or o in component.defaults]
 
-        def steal_options(old_comp, new_comp):
-            new_comp.component.options = old_comp.options
-            new_comp.component.defaults = old_comp.defaults
-            new_comp.component.title = old_comp.title
+        def assassin_selector_to_searchable(old_component: Union[SelectorList, ForEach]) -> Searchable:
+            return Searchable(
+                component=old_component,
+                title="Enter assassin names to search for",
+                accessor=lambda component: sorted(component.options),
+                setter=filter_options
+            )
 
         self.ui_changes = [
             UIChange(
                 name="Searchable Assassins (Events)",
-                replaces="CorePlugin_assassin_pseudonym",
-                component=Searchable(
-                    component=AssassinPseudonymPair(
-                        "CorePlugin_assassin_pseudonym",
-                        assassins=[],
-                        title=""
-                    ),
-                    title="Enter assassin names to search for",
-                    accessor=lambda component: sorted([a[0] for a in component.assassins]),
-                    setter=filter_assassin_list
-                ),
-                enabled_for=EnabledFor(call=Call.EVENT_CREATE | Call.EVENT_UPDATE),
-                replacement_effects=steal_assassins
+                replaces="assassin_selection",
+                replacement_factory=assassin_selector_to_searchable,
+                enabled_for=EnabledFor(call=Call.GATHER_ASSASSIN_PSEUDONYM_PAIRS),
             ),
             UIChange(
                 name="Searchable Assassins (Hiding)",
                 replaces="CorePlugin_hidden_assassins",
-                component=Searchable(
-                    component=SelectorList(
-                        identifier="CorePlugin_hidden_assassins",
-                        title="",
-                        options=[]
-                    ),
-                    title="Enter assassin names to search for",
-                    accessor=lambda component: sorted(component.options),
-                    setter=filter_options
-                ),
-                enabled_for=EnabledFor(hooks=("CorePlugin_hide_assassins",)),
-                replacement_effects=steal_options
+                replacement_factory=assassin_selector_to_searchable,
+                enabled_for=EnabledFor(hooks=("CorePlugin_hide_assassins",))
             )
         ]
 
@@ -133,6 +110,9 @@ class UIConfigPlugin(AbstractPlugin):
     def get_overrides_for_call(self, call: Call):
         comps = [c.get_for_call(call) for c in self.ui_changes]
         return [c for c in comps if c]
+
+    def on_gather_assassin_pseudonym_pairs(self, *_) -> List[HTMLComponent]:
+        return self.get_overrides_for_call(Call.GATHER_ASSASSIN_PSEUDONYM_PAIRS)
 
     def on_event_request_create(self, *_) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.EVENT_CREATE)

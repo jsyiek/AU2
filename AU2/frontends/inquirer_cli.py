@@ -752,9 +752,7 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
             component.htmlComponents = replace_overrides(component.htmlComponents, override_map)
             final.append(component)
         elif component.identifier in override_map:
-            override_map[component.identifier].replacement_effects(component,
-                                                                   override_map[component.identifier].replace_with)
-            final.append(override_map[component.identifier].replace_with)
+            final.append(override_map[component.identifier].replacement_factory(component))
         else:
             final.append(component)
     return final
@@ -831,13 +829,19 @@ def main():
         abort = False
         for f in exp.options_functions:
             options = f(*params)
-            fallback = isinstance(options, list)
+            # "old style" options_functions outputs
+            fallback = isinstance(options, list) and len(options) > 0 and not isinstance(options[0], HTMLComponent)
             if fallback:
-                options = InputWithDropDown(identifier="options",
-                                            title="",
-                                            options=["*EXIT*"] + options)
+                components = [InputWithDropDown(identifier="options",
+                                                title="",
+                                                options=["*EXIT*"] + options)]
+            elif isinstance(options, HTMLComponent):
+                components = [options]
+            else:  # the assumption here is that options is a list of HTMLcomponents
+                components = options
+
             try:
-                result = render(options)
+                result = render_components(components)
             except KeyboardInterrupt:
                 abort = True
                 break

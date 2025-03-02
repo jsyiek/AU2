@@ -18,18 +18,16 @@ class ComponentOverride(HTMLComponent):
     def __init__(
             self,
             overrides: str,
-            replace_with: HTMLComponent,
-            replacement_effects: Callable[[HTMLComponent, HTMLComponent], None] = lambda *args: None):
+            replacement_factory: Callable[[HTMLComponent], HTMLComponent] = lambda c: c):
         """
         Args:
             overrides: identifier of component to override
-            replace_with: component to replace with
-            replacement_effects: arbitrary function that takes in (old_component, replace_with)
+            replacement_factory: produces the replacement for the component specified by `overrides`.
+                (Takes old component as an argument).
         """
         self.overrides = overrides
-        self.replace_with = replace_with
+        self.replacement_factory = replacement_factory
         self.uniqueStr = self.get_unique_str()  # TODO: refactor to snake case
-        self.replacement_effects = replacement_effects
         super().__init__()
 
     def _representation(self) -> str:

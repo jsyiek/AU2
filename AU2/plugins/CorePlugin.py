@@ -1,7 +1,7 @@
 import glob
 import os.path
 
-from typing import Dict, List, Tuple, Any, Union
+from typing import Dict, List, Tuple, Any, Union, Optional
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -247,6 +247,32 @@ class CorePlugin(AbstractPlugin):
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
         return [Label("[CORE] Success!")]
 
+    def on_gather_assassin_pseudonym_pairs(self, e: Optional[Event]) -> List[HTMLComponent]:
+        def pseudonym_list_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+            assassin = ASSASSINS_DATABASE.get(identifier)
+            choices = [(c, i) for i, c in enumerate(assassin.pseudonyms) if c]  # hide any null (i.e. deleted) pseudonyms
+            if len(choices) != 1:
+                return [InputWithDropDown(
+                    identifier="pseudonym",
+                    title=f"{identifier}: Choose pseudonym",
+                    options=choices,
+                    selected=defaults.get(identifier, "")
+                )]
+            else:
+                return [HiddenTextbox(
+                    identifier="pseudonym",
+                    default=choices[0][1]
+                )]
+
+        assassin_pseudonyms = e.assassins if e is not None else {}
+        return [ForEach(
+            "assassin_selection",
+            "Choose which assassins are in this event",
+            ASSASSINS_DATABASE.get_identifiers(),
+            assassin_pseudonyms,
+            pseudonym_list_factory
+        )]
+
     def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         html = [
             Dependency(
@@ -455,35 +481,17 @@ class CorePlugin(AbstractPlugin):
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
 
-    def gather_assassin_pseudonym_pairs(self, e_id: str = None) -> HTMLComponent:
+    def gather_assassin_pseudonym_pairs(self, e_id: Optional[str] = None) -> HTMLComponent:
         """
-        Returns the component for selecting the assassins involved in an event and then their pseudonyms.
-        This appears in the `options_functions` of both Event -> Create and Event -> Update.
+        One of the `options_functions` of Event -> Create and Event-> Update.
+        The point of this is to return the assassin-pseudonym selector.
+        It is an API call to allow UIConfigPlugin's UI overrides to work here.
         """
-        def pseudonym_list_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
-            assassin = ASSASSINS_DATABASE.get(identifier)
-            choices = [(c, i) for i, c in enumerate(assassin.pseudonyms) if c]  # hide any null (i.e. deleted) pseudonyms
-            if len(choices) != 1:
-                return [InputWithDropDown(
-                    identifier="pseudonym",
-                    title=f"{identifier}: Choose pseudonym",
-                    options=choices,
-                    selected=defaults.get(identifier, "")
-                )]
-            else:
-                return [HiddenTextbox(
-                    identifier="pseudonym",
-                    default=choices[0][1]
-                )]
-
-        assassin_pseudonyms = EVENTS_DATABASE.get(e_id).assassins if e_id is not None else {}
-        return ForEach(
-            "assassin_selection",
-            "Choose which assassins are in this event",
-            ASSASSINS_DATABASE.get_identifiers(),
-            assassin_pseudonyms,
-            pseudonym_list_factory
-        )
+        e = EVENTS_DATABASE.get(e_id) if e_id is not None else None
+        components = []
+        for p in PLUGINS:
+            components += p.on_gather_assassin_pseudonym_pairs(e)
+        return components
 
     def ask_core_plugin_create_event(self, assassin_selection: Dict[str, Dict[str, int]]) -> List[HTMLComponent]:
         # each value of `assassin_selection` is a dict with a single key "pseudonym"
