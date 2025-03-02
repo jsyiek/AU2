@@ -143,21 +143,33 @@ def render(html_component, dependency_context={}):
             del out["skip"]
         return out
 
+    elif isinstance(html_component, _ComponentGroup):
+        return {html_component.identifier: render_components(html_component.subcomponents)}
+
     elif isinstance(html_component, ForEach):
         if not html_component.options:
             return {html_component.identifier: {}, "skip": True}
-        q = [
-            inquirer.Checkbox(
-                name="q",
-                message=escape_format_braces(html_component.title),
-                choices=html_component.options,
-                default=list(html_component.defaults.keys())
-            )]
-        chosen_options = inquirer_prompt_with_abort(q)["q"]
-        mappings = {}
-        for c in chosen_options:
-            # TODO: catch KeyboardInterrupts properly
-            mappings[c] = render_components(html_component.subcomponents_factory(c, html_component.defaults))
+        retry = True
+        while retry:
+            q = [
+                inquirer.Checkbox(
+                    name="q",
+                    message=escape_format_braces(html_component.title),
+                    choices=html_component.options,
+                    default=list(html_component.defaults.keys())
+                )]
+            chosen_options = inquirer_prompt_with_abort(q)["q"]
+            try:
+                mappings = render_components([
+                    _ComponentGroup(c, html_component.subcomponents_factory(c, html_component.defaults))
+                    for c in chosen_options
+                ])
+            # if the user ctrl-C's at the first subcomponent,
+            # we want to return to the list of options
+            except KeyboardInterrupt:
+                continue
+            else:
+                retry = False
         return {html_component.identifier: mappings}
 
     elif isinstance(html_component, Searchable):
@@ -746,6 +758,19 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
         else:
             final.append(component)
     return final
+
+
+class _ComponentGroup(HTMLComponent):
+    """
+    "Dummy" MetaComponent used by the `inquirer` frontend tmake rendering `ForEach` components easier,
+    by allowing the subcomponents to be grouped and passed into `render_components`.
+    """
+    name: str = "_ComponentGroup"
+    def __init__(self, identifier: str, subcomponents: List[HTMLComponent]):
+        self.identifier = identifier
+        self.uniqueStr = self.get_unique_str()
+        self.subcomponents = subcomponents
+        super().__init__()
 
 
 def render_components(components: List[HTMLComponent]) -> Dict:
