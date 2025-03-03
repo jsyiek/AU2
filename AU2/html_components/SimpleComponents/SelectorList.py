@@ -12,7 +12,7 @@ class SelectorList(HTMLComponent):
             self,
             identifier: str,
             title: str,
-            options: List[T_ := Union[str, Tuple[str, Any]]],
+            options: List[(T_ := Union[str, Tuple[str, Any]])],
             defaults: List[T_] = []):
         self.title = escape(title)
         self.identifier = escape(identifier)

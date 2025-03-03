@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Callable, TypeVar, Tuple, Union
+from typing import List, Dict, Callable, TypeVar, Tuple, Union
 
 from AU2.html_components import HTMLComponent
 
@@ -17,8 +17,8 @@ class ForEach(HTMLComponent):
                  identifier: str,
                  title: str,
                  options: List[Union[str, Tuple[str, T_]]],
-                 subcomponents_factory: Callable[[T_, Dict[T_, Dict[str, S_]]], List[HTMLComponent]],
-                 defaults: Dict[T_, Dict[str, S_]] = {},
+                 subcomponents_factory: Callable[[T_, S_], List[HTMLComponent]],
+                 defaults: S_ = {},
                  explanation: List[str] = []):
         self.title = title
         self.identifier = identifier

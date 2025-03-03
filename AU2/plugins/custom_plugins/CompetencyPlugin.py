@@ -1,6 +1,6 @@
 import datetime
 import os
-from typing import List, Any, Dict
+from typing import List, TypeVar, Dict
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -8,10 +8,8 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
-from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
+from AU2.html_components.MetaComponents.ForEach import ForEach
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
-from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
@@ -287,49 +285,57 @@ class CompetencyPlugin(AbstractPlugin):
                 )
         return []
 
-    def on_event_request_create(self, *_) -> List[HTMLComponent]:
+    def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         questions = []
+        # only ask about competency for non-police assassins
+        assassins = [identifier for identifier in assassin_pseudonyms
+                     if not ASSASSINS_DATABASE.get(identifier).is_police]
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Full Auto":
+            def competency_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+                return [
+                    IntegerEntry(
+                        identifier="competency_extension",
+                        title=f"Value for {identifier}",
+                        default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION),
+                    )
+                ]
             questions.append(
-                Dependency(
-                    dependentOn="CorePlugin_assassin_pseudonym",
-                    htmlComponents=[
-                        AssassinDependentIntegerEntry(
-                            pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                            identifier=self.html_ids["Competency"],
-                            title="Extend competency?",
-                            default={},
-                            global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
-                        )
-                    ]
+                ForEach(
+                    identifier=self.html_ids["Competency"],
+                    title="Extend competency?",
+                    options=assassins,
+                    subcomponents_factory=competency_entry_factory
                 )
             )
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
+            def attempts_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+                return [
+                    IntegerEntry(
+                        identifier="attempts",
+                        title=f"Value for {identifier}",
+                        default=1
+                    )
+                ]
             questions.append(
-                Dependency(
-                    dependentOn="CorePlugin_assassin_pseudonym",
-                    htmlComponents=[
-                        AssassinDependentIntegerEntry(
-                            pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                            identifier=self.html_ids["Attempts"],
-                            title="Add attempts/assists",
-                            default={},
-                            global_default=1
-                        )
-                    ]
+                ForEach(
+                    identifier=self.html_ids["Attempts"],
+                    title="Add attempts/assists",
+                    options=assassins,
+                    subcomponents_factory=attempts_entry_factory
                 )
             )
         return questions
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         if self.html_ids["Competency"] in htmlResponse:
-            e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[self.html_ids["Competency"]]
+            competency_map = {ident: d["competency_extension"] for ident, d in htmlResponse[self.html_ids["Competency"]].items()}
+            e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = competency_map
         if self.html_ids["Attempts"] in htmlResponse:
             # This currently stores attempts as ['a', 'a'] for two attempts by player a
             # It would be better to store as a dict {'a':2}, but I can't break the current database
             # TODO cleanup after game end
             e.pluginState.setdefault(self.identifier, {})[self.plugin_state["ATTEMPTS"]] = sum(
-                [[key]*value for key, value in htmlResponse[self.html_ids["Attempts"]].items()]
+                [[ident]*d["attempts"] for ident, d in htmlResponse[self.html_ids["Attempts"]].items()]
             , [])
         # Store the default competency extension at the time of the event, in the event
         # This way auto competency can be calculated dynamically
@@ -337,58 +343,71 @@ class CompetencyPlugin(AbstractPlugin):
             GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
         return [Label("[COMPETENCY] Success!")]
 
-    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
+        # only ask about competency for non-police assassins
+        assassins = [identifier for identifier in assassin_pseudonyms
+                     if not ASSASSINS_DATABASE.get(identifier).is_police]
         # Allow competency editing on event update even if full auto competency enabled.
-        # TODO Make a selector that pre-filters to non-police players
+        def competency_entry_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+            return [
+                IntegerEntry(
+                    identifier="competency_extension",
+                    title=f"Value for {identifier}",
+                    default=defaults.get(identifier,
+                                         GENERIC_STATE_DATABASE.arb_int_state.get(
+                                             self.plugin_state["DEFAULT"], DEFAULT_EXTENSION
+                                         ))
+                )
+            ]
         questions = [
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentIntegerEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Competency"],
-                        title="Extend competency?",
-                        default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["COMPETENCY"], {}),
-                        global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
-                    )
-                ]
+            ForEach(
+                identifier=self.html_ids["Competency"],
+                title="Extend competency?",
+                options=assassins,
+                subcomponents_factory=competency_entry_factory,
+                defaults=e.pluginState.get(self.identifier, {}).get(self.plugin_state["COMPETENCY"], {})
             )
         ]
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
             # need this to convert the list of attempts as stored in the db to the structure understood by
             # AssassinDependentIntegerEntry
-            def list_to_multiset(l: List[Any]) -> Dict[Any, int]:
+            T_ = TypeVar("T_")
+            def list_to_multiset(l: List[T_]) -> Dict[T_, int]:
                 """Turns a list into a dict mapping values to how many times they appear in the list"""
                 ms = dict()
                 for item in l:
                     ms[item] = ms.get(item, 0) + 1
                 return ms
+            def attempts_entry_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+                return [
+                    IntegerEntry(
+                        identifier="attempts",
+                        title=f"Value for {identifier}",
+                        default=defaults.get(identifier, 1)
+                    )
+                ]
             questions.append(
-                Dependency(
-                    dependentOn="CorePlugin_assassin_pseudonym",
-                    htmlComponents=[
-                        AssassinDependentIntegerEntry(
-                            pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                            identifier=self.html_ids["Attempts"],
-                            title="Add attempts/assists",
-                            default=list_to_multiset(
+                ForEach(
+                    identifier=self.html_ids["Attempts"],
+                    title="Add attempts/assists",
+                    options=assassins,
+                    subcomponents_factory=attempts_entry_factory,
+                    defaults=list_to_multiset(
                                 e.pluginState.get(self.identifier, {}).get(self.plugin_state["ATTEMPTS"], {})
-                            ),
-                            global_default=1
-                        )
-                    ]
+                            )
                 )
             )
         return questions
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = htmlResponse[self.html_ids["Competency"]]
+        competency_map = {ident: d["competency_extension"] for ident, d in
+                          htmlResponse[self.html_ids["Competency"]].items()}
+        e.pluginState.setdefault(self.identifier, {})[self.plugin_state["COMPETENCY"]] = competency_map
         if self.html_ids["Attempts"] in htmlResponse:
-            # (see on_event_create)
+            # see on_event_create
             e.pluginState.setdefault(self.identifier, {})[self.plugin_state["ATTEMPTS"]] = sum(
-                [[key] * value for key, value in htmlResponse[self.html_ids["Attempts"]].items()],
-                []
-            )
+                [[ident] * d["attempts"] for ident, d in htmlResponse[self.html_ids["Attempts"]].items()]
+                , [])
         return [Label("[COMPETENCY] Success!")]
 
     def on_page_request_generate(self) -> List[HTMLComponent]:

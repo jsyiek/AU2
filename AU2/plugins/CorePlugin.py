@@ -1,7 +1,7 @@
 import glob
 import os.path
 
-from typing import Dict, List, Tuple, Any, Union, Optional
+from typing import Dict, List, Tuple, Any, Optional
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -294,6 +294,11 @@ class CorePlugin(AbstractPlugin):
                     )
 
         html = [
+            SelectorList(
+                identifier=self.event_html_ids["Kills"],
+                title="Select kills",
+                options=potential_kills
+            ),
             ForEach(
                 identifier=self.event_html_ids["Reports"],
                 title="Reports (select players with reports)",
@@ -310,11 +315,6 @@ class CorePlugin(AbstractPlugin):
                     f"    ({a._secret_id}) {a.real_name}"
                     for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
                 ]
-            ),
-            SelectorList(
-                identifier=self.event_html_ids["Kills"],
-                title="Select kills",
-                options=potential_kills
             ),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
