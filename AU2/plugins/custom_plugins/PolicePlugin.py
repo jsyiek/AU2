@@ -9,11 +9,13 @@ from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.MetaComponents.ForEach import ForEach
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
+from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -233,21 +235,25 @@ class PolicePlugin(AbstractPlugin):
             self.gsdb_set(i, i in answer)
         return [Label("[POLICE] Success!")]
 
-    def on_event_request_create(self, *_) -> List[HTMLComponent]:
-        # TODO Make a selector with police filtering
+    def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
             return []
+        # filter for police only
+        police = [ident for ident in assassin_pseudonyms if ASSASSINS_DATABASE.get(ident).is_police]
+
+        def rank_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+            return [
+                IntegerEntry(
+                    identifier="relative_rank",
+                    title=f"Value for {identifier}"
+                )
+            ]
         return [
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentIntegerEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Relative Rank"],
-                        title="Select Police to adjust rank (relative to current rank)",
-                        default={}
-                    )
-                ]
+            ForEach(
+                identifier=self.html_ids["Relative Rank"],
+                title="Select Police to adjust rank (relative to current rank)",
+                options=police,
+                subcomponents_factory=rank_entry_factory
             )
         ]
 
@@ -255,25 +261,31 @@ class PolicePlugin(AbstractPlugin):
         if not self.gsdb_get("Manual Rank"):
             return [Label("[POLICE] Didn't need to do anything")]
 
-        for player_id, relative_rank in htmlResponse[self.html_ids["Relative Rank"]].items():
-            e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
+        for player_id, d in htmlResponse[self.html_ids["Relative Rank"]].items():
+            e.pluginState.setdefault(self.identifier, {})[player_id] = d["relative_rank"]
         return [Label("[POLICE] Success!")]
 
-    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
-        # TODO Make a selector with police filtering
+    def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
             return []
+        # filter for police only
+        police = [ident for ident in assassin_pseudonyms if ASSASSINS_DATABASE.get(ident).is_police]
+
+        def rank_entry_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+            return [
+                IntegerEntry(
+                    identifier="relative_rank",
+                    title=f"Value for {identifier}",
+                    default=defaults.get(identifier, None)
+                )
+            ]
         return [
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentIntegerEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Relative Rank"],
-                        title="Select Police to adjust rank (relative to current rank)",
-                        default=e.pluginState.get(self.identifier, {})
-                    )
-                ]
+            ForEach(
+                identifier=self.html_ids["Relative Rank"],
+                title="Select Police to adjust rank (relative to current rank)",
+                options=police,
+                subcomponents_factory=rank_entry_factory,
+                defaults=e.pluginState.get(self.identifier, {})
             )
         ]
 
@@ -281,8 +293,8 @@ class PolicePlugin(AbstractPlugin):
         if not self.gsdb_get("Manual Rank"):
             return [Label("[POLICE] Didn't need to do anything")]
 
-        for player_id, relative_rank in htmlResponse[self.html_ids["Relative Rank"]].items():
-            e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
+        for player_id, d in htmlResponse[self.html_ids["Relative Rank"]].items():
+            e.pluginState.setdefault(self.identifier, {})[player_id] = d["relative_rank"]
         return [Label("[POLICE] Success!")]
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
