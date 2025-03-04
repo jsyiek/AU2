@@ -19,7 +19,8 @@ class ForEach(HTMLComponent):
                  options: List[Union[str, Tuple[str, T_]]],
                  subcomponents_factory: Callable[[T_, S_], List[HTMLComponent]],
                  defaults: S_ = {},
-                 explanation: List[str] = []):
+                 explanation: List[str] = [],
+                 skippable_explanation: bool = True):
         self.title = title
         self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
@@ -27,6 +28,7 @@ class ForEach(HTMLComponent):
         self.defaults = defaults
         self.subcomponents_factory = subcomponents_factory
         self.explanation = explanation
+        self.skippable_explanation = skippable_explanation
         super().__init__()
 
     def _representation(self) -> str:

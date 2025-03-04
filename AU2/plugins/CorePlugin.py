@@ -314,7 +314,8 @@ class CorePlugin(AbstractPlugin):
                 ] + [
                     f"    ({a._secret_id}) {a.real_name}"
                     for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
-                ]
+                ],
+                skippable_explanation=False
             ),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
@@ -342,7 +343,7 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]):
-        def report_entry_factory(identifier: str, defaults: Dict[str, str]) -> List[HTMLComponent]:
+        def report_entry_factory(identifier: str, defaults: Dict[str, Dict[str, str]]) -> List[HTMLComponent]:
             pseudonym_id = str(assassin_pseudonyms[identifier])
             return [
                 LargeTextEntry(
@@ -363,9 +364,12 @@ class CorePlugin(AbstractPlugin):
                     if (a1, a2) in e.kills:
                         default_kills.append(kill_option)
 
-        # convert the report format as stored in events to the format required by `ForEach`
-        # i.e. from a list of tuples (assassin identifier, pseudonym index, report)
-        # to a dict mapping assassin identifiers to dicts mapping pseudonym indices to report text
+        # Convert the format of existing reports into a dict, for use by `report_entry_factory`.
+        # Note that this will overwrite multiple reports attributed to the same player,
+        # and also will not recognise reports attributed to a different pseudonym.
+        # (This is the same behaviour as `AssassinDependentReportEntry` had.
+        # It is ok at the moment because we don't support multiple reports in the frontend,
+        # but the change of pseudonym issue could be annoying.)
         report_defaults: Dict[str, Dict[str, str]] = {}
         for t in e.reports:
             report_defaults.setdefault(t[0], {})[str(t[1])] = t[2]

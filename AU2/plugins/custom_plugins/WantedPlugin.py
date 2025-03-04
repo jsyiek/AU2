@@ -1,6 +1,6 @@
 import os
 from html import escape
-from typing import List
+from typing import List, Dict, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -10,7 +10,9 @@ from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.MetaComponents.ForEach import ForEach
 from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SpecialComponents.CrimeEntry import CrimeEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -82,40 +84,65 @@ class WantedPlugin(AbstractPlugin):
             "Wanted": self.identifier + "_wanted"
         }
 
-    def on_event_request_create(self, *_) -> List[HTMLComponent]:
+    def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
+        def crime_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+            return [
+                CrimeEntry(
+                    identifier="crime",
+                    assassin_identifier=identifier,
+                    default=(None, "", "")
+                )
+            ]
         return [
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentCrimeEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.event_html_ids["Wanted"],
-                        title="WANTED: Choose players to set a new Wanted duration",
-                        default={},
-                    )]
+            ForEach(
+                identifier=self.event_html_ids["Wanted"],
+                title="WANTED: Choose players to set a new Wanted duration",
+                options=list(assassin_pseudonyms.keys()),
+                subcomponents_factory=crime_entry_factory,
+                explanation=[
+                    "Duration is specified in days:",
+                    "    >0 sets them as WANTED",
+                    "    =0 sets them as NOT WANTED",
+                    "    <0 removes any mention of wantedness from this event"
+                ]
             )
         ]
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        e.pluginState[self.identifier] = htmlResponse[self.event_html_ids["Wanted"]]
+        wanted_info = {ident: d["crime"] for ident, d in htmlResponse[self.event_html_ids["Wanted"]].items()
+                        if d["crime"] is not None}
+        e.pluginState[self.identifier] = wanted_info
         return [Label("[WANTED] Success!")]
 
-    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
+        def crime_entry_factory(identifier: str, defaults: Dict[str, Tuple[int, str, str]]) -> List[HTMLComponent]:
+            return [
+                CrimeEntry(
+                    identifier="crime",
+                    assassin_identifier=identifier,
+                    default=defaults.get(identifier, (None, "", ""))
+                )
+            ]
         return [
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentCrimeEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.event_html_ids["Wanted"],
-                        title="WANTED: Choose players to set a new Wanted duration",
-                        default=e.pluginState.get(self.identifier, {}),
-                    )]
+            ForEach(
+                identifier=self.event_html_ids["Wanted"],
+                title="WANTED: Choose players to set a new Wanted duration",
+                options=list(assassin_pseudonyms.keys()),
+                subcomponents_factory=crime_entry_factory,
+                defaults=e.pluginState.get(self.identifier, {}),
+                explanation=[
+                    "Duration is specified in days:",
+                    "    >0 sets them as WANTED",
+                    "    =0 sets them as NOT WANTED",
+                    "    <0 removes any mention of wantedness from this event"
+                ]
             )
         ]
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        e.pluginState[self.identifier] = htmlResponse[self.event_html_ids["Wanted"]]
+        wanted_info = {ident: d["crime"] for ident, d in htmlResponse[self.event_html_ids["Wanted"]].items()
+                       if d["crime"] is not None}
+        e.pluginState[self.identifier] = wanted_info
         return [Label("[WANTED] Success!")]
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:

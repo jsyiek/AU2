@@ -43,6 +43,7 @@ from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, \
     ListUpdates
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
+from AU2.html_components.SpecialComponents.CrimeEntry import CrimeEntry
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
@@ -160,11 +161,12 @@ def render(html_component, dependency_context={}):
                 )]
             chosen_options = inquirer_prompt_with_abort(q)["q"]
 
-            # the lines are stored in a list,
-            # rather than as a single string,
-            # for the sake of the (potential) HTML frontend
-            for line in html_component.explanation:
-                print(line)
+            if len(chosen_options) > 0 or not html_component.skippable_explanation:
+                # the lines are stored in a list,
+                # rather than as a single string,
+                # for the sake of the (potential) HTML frontend
+                for line in html_component.explanation:
+                    print(line)
 
             try:
                 mappings = render_components([
@@ -348,6 +350,31 @@ def render(html_component, dependency_context={}):
             if int(value["duration"]) >= 0:
                 results[a] = (int(value["duration"]), value.get("crime", ""), value.get("redemption", ""))
         return {html_component.identifier: results}
+
+    # special component
+    elif isinstance(html_component, CrimeEntry):
+        a = html_component.assassin_identifier
+        q = [
+            inquirer.Text(
+                name="duration",
+                message=f"WANTED DURATION for: {escape_format_braces(a)} ",
+                default=html_component.default[0],
+                validate=integer_validator
+            ), inquirer.Text(
+                name="crime",
+                message=f"CRIME for: {escape_format_braces(a)}",
+                default=escape_format_braces(html_component.default[1]),
+                ignore=lambda x: int(x["duration"]) <= 0
+            ), inquirer.Text(
+                name="redemption",
+                message=f"REDEMPTION for: {escape_format_braces(a)}",
+                default=escape_format_braces(html_component.default[2]),
+                ignore=lambda x: int(x["duration"]) <= 0
+            )]
+        value = inquirer_prompt_with_abort(q)
+        duration = int(value["duration"])
+        result = (duration, value.get("crime", ""), value.get("redemption", "")) if duration >= 0 else None
+        return {html_component.identifier: result}
 
     # dependent component
     elif isinstance(html_component, AssassinDependentSelector):
