@@ -130,7 +130,7 @@ def render(html_component, dependency_context={}):
                     new_dependency.update(out)
                 elif iteration > 0:
                     value = render(h, new_dependency)
-                    if value.get("skip", False) and last_step == -1:
+                    if value.pop("__skip", False) and last_step == -1:
                         iteration -= 1
                         continue
                     out.update(value)
@@ -139,17 +139,14 @@ def render(html_component, dependency_context={}):
             except KeyboardInterrupt:
                 iteration -= 1
                 last_step = -1
-
-        if "skip" in out:
-            del out["skip"]
         return out
 
     elif isinstance(html_component, _ComponentGroup):
         return {html_component.identifier: render_components(html_component.subcomponents)}
 
     elif isinstance(html_component, ForEach):
-        if not html_component.options:
-            return {html_component.identifier: {}, "skip": True}
+        if len(html_component.options) == 0:
+            return {html_component.identifier: {}, "__skip": True}
         retry = True
         while retry:
             q = [
@@ -193,7 +190,6 @@ def render(html_component, dependency_context={}):
             filters = [candidate.strip() for candidate in answer.split(",") if candidate.strip()]
             component_copy = copy.copy(html_component.component)
             options = html_component.accessor(component_copy)
-
             is_default = lambda o: hasattr(html_component.component, "default") \
                                    and o in html_component.component.default
 
@@ -210,7 +206,7 @@ def render(html_component, dependency_context={}):
         assassins = [a[0] for a in html_component.assassins]
         assassins.sort()
         if not assassins:
-            return {html_component.identifier: {}, "skip": True}
+            return {html_component.identifier: {}, "__skip": True}
         q = [
             inquirer.Checkbox(
                 name="q",
@@ -245,7 +241,7 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: [], "skip": True}
+            return {html_component.identifier: [], "__skip": True}
         q = [inquirer.Checkbox(
             name="q",
             message="Reports (select players with reports)",
@@ -285,10 +281,10 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: [], "skip": True}
+            return {html_component.identifier: [], "__skip": True}
         assassins = list(assassins_mapping.keys())
         if len(assassins) <= 1:
-            return {html_component.identifier: tuple(), "skip": True}
+            return {html_component.identifier: tuple(), "__skip": True}
         potential_kills = {}
         defaults = []
         for a1 in assassins:
@@ -314,7 +310,7 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            return {html_component.identifier: {}, "__skip": True}
         q = [inquirer.Checkbox(
             name="q",
             message=escape_format_braces(html_component.title),
@@ -382,7 +378,7 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: [], "skip": True}
+            return {html_component.identifier: [], "__skip": True}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name=html_component.identifier,
@@ -398,7 +394,7 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            return {html_component.identifier: {}, "__skip": True}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -424,7 +420,7 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            return {html_component.identifier: {}, "__skip": True}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -451,7 +447,7 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            return {html_component.identifier: {}, "__skip": True}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -678,6 +674,8 @@ def render(html_component, dependency_context={}):
                     ListUpdates(edited, new_values, deleted_indices)}
 
     elif isinstance(html_component, SelectorList):
+        if len(html_component.options) == 0:
+            return {html_component.identifier: [], "__skip": True}
         q = [
             inquirer.Checkbox(
                 name=html_component.identifier,
@@ -808,7 +806,7 @@ class _ComponentGroup(HTMLComponent):
 def render_components(components: List[HTMLComponent]) -> Dict:
     components = replace_overrides(components)
     components = merge_dependency(components)
-    inp = {}
+    out = {}
     iteration = 0
     last_step = 1
     while iteration < len(components):
@@ -820,16 +818,16 @@ def render_components(components: List[HTMLComponent]) -> Dict:
                 iteration -= 1
                 continue
             result = render(components[iteration])
-            if result.get("skip", False) and last_step == -1:
+            if result.pop("__skip", False) and last_step == -1:
                 iteration -= 1
                 continue
-            inp.update(result)
+            out.update(result)
             iteration += 1
             last_step = 1
         except KeyboardInterrupt:
             iteration -= 1
             last_step = -1
-    return inp
+    return out
 
 
 def main():

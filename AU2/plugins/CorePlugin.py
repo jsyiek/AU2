@@ -317,12 +317,7 @@ class CorePlugin(AbstractPlugin):
                 ],
                 skippable_explanation=False
             ),
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
-                ]
-            ),
+            HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
         ]
@@ -400,12 +395,7 @@ class CorePlugin(AbstractPlugin):
                 options=potential_kills,
                 defaults=default_kills
             ),
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
-                ]
-            ),
+            HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
