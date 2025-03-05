@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
+import itertools
 import random
 import tabulate
 from typing import List, Any, Dict, Optional, Tuple
@@ -208,11 +209,15 @@ def render(html_component, dependency_context={}):
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "skip": True}
+
+        assassins_in_event = [(aId, *rest) for (aId, *rest) in html_component.assassins if aId in assassins_mapping]
+        options = list(itertools.chain.from_iterable([
+            [(aId, i, p) for (i, p) in enumerate(pseudonyms)] for (aId, pseudonyms) in assassins_in_event]))
         q = [inquirer.Checkbox(
             name="q",
             message="Reports (select players with reports)",
-            choices=list(assassins_mapping.keys()),
-            default=list(a[0] for a in html_component.default)  # default: List[Tuple[str, int, str]]
+            choices=options,
+            default=html_component.default  # default: List[Tuple[str, int, str]]
         )]
         reporters = inquirer_prompt_with_abort(q)["q"]
         results = []
@@ -231,14 +236,14 @@ def render(html_component, dependency_context={}):
                 assassin_model = ASSASSINS_DATABASE.get(a)
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
         for r in reporters:
-            key = (r, assassins_mapping[r])
+            key = r[:2]
             q = [inquirer.Editor(
                 name="report",
-                message=f"Report: {escape_format_braces(r)}",
+                message=f"Report: {escape_format_braces(str(r))}",
                 default=escape_format_braces(default_mapping.get(key, ''))
             )]
             report = inquirer_prompt_with_abort(q)["report"]
-            results.append((r, assassins_mapping[r], report))
+            results.append((r[0], r[1], report))
         return {html_component.identifier: results}
 
     # dependent component
