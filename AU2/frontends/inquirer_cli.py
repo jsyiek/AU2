@@ -213,11 +213,19 @@ def render(html_component, dependency_context={}):
         assassins_in_event = [(aId, *rest) for (aId, *rest) in html_component.assassins if aId in assassins_mapping]
         options = list(itertools.chain.from_iterable([
             [(aId, i, p) for (i, p) in enumerate(pseudonyms)] for (aId, pseudonyms) in assassins_in_event]))
+
+        default_options = []
+        for (aId, idx, _) in html_component.default:
+            potential_matches = [(other_aId, p) for (other_aId, p) in assassins_in_event if other_aId == aId]
+            if potential_matches:
+                (_, p) = potential_matches[0]
+                idx_to_use = min(len(p), idx)
+                default_options.append((aId, idx_to_use, p[idx_to_use]))
         q = [inquirer.Checkbox(
             name="q",
             message="Reports (select players with reports)",
             choices=options,
-            default=html_component.default  # default: List[Tuple[str, int, str]]
+            default=default_options
         )]
         reporters = inquirer_prompt_with_abort(q)["q"]
         results = []
@@ -227,8 +235,7 @@ def render(html_component, dependency_context={}):
         if assassins_mapping:
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
-            print(
-                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
+            print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
             print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
             print("    [NX] Renders real name of assassin with ID X (if in the event)")
             print("ASSASSIN IDENTIFIERS")
