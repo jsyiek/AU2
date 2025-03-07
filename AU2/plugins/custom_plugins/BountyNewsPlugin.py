@@ -19,15 +19,15 @@ from AU2.plugins.util.game import get_game_start
 
 
 BOUNTIES_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "bounties.html"), "r", encoding="utf-8",
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "bounty-news.html"), "r", encoding="utf-8",
           errors="ignore") as F:
     BOUNTIES_PAGE_TEMPLATE = F.read()
 
 
 @registered_plugin
-class BountyPlugin(AbstractPlugin):
+class BountyNewsPlugin(AbstractPlugin):
     def __init__(self):
-        super().__init__("BountyPlugin")
+        super().__init__("BountyNewsPlugin")
 
         self.html_ids = {
             "bounty_event": self.identifier + "_bounty_event"
@@ -54,12 +54,12 @@ class BountyPlugin(AbstractPlugin):
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         is_bounty = htmlResponse[self.html_ids["bounty_event"]]
         e.pluginState.setdefault(self.identifier, {})["bounty"] = is_bounty
-        return [Label("[BOUNTY] Success")]
+        return [Label("[BOUNTY NEWS] Success")]
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         is_bounty = htmlResponse[self.html_ids["bounty_event"]]
         e.pluginState.setdefault(self.identifier, {})["bounty"] = is_bounty
-        return [Label("[BOUNTY] Success")]
+        return [Label("[BOUNTY NEWS] Success")]
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
@@ -105,11 +105,11 @@ class BountyPlugin(AbstractPlugin):
         if bounty_content == "":
             bounty_content = "<p>Ah, no bounties yet.</p>"
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "bounties.html"), "w+", encoding="utf-8") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "bounty-news.html"), "w+", encoding="utf-8") as F:
             F.write(
                 BOUNTIES_PAGE_TEMPLATE.format(
                     CONTENT=bounty_content,
                     YEAR=str(get_now_dt().year)
                 )
             )
-        return [Label("[BOUNTY] Success!")]
+        return [Label("[BOUNTY NEWS] Success!")]
