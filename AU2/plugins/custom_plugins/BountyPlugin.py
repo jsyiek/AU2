@@ -37,7 +37,13 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 @dataclass
 class Bounty:
     identifier: str = ""
+
+    # for backwards-compatibility, but note that creating a new bounty and loading the save in versions of AU2 up to
+    # v1.4.0-pre3 will cause a crash when using `Generate Pages` with `BountyPlugin` enabled, because those versions
+    # can't deal with a `Bounty`'s `target_id` being blank
     target_id: str = ""
+
+    target_str: str = ""
     placer_id: str = ""
     crime: str = ""
     reward: str = ""
@@ -48,6 +54,7 @@ class Bounty:
         b = Bounty(
             identifier,
             d.get("target_id", ""),
+            d.get("target_str", ""),
             d.get("placer_id", ""),
             d.get("crime", "Nothing...?"),
             d.get("reward", "Nothing...?"),
@@ -62,6 +69,7 @@ class Bounty:
     def to_dict(self):
         return {
             "target_id": self.target_id,
+            "target_str": self.target_str,
             "placer_id": self.placer_id,
             "crime": self.crime,
             "reward": self.reward,
@@ -76,7 +84,7 @@ class BountyPlugin(AbstractPlugin):
 
         self.html_ids = {
             "identifier": "identifier",
-            "target": "target_id",
+            "target": "target_str",
             "placer": "placer_id",
             "crime": "crime",
             "reward": "reward",
@@ -118,21 +126,20 @@ class BountyPlugin(AbstractPlugin):
             if component.selected and component.selected not in options:
                 component.options.append(component.selected)
 
+        if not default.target_str and default.target_id:
+            target_str = ASSASSINS_DATABASE.get(default.target_id).real_name
+        else:
+            target_str = default.target_str
+
         return [
             HiddenTextbox(
                 identifier=self.html_ids["identifier"],
                 default=default.identifier
             ),
-            Searchable(
-                InputWithDropDown(
-                    identifier=self.html_ids["target"],
-                    title="Who is the bounty on?",
-                    options=ASSASSINS_DATABASE.get_identifiers(),
-                    selected=default.target_id
-                ),
-                title="Who is the bounty on? (Search)",
-                accessor=lambda i: i.options,
-                setter=setter
+            DefaultNamedSmallTextbox(
+                identifier=self.html_ids["target"],
+                title="Who is the bounty on?",
+                default=target_str
             ),
             Searchable(
                 InputWithDropDown(
@@ -168,13 +175,16 @@ class BountyPlugin(AbstractPlugin):
         bounties = [b for b in bounties if b.active]
 
         table_str = "<p>Ah, no bounties yet.</p>"
-
         if bounties:
             rows = []
             for b in bounties:
+                if not b.target_str and b.target_id:
+                    target_str = ASSASSINS_DATABASE.get(b.target_id).real_name
+                else:
+                    target_str = b.target_str
                 rows.append(
                     ROW_TEMPLATE.format(
-                        TARGET_NAME=ASSASSINS_DATABASE.assassins[b.target_id].real_name,
+                        TARGET_NAME=target_str,
                         PLACER_NAME=ASSASSINS_DATABASE.assassins[b.placer_id].real_name,
                         CRIME=b.crime,
                         REWARD=b.reward
