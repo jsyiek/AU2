@@ -202,10 +202,9 @@ class CorePlugin(AbstractPlugin):
         )
 
         html = [
-            *(
-                [Checkbox(self.html_ids["Police"], "Police? (y/n)")] if last_emailed_event == -1
-                else [Label("Assassin type: Police"), HiddenTextbox(self.html_ids["Police"], default=True)]
-            ),
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=last_emailed_event != -1,
+                     force_default=last_emailed_event != -1),
             NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
             NamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns"),
@@ -229,10 +228,8 @@ class CorePlugin(AbstractPlugin):
 
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            (
-                Checkbox(self.html_ids["Police"], "Police? (y/n)") if last_emailed_event == -1
-                else Label("Assassin type: " + ("Police" if assassin.is_police else "Full Player"))
-            ),
+            Checkbox(self.html_ids["Police"], "Police? (y/n)", checked=assassin.is_police,
+                     force_default=last_emailed_event != -1),
             EditablePseudonymList(
                 self.html_ids["Pseudonym"], "Edit Pseudonyms",
                 (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
