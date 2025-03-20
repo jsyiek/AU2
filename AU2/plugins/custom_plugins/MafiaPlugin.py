@@ -563,7 +563,7 @@ class MafiaPlugin(AbstractPlugin):
                 RANK=str(i),
                 MAFIA=MAFIA_TEMPLATE.format(HEX=LIGHT_MAFIA_HEX[mafia]),
                 TRAITOR=TRAITOR_TEMPLATE if a.identifier in wanted else "",
-                PSEUDONYM=escape(a.all_pseudonyms()),
+                PSEUDONYM=a.all_pseudonyms(escape=soft_escape),
                 POINTS=escape(str(round(points[a.identifier] + permanent_points[a.identifier], 2))),
                 PERMANENT_POINTS=escape(str(round(permanent_points[a.identifier], 2))),
                 OPEN_BOUNTIES=escape(", ".join(open_bounties[a.identifier])),

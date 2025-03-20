@@ -26,7 +26,7 @@ from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
-from AU2.plugins.util.game import get_game_start
+from AU2.plugins.util.game import get_game_start, soft_escape
 
 OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
@@ -333,7 +333,7 @@ class ScoringPlugin(AbstractPlugin):
                       for e in score_manager.get_death_events(p)]
             rows.append(stats_row_template(columns).format(
                 NAME=p.real_name,
-                PSEUDONYMS=p.all_pseudonyms(),
+                PSEUDONYMS=p.all_pseudonyms(escape=soft_escape),
                 KILLS=score_manager.get_kills(p),
                 CONKERS=score_manager.get_conkers(p),
                 ATTEMPTS=score_manager.get_attempts(p),

@@ -27,7 +27,7 @@ from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, D
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import get_game_start
+from AU2.plugins.util.game import get_game_start, soft_escape
 
 INCOS_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -487,7 +487,7 @@ class CompetencyPlugin(AbstractPlugin):
                     DEAD_INCOS_TABLE_ROW_TEMPLATE.format(
                         NAME=a.real_name,
                         COLLEGE=a.college,
-                        PSEUDONYM=a.all_pseudonyms()
+                        PSEUDONYM=a.all_pseudonyms(escape=soft_escape)
                     )
                 )
             tables.append(

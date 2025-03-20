@@ -21,6 +21,7 @@ from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.PoliceRankManager import DEFAULT_RANKS, PoliceRankManager, DEFAULT_POLICE_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.game import soft_escape
 
 POLICE_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -312,7 +313,7 @@ class PolicePlugin(AbstractPlugin):
                     rows.append(
                         POLICE_TABLE_ROW_TEMPLATE.format(
                             RANK=police_rank_manager.get_rank_name(a.identifier),
-                            PSEUDONYM=a.all_pseudonyms(),
+                            PSEUDONYM=a.all_pseudonyms(escape=soft_escape),
                             NAME=a.real_name,
                             EMAIL=a.email,
                             COLLEGE=a.college,
@@ -329,7 +330,7 @@ class PolicePlugin(AbstractPlugin):
                     rows.append(
                         DEAD_POLICE_TABLE_ROW_TEMPLATE.format(
                             RANK=police_rank_manager.get_rank_name(a.identifier),
-                            PSEUDONYM=a.all_pseudonyms(),
+                            PSEUDONYM=a.all_pseudonyms(escape=soft_escape),
                             NAME=a.real_name,
                             EMAIL=a.email,
                             COLLEGE=a.college,
