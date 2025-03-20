@@ -441,10 +441,10 @@ Syntax:
                         key=lambda e: e.datetime)
         openseason_end = get_game_end() or get_now_dt()
         for e in events:
-            score_manager.add_event(e)
             # stops the duel changing the openseason page
             if e.datetime > openseason_end:
                 break
+            score_manager.add_event(e)
 
         table_str = "Something went wrong..."
         if score_manager.live_assassins:
