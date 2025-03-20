@@ -456,11 +456,15 @@ class CompetencyPlugin(AbstractPlugin):
             competency_manager.add_event(e)
             death_manager.add_event(e)
 
-        # note: this includes hidden players
-        # which is important because otherwise dead incos would disappear when resurrected as police!
-        incos = competency_manager.get_incos_at(limit)
-        dead_incos: List[Assassin] = [i for i in incos if i.identifier in death_manager.get_dead()]
-        alive_incos: List[Assassin] = [i for i in incos if i not in dead_incos and not i.hidden]
+        # dead incos != incos who are currently dead,
+        # but rather players who died while inco.
+        # note that `dead_incos` includes hidden assassins,
+        # otherwise a player would disappear from the list of corpses when resurrected as police
+        dead_incos = competency_manager.inco_corpses
+        alive_incos: List[Assassin] = [i for i in competency_manager.get_incos_at(limit)
+                                       if not i.hidden
+                                       and competency_manager.is_inco_at(i, limit)
+                                       and not death_manager.is_dead(i)]
 
         tables = []
         if alive_incos:
