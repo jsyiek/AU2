@@ -13,6 +13,7 @@ from AU2.html_components.DependentComponents.AssassinDependentReportEntry import
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
@@ -27,7 +28,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start
+from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 
 
 AVAILABLE_PLUGINS = {}
@@ -179,6 +180,12 @@ class CorePlugin(AbstractPlugin):
                 "CorePlugin -> Set game start",
                 self.ask_set_game_start,
                 self.answer_set_game_start
+            ),
+            ConfigExport(
+                "core_plugin_set_game_end",
+                "CorePlugin -> Set game end",
+                self.ask_set_game_send,
+                self.answer_set_game_end
             ),
             ConfigExport(
                 "core_plugin_suppress_exports",
@@ -706,7 +713,7 @@ class CorePlugin(AbstractPlugin):
 
         return config.answer(htmlResponse)
 
-    def ask_set_game_start(self):
+    def ask_set_game_start(self) -> List[HTMLComponent]:
         return [
             DatetimeEntry(
                 self.identifier + "_game_start",
@@ -715,8 +722,25 @@ class CorePlugin(AbstractPlugin):
             )
         ]
 
-    def answer_set_game_start(self, htmlResponse):
+    def answer_set_game_start(self, htmlResponse) -> List[HTMLComponent]:
         set_game_start(htmlResponse[self.identifier + "_game_start"])
         return [
             Label(f"[CORE] Set game start to {get_game_start().strftime('%Y-%m-%d %H:%M:%S')}")
+        ]
+
+    def ask_set_game_end(self) -> List[HTMLComponent]:
+        return [
+            OptionalDatetimeEntry(
+                self.identifier + "_game_end",
+                title="Enter game end",
+                default=get_game_end()
+            )
+        ]
+
+    def answer_set_game_end(self, htmlResponse) -> List[HTMLComponent]:
+        new_end = htmlResponse[self.identifier + "_game_end"]
+        set_game_end(new_end)
+        return [
+            Label(f"[CORE] Set game end to {new_end.strftime('%Y-%m-%d %H:%M:%S')}") if new_end
+            else Label(f"[CORE] Unset game end.")
         ]
