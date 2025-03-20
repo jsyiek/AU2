@@ -29,6 +29,7 @@ from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.date_utils import get_now_dt
 
 
 AVAILABLE_PLUGINS = {}
@@ -184,7 +185,7 @@ class CorePlugin(AbstractPlugin):
             ConfigExport(
                 "core_plugin_set_game_end",
                 "CorePlugin -> Set game end",
-                self.ask_set_game_send,
+                self.ask_set_game_end,
                 self.answer_set_game_end
             ),
             ConfigExport(
@@ -729,11 +730,12 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def ask_set_game_end(self) -> List[HTMLComponent]:
+        default = get_game_end()
         return [
             OptionalDatetimeEntry(
                 self.identifier + "_game_end",
                 title="Enter game end",
-                default=get_game_end()
+                default=get_now_dt() if default is None else default
             )
         ]
 
