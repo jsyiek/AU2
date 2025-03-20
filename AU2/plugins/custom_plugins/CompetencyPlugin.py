@@ -456,9 +456,11 @@ class CompetencyPlugin(AbstractPlugin):
             competency_manager.add_event(e)
             death_manager.add_event(e)
 
+        # note: this includes hidden players
+        # which is important because otherwise dead incos would disappear when resurrected as police!
         incos = competency_manager.get_incos_at(limit)
         dead_incos: List[Assassin] = [i for i in incos if i.identifier in death_manager.get_dead()]
-        alive_incos: List[Assassin] = [i for i in incos if i not in dead_incos]
+        alive_incos: List[Assassin] = [i for i in incos if i not in dead_incos and not i.hidden]
 
         tables = []
         if alive_incos:
@@ -478,8 +480,7 @@ class CompetencyPlugin(AbstractPlugin):
                 INCOS_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
 
-        # TODO: Disabled until logic for dead incos is repaired
-        if dead_incos and False:
+        if dead_incos:
             dead_incos.sort(key=lambda a: (a.college, a.real_name))
             rows = []
             for a in dead_incos:
