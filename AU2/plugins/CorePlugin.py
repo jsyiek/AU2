@@ -34,7 +34,6 @@ from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 from AU2.plugins.util.date_utils import get_now_dt
 
-
 AVAILABLE_PLUGINS = {}
 
 
@@ -214,6 +213,12 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def on_assassin_request_create(self):
+        # use this to detect whether the game has started or not, since sending the first email is the point when
+        # targets are "locked in" and adding new non-police players becomes dangerous
+        last_emailed_event = int(
+            GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
+        )
+
         html = [
             NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
@@ -223,7 +228,9 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
             LargeTextEntry(self.html_ids["Notes"], "Notes"),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)")
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=last_emailed_event >= 0,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
@@ -231,9 +238,13 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_assassin_request_update(self, assassin: Assassin):
+        # use this to detect whether the game has started or not, since sending the first email is the point when
+        # targets are "locked in" and changing player types becomes dangerous.
+        last_emailed_event = int(
+            GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
+        )
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            Label("Assassin type: " + ("Police" if assassin.is_police else "Full Player")),
             EditablePseudonymList(
                 self.html_ids["Pseudonym"], "Edit Pseudonyms",
                 (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
@@ -245,6 +256,9 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=assassin.is_police,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
@@ -262,6 +276,7 @@ class CorePlugin(AbstractPlugin):
         assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
+        assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
