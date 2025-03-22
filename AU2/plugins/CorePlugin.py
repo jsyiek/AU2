@@ -1,11 +1,14 @@
 import glob
 import os.path
+import random
 
 from typing import Dict, List, Tuple, Any
+from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
+from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
@@ -70,7 +73,9 @@ class CorePlugin(AbstractPlugin):
             "College": self.identifier + "_college",
             "Notes": self.identifier + "_notes",
             "Police": self.identifier + "_police",
-            "Hidden Assassins": self.identifier + "_hidden_assassins"
+            "Hidden Assassins": self.identifier + "_hidden_assassins",
+            "Nuke Database": self.identifier + "_nuke",
+            "Secret Number": self.identifier + "_secret_confirm"
         }
 
         self.params = {
@@ -158,6 +163,12 @@ class CorePlugin(AbstractPlugin):
                 self.ask_config,
                 self.answer_config,
                 (self.gather_config_options,)
+            ),
+            Export(
+                identifier="core_plugin_reset_database",
+                display_name="Reset Database",
+                ask=self.ask_reset_database,
+                answer=self.answer_reset_database
             )
         ]
 
@@ -714,7 +725,40 @@ class CorePlugin(AbstractPlugin):
 
         return config.answer(htmlResponse)
 
-    def ask_set_game_start(self) -> List[HTMLComponent]:
+    def ask_reset_database(self) -> List[HTMLComponent]:
+        i = random.randint(0, 1000000)
+        return [
+            Label(
+                title="Are you sure you want to COMPLETELY RESET the database?"
+            ),
+            Label(
+                title="!!!! UNSAVED DATA CANNOT BE RECOVERED !!!!"
+            ),
+            Label(
+                title="(You can type anything else and the reset will be aborted.)"
+            ),
+            HiddenTextbox(
+                identifier=self.html_ids["Secret Number"],
+                default=str(i)
+            ),
+            NamedSmallTextbox(
+                identifier=self.html_ids["Nuke Database"],
+                title=f"Type {i} to reset the database"
+            )
+        ]
+
+    def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
+        hidden_number = htmlResponse[self.html_ids["Secret Number"]]
+        entered_number = htmlResponse[self.html_ids["Nuke Database"]]
+        if hidden_number != entered_number:
+            return [Label("[CORE] Aborting. You entered the code incorrectly.")]
+        for f in os.listdir(BASE_WRITE_LOCATION):
+            if f.endswith(".json"):
+                os.remove(os.path.join(BASE_WRITE_LOCATION, f))
+        refresh_databases()
+        return [Label("[CORE] Databases successfully reset.")]
+
+    def ask_set_game_start(self):
         return [
             DatetimeEntry(
                 self.identifier + "_game_start",

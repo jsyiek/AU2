@@ -1,16 +1,13 @@
 import os
 import shutil
-import random
 from typing import List
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.util.date_utils import get_now_dt
@@ -27,9 +24,7 @@ class LocalBackupPlugin(AbstractPlugin):
         super().__init__("LocalBackupPlugin")
 
         self.html_ids = {
-            "Backup Name": self.identifier + "_backup_name",
-            "Nuke Database": self.identifier + "_nuke",
-            "Secret Number": self.identifier + "_secret_confirm"
+            "Backup Name": self.identifier + "_backup_name"
         }
 
         self.exports = [
@@ -44,13 +39,7 @@ class LocalBackupPlugin(AbstractPlugin):
                 display_name="Backup -> Restore Backup",
                 ask=self.ask_restore_backup,
                 answer=self.answer_restore_backup
-            ),
-            Export(
-                identifier="local_backup_reset_database",
-                display_name="Reset Database",
-                ask=self.ask_reset_database,
-                answer=self.answer_reset_database
-            ),
+            )
         ]
 
     def ask_backup(self) -> List[HTMLComponent]:
@@ -95,36 +84,3 @@ class LocalBackupPlugin(AbstractPlugin):
 
         refresh_databases()
         return [Label(f"[BACKUP] Restored {chosen_backup}")]
-
-    def ask_reset_database(self) -> List[HTMLComponent]:
-        i = random.randint(0, 1000000)
-        return [
-            Label(
-                title="Are you sure you want to COMPLETELY RESET the database?"
-            ),
-            Label(
-                title="!!!! UNSAVED DATA CANNOT BE RECOVERED !!!!"
-            ),
-            Label(
-                title="(You can type anything else and the reset will be aborted.)"
-            ),
-            HiddenTextbox(
-                identifier=self.html_ids["Secret Number"],
-                default=str(i)
-            ),
-            NamedSmallTextbox(
-                identifier=self.html_ids["Nuke Database"],
-                title=f"Type {i} to reset the database"
-            )
-        ]
-
-    def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
-        hidden_number = htmlResponse[self.html_ids["Secret Number"]]
-        entered_number = htmlResponse[self.html_ids["Nuke Database"]]
-        if hidden_number != entered_number:
-            return [Label("[BACKUP] Aborting. You entered the code incorrectly.")]
-        for f in os.listdir(BASE_WRITE_LOCATION):
-            if f.endswith(".json"):
-                os.remove(os.path.join(BASE_WRITE_LOCATION, f))
-        refresh_databases()
-        return [Label("[BACKUP] Databases successfully reset.")]
