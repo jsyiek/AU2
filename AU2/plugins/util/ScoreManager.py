@@ -1,7 +1,7 @@
 import functools
 import datetime
 from collections import defaultdict
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Iterable
 
 from AU2.database.model import Event, Assassin
 from AU2.plugins.util.date_utils import dt_to_timestamp, get_now_dt
@@ -10,7 +10,7 @@ from AU2.plugins.util.date_utils import dt_to_timestamp, get_now_dt
 
 class ScoreManager:
     def __init__(self,
-                 assassin_ids: List[str],
+                 assassin_ids: Iterable[str],
                  formula: str = "",
                  bonuses: Dict[str, int] = {},
                  perma_death=True,

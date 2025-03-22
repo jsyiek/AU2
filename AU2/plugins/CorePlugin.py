@@ -1,11 +1,14 @@
 import glob
 import os.path
+import random
 
 from typing import Dict, List, Tuple, Any
+from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
+from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
@@ -13,6 +16,7 @@ from AU2.html_components.DependentComponents.AssassinDependentReportEntry import
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
@@ -27,8 +31,8 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start
-
+from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.date_utils import get_now_dt
 
 AVAILABLE_PLUGINS = {}
 
@@ -68,7 +72,9 @@ class CorePlugin(AbstractPlugin):
             "College": self.identifier + "_college",
             "Notes": self.identifier + "_notes",
             "Police": self.identifier + "_police",
-            "Hidden Assassins": self.identifier + "_hidden_assassins"
+            "Hidden Assassins": self.identifier + "_hidden_assassins",
+            "Nuke Database": self.identifier + "_nuke",
+            "Secret Number": self.identifier + "_secret_confirm"
         }
 
         self.params = {
@@ -156,6 +162,12 @@ class CorePlugin(AbstractPlugin):
                 self.ask_config,
                 self.answer_config,
                 (self.gather_config_options,)
+            ),
+            Export(
+                identifier="core_plugin_reset_database",
+                display_name="Reset Database",
+                ask=self.ask_reset_database,
+                answer=self.answer_reset_database
             )
         ]
 
@@ -181,6 +193,12 @@ class CorePlugin(AbstractPlugin):
                 self.answer_set_game_start
             ),
             ConfigExport(
+                "core_plugin_set_game_end",
+                "CorePlugin -> Set game end",
+                self.ask_set_game_end,
+                self.answer_set_game_end
+            ),
+            ConfigExport(
                 "core_plugin_suppress_exports",
                 "CorePlugin -> Hide menu options",
                 self.ask_suppress_exports,
@@ -195,6 +213,12 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def on_assassin_request_create(self):
+        # use this to detect whether the game has started or not, since sending the first email is the point when
+        # targets are "locked in" and adding new non-police players becomes dangerous
+        last_emailed_event = int(
+            GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
+        )
+
         html = [
             NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
@@ -204,7 +228,9 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
             LargeTextEntry(self.html_ids["Notes"], "Notes"),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)")
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=last_emailed_event >= 0,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
@@ -212,9 +238,13 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_assassin_request_update(self, assassin: Assassin):
+        # use this to detect whether the game has started or not, since sending the first email is the point when
+        # targets are "locked in" and changing player types becomes dangerous.
+        last_emailed_event = int(
+            GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
+        )
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            Label("Assassin type: " + ("Police" if assassin.is_police else "Full Player")),
             EditablePseudonymList(
                 self.html_ids["Pseudonym"], "Edit Pseudonyms",
                 (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
@@ -226,6 +256,9 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=assassin.is_police,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
@@ -243,6 +276,7 @@ class CorePlugin(AbstractPlugin):
         assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
+        assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
@@ -706,6 +740,39 @@ class CorePlugin(AbstractPlugin):
 
         return config.answer(htmlResponse)
 
+    def ask_reset_database(self) -> List[HTMLComponent]:
+        i = random.randint(0, 1000000)
+        return [
+            Label(
+                title="Are you sure you want to COMPLETELY RESET the database?"
+            ),
+            Label(
+                title="!!!! UNSAVED DATA CANNOT BE RECOVERED !!!!"
+            ),
+            Label(
+                title="(You can type anything else and the reset will be aborted.)"
+            ),
+            HiddenTextbox(
+                identifier=self.html_ids["Secret Number"],
+                default=str(i)
+            ),
+            NamedSmallTextbox(
+                identifier=self.html_ids["Nuke Database"],
+                title=f"Type {i} to reset the database"
+            )
+        ]
+
+    def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
+        hidden_number = htmlResponse[self.html_ids["Secret Number"]]
+        entered_number = htmlResponse[self.html_ids["Nuke Database"]]
+        if hidden_number != entered_number:
+            return [Label("[CORE] Aborting. You entered the code incorrectly.")]
+        for f in os.listdir(BASE_WRITE_LOCATION):
+            if f.endswith(".json"):
+                os.remove(os.path.join(BASE_WRITE_LOCATION, f))
+        refresh_databases()
+        return [Label("[CORE] Databases successfully reset.")]
+
     def ask_set_game_start(self):
         return [
             DatetimeEntry(
@@ -715,8 +782,26 @@ class CorePlugin(AbstractPlugin):
             )
         ]
 
-    def answer_set_game_start(self, htmlResponse):
+    def answer_set_game_start(self, htmlResponse) -> List[HTMLComponent]:
         set_game_start(htmlResponse[self.identifier + "_game_start"])
         return [
             Label(f"[CORE] Set game start to {get_game_start().strftime('%Y-%m-%d %H:%M:%S')}")
+        ]
+
+    def ask_set_game_end(self) -> List[HTMLComponent]:
+        default = get_game_end()
+        return [
+            OptionalDatetimeEntry(
+                self.identifier + "_game_end",
+                title="Enter game end",
+                default=get_now_dt() if default is None else default
+            )
+        ]
+
+    def answer_set_game_end(self, htmlResponse) -> List[HTMLComponent]:
+        new_end = htmlResponse[self.identifier + "_game_end"]
+        set_game_end(new_end)
+        return [
+            Label(f"[CORE] Set game end to {new_end.strftime('%Y-%m-%d %H:%M:%S')}") if new_end
+            else Label(f"[CORE] Unset game end.")
         ]

@@ -472,12 +472,14 @@ def render(html_component, dependency_context={}):
         return {}
 
     elif isinstance(html_component, Checkbox):
+        default = html_component.checked and "Yes" or "No"
+        choices = [default] if html_component.force_default else ["No", "Yes"]
         q = [
             inquirer.List(
                 name="q",
                 message=escape_format_braces(html_component.title),
-                choices=["No", "Yes"],
-                default="Yes" if html_component.checked else "No"
+                choices=choices,
+                default=default
             )]
         a = inquirer_prompt_with_abort(q)
         return {html_component.identifier: a["q"] == "Yes"}
