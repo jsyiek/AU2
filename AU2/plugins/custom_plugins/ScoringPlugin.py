@@ -26,7 +26,7 @@ from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
-from AU2.plugins.util.game import get_game_start
+from AU2.plugins.util.game import get_game_start, get_game_end
 
 OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
@@ -178,17 +178,18 @@ class ScoringPlugin(AbstractPlugin):
             "Assassin": self.identifier + "_assassin",
             "Stats Columns": self.identifier + "_stats_cols",
             "Visualise Kills?": self.identifier + "_visualise_kills",
-            "End": self.identifier + "_openseason_end",
-            "Stats Order": self.identifier + "_stats_order"
+            "Stats Order": self.identifier + "_stats_order",
+            "Generate Stats Page?": self.identifier + "_stats_page"
         }
 
         self.plugin_state = {
             "Start": {'id': self.identifier + "_openseason_start", 'default': None},
             "Formula": {'id': self.identifier + "_score_formula", 'default': ''},
-            "Stats Columns": {'id': self.identifier + "_stats_cols", 'default': list(STATS_COLUMN_TEMPLATES.keys())},
+            "Stats Columns": {'id': self.identifier + "_stats_cols", 'default': [
+                "Real Name", "Pseudonym", "Number of Kills", "Conkers Score"
+            ]},
             "Visualise Kills?": {'id': self.identifier + "_visualise_kills", 'default': True},
-            "End": {'id': self.identifier + "_openseason_end", 'default': None},
-            "Stats Order": {'id': self.identifier + "_stats_order", 'default': ''}
+            "Stats Order": {'id': self.identifier + "_stats_order", 'default': 'By Kills (London style)'}
         }
 
         self.assassin_plugin_state = {
@@ -203,12 +204,6 @@ class ScoringPlugin(AbstractPlugin):
                 self.answer_set_bonuses,
                 (self.gather_assassins_and_bonuses,)
             ),
-            Export(
-                "scoring_stats_page",
-                "Scoring -> Generate stats page",
-                self.ask_stats_page,
-                self.answer_stats_page,
-            )
         ]
 
         self.config_exports = [
@@ -223,7 +218,7 @@ class ScoringPlugin(AbstractPlugin):
                 "Scoring -> Set formula",
                 self.ask_set_formula,
                 self.answer_set_formula
-            ),
+            )
         ]
 
     # plugin state management is copied from PolicePlugin
@@ -278,40 +273,12 @@ class ScoringPlugin(AbstractPlugin):
         self.aps_set(ident, "Bonus", new_bonus)
         return [Label("[SCORING] Set bonus.")]
 
-    def ask_stats_page(self) -> List[HTMLComponent]:
+    def _generate_stats_page(self,
+                             columns: List[str],
+                             generate_killtree: bool,
+                             stats_order: str) -> List[HTMLComponent]:
         components = []
-        selected_cols: List[str] = self.gsdb_get("Stats Columns")
-        all_cols = list(STATS_COLUMN_TEMPLATES.keys())
-        components.append(SelectorList(identifier=self.html_ids["Stats Columns"],
-                                       title="Which columns should be included in the player stats table?",
-                                       options=all_cols,
-                                       defaults=selected_cols))
-        components.append(InputWithDropDown(identifier=self.html_ids["Stats Order"],
-                                            title="How should players be ordered on the stats page?",
-                                            options=STATS_ORDERING_KEYS.keys(),
-                                            selected=self.gsdb_get("Stats Order")))
-        generate_killtree: bool = self.gsdb_get("Visualise Kills?")
-        components.append(Checkbox(identifier=self.html_ids["Visualise Kills?"],
-                                   title="Generate visualisation of kill graph?",
-                                   checked=generate_killtree))
-        end: Optional[datetime.datetime] = timestamp_to_dt(self.gsdb_get("End"))
-        components.append(OptionalDatetimeEntry(identifier=self.html_ids["End"],
-                                                title="Enter when Open Season ended (this is used to determine which "
-                                                      "players were duellists)",
-                                                default=end))
-        return components
-
-    def answer_stats_page(self, htmlResponse) -> List[HTMLComponent]:
-        components = []
-        # this is silly but needed to fix a bug where columns end up in the wrong order
-        columns: List[str] = [c for c in STATS_COLUMN_TEMPLATES if c in htmlResponse[self.html_ids["Stats Columns"]]]
-        self.gsdb_set("Stats Columns", columns)  # it is convenient for the columns previously selected to be remembered
-        generate_killtree: bool = htmlResponse[self.html_ids["Visualise Kills?"]]
-        self.gsdb_set("Visualise Kills?", generate_killtree)
-        openseason_end: Optional[datetime.datetime] = htmlResponse[self.html_ids["End"]]
-        self.gsdb_set("End", dt_to_timestamp(openseason_end))
-        stats_order = htmlResponse[self.html_ids["Stats Order"]]
-        self.gsdb_set("Stats Order", stats_order)
+        openseason_end = get_game_end()
         # use a score manager to count kills, conkers, and attempts
         # don't need to set the formula because we aren't going to fetch scores
         full_players = ASSASSINS_DATABASE.get_filtered(include=lambda a: not a.is_police,
@@ -452,12 +419,11 @@ Syntax:
         except Exception:
             return False
 
-    def on_page_generate(self, _) -> List[HTMLComponent]:
+    def _generate_openseason_page(self):
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
-        if not open_season_start or open_season_start >= get_now_dt():
+        if open_season_start and open_season_start >= get_now_dt():
             return []
-
         # also don't generate if formula is invalid
         formula = self.gsdb_get("Formula")
         if not self.formula_is_valid(formula):
@@ -465,15 +431,19 @@ Syntax:
 
         # need to include hidden assassins so that resurrecting as police doesn't stop kills counting
         score_manager = ScoreManager(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_police,
-                                                                        include_hidden=lambda a: not a.is_police),
+                                                                        include_hidden=True),
                                      formula=formula,
                                      bonuses={
                                          ident: self.aps_get(ident, "Bonus")
-                                         for ident in ASSASSINS_DATABASE.get_identifiers()
+                                         for ident in ASSASSINS_DATABASE.get_identifiers(include_hidden=True)
                                      })
         events = sorted(EVENTS_DATABASE.events.values(),
                         key=lambda e: e.datetime)
+        openseason_end = get_game_end() or get_now_dt()
         for e in events:
+            # stops the duel changing the openseason page
+            if e.datetime > openseason_end:
+                break
             score_manager.add_event(e)
 
         table_str = "Something went wrong..."
@@ -505,5 +475,47 @@ Syntax:
                 )
             )
 
-        return [Label("[SCORING] Success!")]
+        return [Label("[SCORING] Generated openseason page.")]
 
+    def _should_generate_stats_page(self) -> bool:
+        game_end = get_game_end()
+        return (game_end < get_now_dt()) if game_end else False
+
+    def on_page_request_generate(self) -> List[HTMLComponent]:
+        components = []
+        # stats page generation
+        if self._should_generate_stats_page():
+            selected_cols: List[str] = self.gsdb_get("Stats Columns")
+            all_cols = list(STATS_COLUMN_TEMPLATES.keys())
+            generate_killtree: bool = self.gsdb_get("Visualise Kills?")
+            components.extend([
+                SelectorList(identifier=self.html_ids["Stats Columns"],
+                                           title="Which columns should be included in the player stats table?",
+                                           options=all_cols,
+                                           defaults=selected_cols),
+                InputWithDropDown(identifier=self.html_ids["Stats Order"],
+                                                title="How should players be ordered on the stats page?",
+                                                options=list(STATS_ORDERING_KEYS.keys()),
+                                                selected=self.gsdb_get("Stats Order")),
+                Checkbox(identifier=self.html_ids["Visualise Kills?"],
+                                       title="Generate visualisation of kill graph?",
+                                       checked=generate_killtree),
+                HiddenTextbox(identifier=self.html_ids["Generate Stats Page?"], default="True")
+            ])
+        return components
+
+    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+        components = []
+        components.extend(self._generate_openseason_page())
+        if htmlResponse.get(self.html_ids["Generate Stats Page?"], "False") == "True":
+            # this is silly but needed to fix a bug where columns end up in the wrong order
+            columns: List[str] = [c for c in STATS_COLUMN_TEMPLATES if
+                                  c in htmlResponse[self.html_ids["Stats Columns"]]]
+            self.gsdb_set("Stats Columns", columns)
+            generate_killtree: bool = htmlResponse[self.html_ids["Visualise Kills?"]]
+            self.gsdb_set("Visualise Kills?", generate_killtree)
+            stats_order = htmlResponse[self.html_ids["Stats Order"]]
+            self.gsdb_set("Stats Order", stats_order)
+            components.extend(self._generate_stats_page(columns, generate_killtree, stats_order))
+
+        return components

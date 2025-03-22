@@ -9,7 +9,6 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
-from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -27,7 +26,7 @@ from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, D
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import get_game_start
+from AU2.plugins.util.game import get_game_start, get_game_end
 
 INCOS_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -392,9 +391,13 @@ class CompetencyPlugin(AbstractPlugin):
         return [Label("[COMPETENCY] Success!")]
 
     def on_page_request_generate(self) -> List[HTMLComponent]:
+        now = get_now_dt()
+        end = get_game_end()
+        default = now if (end is None or now < end) else end  # to preserve the inco list at the end of game
         return [DatetimeEntry(
             identifier=self.html_ids["Datetime"],
-            title="Enter date to calculate incos from"
+            title="Enter date to calculate incos from",
+            default=default
         )]
 
     def ask_show_inco_deadlines(self):
