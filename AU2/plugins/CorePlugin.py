@@ -243,7 +243,6 @@ class CorePlugin(AbstractPlugin):
         last_emailed_event = int(
             GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
         )
-        print(last_emailed_event)
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
             EditablePseudonymList(
