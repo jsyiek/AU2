@@ -203,9 +203,6 @@ class CorePlugin(AbstractPlugin):
         )
 
         html = [
-            Checkbox(self.html_ids["Police"], "Police? (y/n)",
-                     checked=last_emailed_event != -1,
-                     force_default=last_emailed_event != -1),
             NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
             NamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns"),
@@ -214,6 +211,9 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
             LargeTextEntry(self.html_ids["Notes"], "Notes"),
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=last_emailed_event >= 0,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
@@ -226,11 +226,9 @@ class CorePlugin(AbstractPlugin):
         last_emailed_event = int(
             GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
         )
-
+        print(last_emailed_event)
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)", checked=assassin.is_police,
-                     force_default=last_emailed_event != -1),
             EditablePseudonymList(
                 self.html_ids["Pseudonym"], "Edit Pseudonyms",
                 (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
@@ -241,7 +239,10 @@ class CorePlugin(AbstractPlugin):
             DefaultNamedSmallTextbox(self.html_ids["Address"], "Address", assassin.address),
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
-            LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes)
+            LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=assassin.is_police,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
