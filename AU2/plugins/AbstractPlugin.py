@@ -185,19 +185,19 @@ class AbstractPlugin:
         """
         return []
 
-    def on_request_assassin_status(self) -> List[HTMLComponent]:
+    def on_request_assassin_summary(self) -> List[HTMLComponent]:
         return []
 
-    def on_request_event_status(self) -> List[HTMLComponent]:
+    def on_request_event_summary(self) -> List[HTMLComponent]:
         return []
 
-    def render_assassin_status(self, _: Assassin) -> List[AttributePairTableRow]:
+    def render_assassin_summary(self, _: Assassin) -> List[AttributePairTableRow]:
         """
         Display any information about an ASSASSIN that is managed by this plugin
         """
         return []
 
-    def render_event_status(self, _: Event) -> List[AttributePairTableRow]:
+    def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
         """
         Display any information about an EVENT that is managed by this plugin
         """

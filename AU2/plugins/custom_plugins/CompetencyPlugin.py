@@ -2,7 +2,7 @@ import dataclasses
 import datetime
 import enum
 import os
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -78,7 +78,14 @@ class PlayerStatus(enum.Enum):
     COMPETENT = enum.auto()
     POLICE = enum.auto()
     INCOMPETENT = enum.auto()
+    GIGAINCOMPETENT = enum.auto()
     DEAD = enum.auto()
+
+    def is_alive_player(self):
+        """
+        Returns true if this player status represents a player that is alive
+        """
+        return self in [self.COMPETENT, self.INCOMPETENT, self.GIGAINCOMPETENT]
 
     def __str__(self):
         return str(self.name).replace("PlayerStatus.", "")
@@ -89,6 +96,21 @@ class PlayerInfo:
     identifier: str
     status: PlayerStatus
     competency_deadline: datetime.datetime
+
+
+def get_active_players(death_manager: DeathManager) -> Set[str]:
+    """
+    Collects all players not currently at risk of a gigabolt
+    """
+    active_players = []
+
+    for e in sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime):
+        death_manager.add_event(e)
+        for killer, _ in e.kills:
+            active_players.append(killer)
+        for player_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
+            active_players.append(player_id)
+    return set(active_players)
 
 
 def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
@@ -102,17 +124,22 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
     competency_manager = CompetencyManager(start_datetime)
     death_manager = DeathManager(perma_death=True)
 
+    # populates the death manager
+    active_players = get_active_players(death_manager)
+
     for e in events:
         competency_manager.add_event(e)
-        death_manager.add_event(e)
 
     infos = {}
     for a in ASSASSINS_DATABASE.get_filtered(include_hidden=lambda _: True):
         status = PlayerStatus.COMPETENT
+        is_gigainco = a.identifier not in active_players
         is_inco = competency_manager.is_inco_at(a, from_date)
         is_dead = death_manager.is_dead(a)
         if a.is_police:
             status = PlayerStatus.POLICE
+        elif is_gigainco and not is_dead:
+            status = PlayerStatus.GIGAINCOMPETENT
         elif is_inco and is_dead:
             status = PlayerStatus.DEAD
         elif is_inco:
@@ -194,22 +221,15 @@ class CompetencyPlugin(AbstractPlugin):
         ]
 
     def gigabolt_ask(self):
-        active_players = []
         questions = []
-        death_manager = DeathManager()
         if not GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"]):
             questions.append(Label("[WARNING] Attempt tracking not enabled. Active players may be selected"))
-        for e in list(EVENTS_DATABASE.events.values()):
-            death_manager.add_event(e)
-            for killer, _ in e.kills:
-                active_players.append(killer)
-            for player_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
-                active_players.append(player_id)
-        active_players = set(active_players)
 
         questions.append(Label("All inactive assassins have been pre-selected"))
         questions.append(Label("Please sanity-check this list - you don't want to eliminate active players"))
 
+        death_manager = DeathManager()
+        active_players = get_active_players(death_manager)
         available_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: not (a.is_police or death_manager.is_dead(a)))
         questions.append(SelectorList(
             title="Select assassins to thunderbolt",
@@ -454,7 +474,7 @@ class CompetencyPlugin(AbstractPlugin):
             default=default
         )]
 
-    def render_assassin_status(self, assassin: Assassin) -> List[AttributePairTableRow]:
+    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
         pinfo = get_player_infos()[assassin.identifier]
         response = [("Competency status", str(pinfo.status))]
         if pinfo.status in [PlayerStatus.COMPETENT, PlayerStatus.INCOMPETENT]:

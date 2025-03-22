@@ -136,7 +136,7 @@ class UIConfigPlugin(AbstractPlugin):
                 replacement_effects=steal_options
             ),
             UIChange(
-                name="Searchable Assassins (Status)",
+                name="Searchable Assassins (Summary)",
                 replaces="CorePlugin_assassin",
                 component=Searchable(
                     component=InputWithDropDown(
@@ -172,7 +172,7 @@ class UIConfigPlugin(AbstractPlugin):
         comps = [c.get_for_call(call) for c in self.ui_changes]
         return [c for c in comps if c]
 
-    def on_request_assassin_status(self) -> List[HTMLComponent]:
+    def on_request_assassin_summary(self) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.ASSASSIN_STATUS)
 
     def on_event_request_create(self) -> List[HTMLComponent]:
