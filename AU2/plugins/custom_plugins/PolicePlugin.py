@@ -313,7 +313,7 @@ class PolicePlugin(AbstractPlugin):
                     rows.append(
                         POLICE_TABLE_ROW_TEMPLATE.format(
                             RANK=police_rank_manager.get_rank_name(a.identifier),
-                            PSEUDONYM=a.all_pseudonyms(escape=soft_escape),
+                            PSEUDONYM=a.all_pseudonyms(),
                             NAME=a.real_name,
                             EMAIL=a.email,
                             COLLEGE=a.college,
@@ -330,7 +330,7 @@ class PolicePlugin(AbstractPlugin):
                     rows.append(
                         DEAD_POLICE_TABLE_ROW_TEMPLATE.format(
                             RANK=police_rank_manager.get_rank_name(a.identifier),
-                            PSEUDONYM=a.all_pseudonyms(escape=soft_escape),
+                            PSEUDONYM=a.all_pseudonyms(),
                             NAME=a.real_name,
                             EMAIL=a.email,
                             COLLEGE=a.college,

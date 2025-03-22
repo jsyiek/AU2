@@ -487,7 +487,7 @@ class CompetencyPlugin(AbstractPlugin):
                     DEAD_INCOS_TABLE_ROW_TEMPLATE.format(
                         NAME=a.real_name,
                         COLLEGE=a.college,
-                        PSEUDONYM=a.all_pseudonyms(escape=soft_escape)
+                        PSEUDONYM=a.all_pseudonyms()
                     )
                 )
             tables.append(

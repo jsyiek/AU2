@@ -155,7 +155,7 @@ class WantedPlugin(AbstractPlugin):
                 rows.append(
                     PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=player.all_pseudonyms(escape=soft_escape),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         ADDRESS=escape(player.address),
                         COLLEGE=escape(player.college),
                         WATER_STATUS=escape(player.water_status),
@@ -182,7 +182,7 @@ class WantedPlugin(AbstractPlugin):
                     POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         ADDRESS=escape(player.address),
                         COLLEGE=escape(player.college),
                         WATER_STATUS=escape(player.water_status),
@@ -201,7 +201,7 @@ class WantedPlugin(AbstractPlugin):
                 rows.append(
                     DEAD_PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         CRIME=escape(wanted_death_event['crime'])
                     )
                 )
@@ -223,7 +223,7 @@ class WantedPlugin(AbstractPlugin):
                     DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         CRIME=escape(wanted_death_event['crime'])
                     )
                 )

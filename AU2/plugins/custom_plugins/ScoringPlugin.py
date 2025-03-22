@@ -122,8 +122,8 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             wanted_manager.add_event(e)
             killer_model = ASSASSINS_DATABASE.get(killer)
             victim_model = ASSASSINS_DATABASE.get(victim)
-            killer_searchable = f"{killer_model.all_pseudonyms()} ({killer_model.real_name})"
-            victim_searchable = f"{victim_model.all_pseudonyms()} ({victim_model.real_name})"
+            killer_searchable = f"{killer_model.all_pseudonyms(fn=lambda x: x)} ({killer_model.real_name})"
+            victim_searchable = f"{victim_model.all_pseudonyms(fn=lambda x: x)} ({victim_model.real_name})"
             if killer not in added_nodes:
                 net.add_node(
                     killer_searchable,
@@ -333,7 +333,7 @@ class ScoringPlugin(AbstractPlugin):
                       for e in score_manager.get_death_events(p)]
             rows.append(stats_row_template(columns).format(
                 NAME=p.real_name,
-                PSEUDONYMS=p.all_pseudonyms(escape=soft_escape),
+                PSEUDONYMS=p.all_pseudonyms(),
                 KILLS=score_manager.get_kills(p),
                 CONKERS=score_manager.get_conkers(p),
                 ATTEMPTS=score_manager.get_attempts(p),
