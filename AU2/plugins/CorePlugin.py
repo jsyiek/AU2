@@ -27,7 +27,8 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_now_dt
+from AU2.plugins.util.game import get_game_start, get_now_dt, set_game_start
+
 
 
 AVAILABLE_PLUGINS = {}
@@ -258,8 +259,7 @@ class CorePlugin(AbstractPlugin):
         assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
-        if self.html_ids["Police"] in htmlResponse:
-            assassin.is_police = htmlResponse[self.html_ids["Police"]]
+        assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):

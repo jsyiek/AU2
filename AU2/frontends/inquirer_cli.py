@@ -472,7 +472,7 @@ def render(html_component, dependency_context={}):
         return {}
 
     elif isinstance(html_component, Checkbox):
-        default = "Yes" if html_component.checked else "No"
+        default = html_component.checked and "Yes" or "No"
         choices = [default] if html_component.force_default else ["No", "Yes"]
         q = [
             inquirer.List(
