@@ -1,4 +1,6 @@
+import dataclasses
 import datetime
+import enum
 import os
 from typing import List, Any, Dict
 
@@ -18,7 +20,8 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, DangerousConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, DangerousConfigExport, \
+    AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -69,6 +72,57 @@ DEFAULT_GIGABOLT_HEADLINE = """# Write a headline for the gigabolt event
 INCOS_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "inco.html"), "r", encoding="utf-8", errors="ignore") as F:
     INCOS_PAGE_TEMPLATE = F.read()
+
+
+class PlayerStatus(enum.Enum):
+    COMPETENT = enum.auto()
+    POLICE = enum.auto()
+    INCOMPETENT = enum.auto()
+    DEAD = enum.auto()
+
+    def __str__(self):
+        return str(self.name).replace("PlayerStatus.", "")
+
+
+@dataclasses.dataclass
+class PlayerInfo:
+    identifier: str
+    status: PlayerStatus
+    competency_deadline: datetime.datetime
+
+
+def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
+    """
+    Returns a list of calculated player informations (see struct above)
+    """
+    events = list(EVENTS_DATABASE.events.values())
+    events.sort(key=lambda event: event.datetime)
+    start_datetime: datetime.datetime = get_game_start()
+
+    competency_manager = CompetencyManager(start_datetime)
+    death_manager = DeathManager(perma_death=True)
+
+    for e in events:
+        competency_manager.add_event(e)
+        death_manager.add_event(e)
+
+    infos = {}
+    for a in ASSASSINS_DATABASE.get_filtered(include_hidden=lambda _: True):
+        status = PlayerStatus.COMPETENT
+        is_inco = competency_manager.is_inco_at(a, from_date)
+        is_dead = death_manager.is_dead(a)
+        if a.is_police:
+            status = PlayerStatus.POLICE
+        elif is_inco and is_dead:
+            status = PlayerStatus.DEAD
+        elif is_inco:
+            status = PlayerStatus.INCOMPETENT
+        infos[a.identifier] = PlayerInfo(
+            identifier=a.identifier,
+            status=status,
+            competency_deadline=competency_manager.get_deadline_for(a)
+        )
+    return infos
 
 
 @registered_plugin
@@ -400,6 +454,14 @@ class CompetencyPlugin(AbstractPlugin):
             default=default
         )]
 
+    def render_assassin_status(self, assassin: Assassin) -> List[AttributePairTableRow]:
+        pinfo = get_player_infos()[assassin.identifier]
+        response = [("Competency status", str(pinfo.status))]
+        if pinfo.status in [PlayerStatus.COMPETENT, PlayerStatus.INCOMPETENT]:
+            datetime_str = datetime.datetime.strftime(pinfo.competency_deadline, DATETIME_FORMAT)
+            response.append(("Competency deadline", datetime_str))
+        return response
+
     def ask_show_inco_deadlines(self):
         return [NamedSmallTextbox(
             identifier=self.html_ids["Search"],
@@ -409,32 +471,17 @@ class CompetencyPlugin(AbstractPlugin):
     def answer_show_inco_deadlines(self, htmlResponse):
         search_terms = [t.strip() for t in htmlResponse[self.html_ids["Search"]].split(",")]
 
-        events = list(EVENTS_DATABASE.events.values())
-        events.sort(key=lambda event: event.datetime)
-        start_datetime: datetime.datetime = get_game_start()
-
-        competency_manager = CompetencyManager(start_datetime)
-        death_manager = DeathManager(perma_death=True)
-
-        for e in events:
-            competency_manager.add_event(e)
-            death_manager.add_event(e)
-
-        now = get_now_dt()
+        player_infos = get_player_infos()
         deadlines = []
         for a in ASSASSINS_DATABASE.get_filtered(
                 include=lambda x: any(t.lower() in x.identifier.lower() for t in search_terms)
         ):
-            d = competency_manager.get_deadline_for(a)
-            datetime_str = datetime.datetime.strftime(d, DATETIME_FORMAT)
+            datetime_str = datetime.datetime.strftime(player_infos[a.identifier].competency_deadline, DATETIME_FORMAT)
             deadlines.append((a._secret_id,
                               a.real_name,
                               a.pseudonyms[0],
                               datetime_str,
-                              'POLICE' if a.is_police
-                              else 'DEAD' if death_manager.is_dead(a)
-                              else 'INCO' if competency_manager.is_inco_at(a, now)
-                              else ''))
+                              str(player_infos[a.identifier].status)))
         deadlines.sort(key=lambda t: t[3])
 
         # our inquirer_cli rendering of Table uses the headings to determine column widths
@@ -442,7 +489,7 @@ class CompetencyPlugin(AbstractPlugin):
                     "Real Name" + " "*20,
                     "Init. Pseudonym" + " "*20,
                     "Inco. Deadline" + " "*5,
-                    "Comment")
+                    "Comment" + " "*10)
         return [Table(deadlines, headings=headings)]
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from AU2.html_components import HTMLComponent
 
@@ -8,7 +8,7 @@ class Table(HTMLComponent):
     name = "Table"
     noInteraction: bool = True
 
-    def __init__(self, rows: List[List[str]], headings: List[str] = []):
+    def __init__(self, rows: List[Tuple[str, ...]], headings: Tuple[str, ...] = tuple()):
         self.identifier = "Table" # needed for compatibility but not strictly relevant
         self.rows = rows
         self.headings = headings
