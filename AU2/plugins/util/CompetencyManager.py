@@ -43,8 +43,6 @@ class CompetencyManager:
                 victim_model = ASSASSINS_DATABASE.get(victim)
                 if victim_model.is_police:
                     continue
-                if self.is_inco_at(victim_model, e.datetime):
-                    self.inco_corpses.append(victim)
                 self.attempts_since_kill[killer] = 0
                 # Allows overriding auto competency on a case-by-case basis
                 if killer in e.pluginState.get("CompetencyPlugin", {}).get("competency", {}):
