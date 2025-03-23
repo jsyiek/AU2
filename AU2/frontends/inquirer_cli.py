@@ -3,6 +3,7 @@ import copy
 import datetime
 import random
 import tabulate
+import lxml.etree
 from typing import List, Any, Dict, Optional, Tuple
 
 import inquirer
@@ -35,6 +36,7 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
@@ -44,7 +46,7 @@ from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOption
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import escape_format_braces
+from AU2.plugins.util.game import escape_format_braces, soft_escape
 
 
 def datetime_validator(_, current):
@@ -69,6 +71,14 @@ def optional_datetime_validator(_, current):
         return False
     return True
 
+
+def html_validator(_, to_validate: str):
+    parser = lxml.etree.HTMLParser(recover=False)
+    try:
+        lxml.etree.HTML(to_validate, parser)
+    except lxml.etree.XMLSyntaxError:
+        return False
+    return True
 
 # TODO: Create a generic type validator
 
@@ -492,6 +502,11 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, LargeTextEntry):
         q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
                              default=escape_format_braces(html_component.default))]
+        return inquirer_prompt_with_abort(q)
+
+    elif isinstance(html_component, HtmlEntry):
+        q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
+                             default=escape_format_braces(html_component.default), validate=html_validator)]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):

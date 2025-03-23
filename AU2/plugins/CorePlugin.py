@@ -22,6 +22,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport
 from AU2.plugins.AvailablePlugins import __PluginMap
@@ -257,7 +258,7 @@ class CorePlugin(AbstractPlugin):
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
+            HtmlEntry(self.event_html_ids["Headline"], "Headline"),
         ]
         return html
 
@@ -279,7 +280,7 @@ class CorePlugin(AbstractPlugin):
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
+            HtmlEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
         return html
 
