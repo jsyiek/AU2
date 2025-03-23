@@ -29,7 +29,6 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.game import soft_escape
 
 SRCF_WEBSITE = "shell.srcf.net"
 SSH_PORT = 22

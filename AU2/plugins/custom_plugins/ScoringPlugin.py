@@ -19,14 +19,14 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
-from AU2.plugins.custom_plugins.PageGeneratorPlugin import get_color, render_headline_and_reports, event_url
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.render_utils import get_color, render_headline_and_reports, event_url
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
-from AU2.plugins.util.game import get_game_start, get_game_end, soft_escape
+from AU2.plugins.util.game import get_game_start, get_game_end
 
 OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">

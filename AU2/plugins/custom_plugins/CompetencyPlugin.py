@@ -26,7 +26,7 @@ from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, D
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import get_game_start, get_game_end, soft_escape
+from AU2.plugins.util.game import get_game_start, get_game_end
 
 INCOS_TABLE_TEMPLATE = """
 <p xmlns="">
