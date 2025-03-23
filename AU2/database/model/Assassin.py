@@ -8,7 +8,7 @@ from AU2.database.model.PersistentFile import PersistentFile
 from dataclasses import dataclass, field, replace
 
 from AU2.plugins.util.date_utils import get_now_dt, dt_to_timestamp, timestamp_to_dt
-from AU2.plugins.util.render_utils import soft_escape
+from AU2.plugins.util.game import soft_escape
 
 
 @dataclass_json

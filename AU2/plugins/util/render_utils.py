@@ -4,7 +4,6 @@ import zlib
 import itertools
 
 from typing import Callable, Dict, List
-from html import escape
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -13,9 +12,7 @@ from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt, weeks_and_days_to_str
-from AU2.plugins.util.game import get_game_start
-
-HTML_REPORT_PREFIX = "<!--HTML-->"
+from AU2.plugins.util.game import get_game_start, soft_escape
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
 
@@ -85,20 +82,6 @@ HEAD_HEADLINE_TEMPLATE = """
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
 FORMAT_SPECIFIER_REGEX = r"\[[D,P,N]([0-9]+)(?:_([0-9]+))?\]"
-
-
-def soft_escape(string: str) -> str:
-    """
-    Escapes html and adds <br /> to newlines only if not prefixed by HTML_REPORT_PREFIX
-    """
-
-    # umpires may regret allowing this
-    # supposing you are a clever player who has found this and the umpire does not know...
-    # please spare the umpire any headaches
-    # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
-    if not string.startswith(HTML_REPORT_PREFIX):
-        return escape(string).replace("\n", "<br />\n")
-    return string
 
 
 def event_url(e: Event) -> str:
