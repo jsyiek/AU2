@@ -76,7 +76,7 @@ def html_validator(_, to_validate: str) -> bool:
     parser = html5lib.HTMLParser(strict=True)
     try:
         parser.parse(f"<!DOCTYPE html>{to_validate}")
-    except html5lib.html5parser.ParseError:
+    except Exception:
         return False
     return True
 
@@ -512,8 +512,11 @@ def render(html_component, dependency_context={}):
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, HtmlEntry):
-        q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
-                             default=escape_format_braces(html_component.default), validate=html_validator)]
+        q_type = inquirer.Text if html_component.short else inquirer.Editor
+        q = [q_type(name=html_component.identifier,
+                    message=escape_format_braces(html_component.title),
+                    default=escape_format_braces(html_component.default),
+                    validate=soft_html_validator if html_component.soft else html_validator)]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
@@ -551,6 +554,7 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="newpseudonym",
                     message="Enter a new pseudonym",
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["newpseudonym"]
@@ -582,8 +586,9 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="editpseudonym",
                     message="Enter replacement" + ("" if c == 0 else " (blank to delete)"),
-                    # cannot delete initial pseudonym
-                    default=escape_format_braces(v.text)
+                    # (cannot delete initial pseudonym)
+                    default=escape_format_braces(v.text),
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["editpseudonym"]

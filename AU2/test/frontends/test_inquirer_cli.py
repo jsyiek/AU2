@@ -9,6 +9,7 @@ def test_html_validator():
         "<audio controls=\"controls\"><source src=\"./imgL2025/121_Noot_noot.mp3\" type=\"audio/mpeg\"></audio>"
     )
     assert not html_validator(None, "<p>This is <b>invalid</p> HTML.</b>")
+    assert not html_validator(None, "<b unclosed ")
 
 
 def test_soft_html_validator():

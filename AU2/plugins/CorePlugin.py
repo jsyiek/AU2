@@ -197,7 +197,7 @@ class CorePlugin(AbstractPlugin):
 
     def on_assassin_request_create(self):
         html = [
-            NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
+            HtmlEntry(self.html_ids["Pseudonym"], "Initial Pseudonym", soft=True, short=True),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
             NamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns"),
             NamedSmallTextbox(self.html_ids["Email"], "Email", type_="email"),

@@ -3,16 +3,17 @@ from AU2.html_components import HTMLComponent
 
 class HtmlEntry(HTMLComponent):
     """
-    A component which validates HTML,
-    but only if the input includes the HTML specifier.
+    A component which validates HTML.
     """
     name: str = "HtmlEntry"
 
-    def __init__(self, identifier: str, title: str, default: str = ""):
+    def __init__(self, identifier: str, title: str, default: str = "", soft: bool = False, short: bool = True):
         self.title = title
         self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.default = default
+        self.soft = soft
+        self.short = short
         super().__init__()
 
     def _representation(self) -> str:
