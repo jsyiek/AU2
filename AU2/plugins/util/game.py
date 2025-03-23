@@ -1,5 +1,6 @@
 import datetime
 from html import escape
+from typing import Optional
 
 from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -25,6 +26,22 @@ def set_game_start(date: datetime.datetime):
     Sets the start of the game
     """
     GENERIC_STATE_DATABASE.arb_state["game_start"] = date.timestamp()
+
+
+def get_game_end() -> Optional[datetime.datetime]:
+    """
+    Returns the end of the game, or `None` if the end of the game hasn't been set.
+    """
+    ts = GENERIC_STATE_DATABASE.arb_state.get("game_end", None)
+    return datetime.datetime.fromtimestamp(ts).astimezone(TIMEZONE) if ts else None
+
+
+def set_game_end(date: Optional[datetime.datetime]):
+    """
+    Sets the end of the game
+    """
+    GENERIC_STATE_DATABASE.arb_state["game_end"] = date.timestamp() if date else None
+
 
 def soft_escape(string: str) -> str:
     """
@@ -56,5 +73,4 @@ def escape_format_braces(string: str) -> str:
         >>> escape_format_braces(":} :{")
         ":}} :{{"
     """
-    # need type check because, when escaping default values, `None` is sometimes passed to this function
     return string.replace("{", "{{").replace("}", "}}")
