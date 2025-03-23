@@ -3,7 +3,7 @@ import copy
 import datetime
 import random
 import tabulate
-import lxml.etree
+import html5lib
 from typing import List, Any, Dict, Optional, Tuple
 
 import inquirer
@@ -49,7 +49,7 @@ from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
 from AU2.plugins.util.game import escape_format_braces, soft_escape
 
 
-def datetime_validator(_, current):
+def datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -60,7 +60,7 @@ def datetime_validator(_, current):
 
 
 # same as above except allows blank values (for pseudonym datetimes this represents being valid forever)
-def optional_datetime_validator(_, current):
+def optional_datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -72,13 +72,19 @@ def optional_datetime_validator(_, current):
     return True
 
 
-def html_validator(_, to_validate: str):
-    parser = lxml.etree.HTMLParser(recover=False)
+def html_validator(_, to_validate: str) -> bool:
+    parser = html5lib.HTMLParser(strict=True)
     try:
-        lxml.etree.HTML(to_validate, parser)
-    except lxml.etree.XMLSyntaxError:
+        parser.parse(f"<!DOCTYPE html>{to_validate}")
+    except html5lib.html5parser.ParseError:
         return False
     return True
+
+
+def soft_html_validator(_, to_validate: str) -> bool:
+    to_validate = soft_escape(to_validate)
+    return html_validator(_, to_validate)
+
 
 # TODO: Create a generic type validator
 
@@ -245,7 +251,8 @@ def render(html_component, dependency_context={}):
             q = [inquirer.Editor(
                 name="report",
                 message=f"Report: {escape_format_braces(r)}",
-                default=escape_format_braces(default_mapping.get(key, ''))
+                default=escape_format_braces(default_mapping.get(key, '')),
+                validate=soft_html_validator
             )]
             report = inquirer_prompt_with_abort(q)["report"]
             results.append((r, assassins_mapping[r], report))

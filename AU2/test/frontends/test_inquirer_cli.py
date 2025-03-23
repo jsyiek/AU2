@@ -4,6 +4,10 @@ from AU2.frontends.inquirer_cli import html_validator, soft_html_validator
 
 def test_html_validator():
     assert html_validator(None, "<b>This</b> is <i>valid</i> HTML.")
+    assert html_validator(
+        None,
+        "<audio controls=\"controls\"><source src=\"./imgL2025/121_Noot_noot.mp3\" type=\"audio/mpeg\"></audio>"
+    )
     assert not html_validator(None, "<p>This is <b>invalid</p> HTML.</b>")
 
 
