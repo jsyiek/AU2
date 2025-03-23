@@ -4,7 +4,7 @@ import re
 import zlib
 import itertools
 
-from typing import List, Tuple, Optional
+from typing import Callable, Dict, List
 from collections import namedtuple
 
 from AU2 import ROOT_DIR
@@ -282,6 +282,77 @@ def render_event(e: Event,
     return event_text, headline_text
 
 
+def render_all_events(exclude: Callable[[Event], bool]) -> (List[str], Dict[int, List[str]]):
+    """
+    Produces a rendering of all events not excluded by `exclude`.
+
+    Args:
+        exclude: a function taking an Event as input and returning a boolean for whether or not it should be rendered.
+
+    Returns:
+        A tuple of: a list of strings where each element is the HTML rendering of one day's headlines, and a dict
+            mapping week numbers to a list of strings where each element is the HTML rendering of one day's reports.
+    """
+    events = list(EVENTS_DATABASE.events.values())
+    events.sort(key=lambda event: event.datetime)
+    start_datetime = get_game_start()
+    start_date = start_datetime.date()
+
+    # maps chapter (news week) to day-of-week to list of reports
+    # this is 1-indexed (week 1 is first week of game)
+    # days are 0-indexed (fun, huh?)
+    events_for_chapter = {0: {}}
+    headlines_for_day = {}
+    competency_manager = CompetencyManager(start_datetime)
+    death_manager = DeathManager(perma_death=True)
+    wanted_manager = WantedManager()
+
+    for e in events:
+        # don't skip adding hidden events to managers, in case a player dies in a hidden event, etc.
+        wanted_manager.add_event(e)
+        competency_manager.add_event(e)
+        death_manager.add_event(e)
+
+        if exclude(e):
+            continue
+
+        days_since_start, week, day = date_to_weeks_and_days(start_date, e.datetime.date())
+        events_for_chapter.setdefault(week, {})
+
+        event_text, headline_text = render_event(
+            e,
+            death_manager=death_manager,
+            competency_manager=competency_manager,
+            wanted_manager=wanted_manager
+        )
+
+        events_for_chapter[week].setdefault(day, []).append(event_text)
+        headlines_for_day.setdefault(days_since_start, []).append(headline_text)
+
+    weeks = {}
+    for (w, d_dict) in events_for_chapter.items():
+        outs = []
+        for (d, events_list) in d_dict.items():
+            all_event_text = "".join(events_list)
+            day_text = DAY_TEMPLATE.format(
+                DATE=weeks_and_days_to_str(start_date, w, d),
+                EVENTS=all_event_text
+            )
+            outs.append(day_text)
+        weeks[w] = outs
+
+    head_days = []
+    for (d, headlines_list) in headlines_for_day.items():
+        head_days.append(
+            HEAD_DAY_TEMPLATE.format(
+                DATE=weeks_and_days_to_str(start_date, 1, d),
+                HEADLINES="".join(headlines_list)
+            )
+        )
+
+    return head_days, weeks
+
+
 @registered_plugin
 class PageGeneratorPlugin(AbstractPlugin):
     def __init__(self):
@@ -329,78 +400,22 @@ class PageGeneratorPlugin(AbstractPlugin):
         return []
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
-        events = list(EVENTS_DATABASE.events.values())
-        events.sort(key=lambda event: event.datetime)
-        start_datetime: datetime.datetime = get_game_start()
-        start_date: datetime.date = start_datetime.date()
-
-        # maps chapter (news week) to day-of-week to list of reports
-        # this is 1-indexed (week 1 is first week of game)
-        # days are 0-indexed (fun, huh?)
-        events_for_chapter = {0: {}}
-        headlines_for_day = {}
-        competency_manager = CompetencyManager(start_datetime)
-        death_manager = DeathManager(perma_death=True)
-        wanted_manager = WantedManager()
-
-        for e in events:
-            # don't skip adding hidden events to managers, in case a player dies in a hidden event, etc.
-            wanted_manager.add_event(e)
-            competency_manager.add_event(e)
-            death_manager.add_event(e)
-
-            # skip hidden events
-            # this is purely rendering
-            if e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False):
-                continue
-
-            days_since_start, week, day = date_to_weeks_and_days(start_date, e.datetime.date())
-            events_for_chapter.setdefault(week, {})
-
-            event_text, headline_text = render_event(
-                e,
-                death_manager=death_manager,
-                competency_manager=competency_manager,
-                wanted_manager=wanted_manager
-            )
-
-            events_for_chapter[week].setdefault(day, []).append(event_text)
-            headlines_for_day.setdefault(days_since_start, []).append(headline_text)
-
-        weeks = {}
-        for (w, d_dict) in events_for_chapter.items():
-            outs = []
-            for (d, events_list) in d_dict.items():
-                all_event_text = "".join(events_list)
-                day_text = DAY_TEMPLATE.format(
-                    # again not escaping for same reason
-                    DATE=weeks_and_days_to_str(start_date, w, d),
-                    EVENTS=all_event_text
-                )
-                outs.append(day_text)
-            weeks[w] = NEWS_TEMPLATE.format(
-                N=w,
-                DAYS="".join(outs),
-                YEAR=str(get_now_dt().year)
-            )
+        headline_days, weeks = render_all_events(
+            exclude=lambda e: e.pluginState.get(self.identifier, {}).get(self.plugin_state["HIDDEN"], False)
+        )
 
         for w in weeks:
             path = os.path.join(WEBPAGE_WRITE_LOCATION, f"news{w:02}.html")
-
-            with open(path, "w+", encoding="utf-8", errors="ignore") as F:
-                F.write(weeks[w])
-
-        head_days = []
-        for (d, headlines_list) in headlines_for_day.items():
-            head_days.append(
-                HEAD_DAY_TEMPLATE.format(
-                    DATE=weeks_and_days_to_str(start_date, 1, d),
-                    HEADLINES="".join(headlines_list)
-                )
+            week_page_text = NEWS_TEMPLATE.format(
+                N=w,
+                DAYS="".join(weeks[w]),
+                YEAR=str(get_now_dt().year)
             )
+            with open(path, "w+", encoding="utf-8", errors="ignore") as F:
+                F.write(week_page_text)
 
         head_page_text = HEAD_TEMPLATE.format(
-            CONTENT="".join(head_days),
+            CONTENT="".join(headline_days),
             YEAR=str(get_now_dt().year)
         )
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, "head.html"), "w+", encoding="utf-8", errors="ignore") as F:
