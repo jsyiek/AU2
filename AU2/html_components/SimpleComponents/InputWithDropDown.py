@@ -1,4 +1,3 @@
-from html import escape
 from typing import List
 
 from AU2.html_components import HTMLComponent

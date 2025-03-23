@@ -5,13 +5,13 @@ from typing import Tuple, Dict, List, Set
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event
+from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -48,14 +48,7 @@ class TargetingPlugin(AbstractPlugin):
 
     def __init__(self):
         super().__init__("TargetingPlugin")
-        self.exports = [
-            Export(
-                "targeting_print_targeting_graph",
-                "Targeting Graph -> Print",
-                lambda *args: [],
-                self.answer_show_targeting_graph
-            )
-        ]
+        self.exports = []
 
         self.config_exports = [
             DangerousConfigExport(
@@ -184,18 +177,20 @@ class TargetingPlugin(AbstractPlugin):
         answer = "won't" if use_seeds_for_updates_only else "will"
         return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
 
-    def answer_show_targeting_graph(self, _):
-        response = []
-        graph = self.compute_targets(response)
-        for (attacker, targets) in graph.items():
-            response.append(Label(attacker))
-            response.append(Label(f"|________ {targets[0]}"))
-            response.append(Label(f"|________ {targets[1]}"))
-            response.append(Label(f"|________ {targets[2]}"))
-            response.append(Label(""))
+    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+        graph = self.compute_targets([]) # we don't care about any issues that arise
+        response: List[AttributePairTableRow] = []
+        if assassin.identifier not in graph:
+            return []
+        for (i, target) in enumerate(graph[assassin.identifier]):
+            response.append((f"Target {i+1}", target))
 
-        if graph:
-            response.append(Label(f"Total alive players: {len(graph.keys())}"))
+        num_attackers = 0
+        for (attacker, targets) in graph.items():
+            if assassin.identifier in targets:
+                response.append((f"Attacker {num_attackers+1}", attacker))
+                num_attackers += 1
+
         return response
 
     @property
