@@ -1,13 +1,8 @@
 import datetime
-from html import escape
-from typing import Optional
 
 from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.plugins.util.date_utils import get_now_dt
-
-
-HTML_REPORT_PREFIX = "<!--HTML-->"
 
 
 def get_game_start() -> datetime.datetime:
@@ -41,20 +36,6 @@ def set_game_end(date: Optional[datetime.datetime]):
     Sets the end of the game
     """
     GENERIC_STATE_DATABASE.arb_state["game_end"] = date.timestamp() if date else None
-
-
-def soft_escape(string: str) -> str:
-    """
-    Escapes html and adds <br /> to newlines only if not prefixed by HTML_REPORT_PREFIX
-    """
-
-    # umpires may regret allowing this
-    # supposing you are a clever player who has found this and the umpire does not know...
-    # please spare the umpire any headaches
-    # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
-    if not string.startswith(HTML_REPORT_PREFIX):
-        return escape(string).replace("\n", "<br />\n")
-    return string
 
 
 def escape_format_braces(string: str) -> str:

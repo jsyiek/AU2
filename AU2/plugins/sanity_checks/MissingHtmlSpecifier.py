@@ -6,7 +6,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.plugins.sanity_checks.model.SanityCheck import SanityCheck
 from AU2.plugins.sanity_checks.model.SanityCheck import Suggestion
-from AU2.plugins.util.game import HTML_REPORT_PREFIX
+from AU2.plugins.util.render_utils import HTML_REPORT_PREFIX
 
 
 class MissingHtmlSpecifier(SanityCheck):

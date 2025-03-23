@@ -8,9 +8,9 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin
 from AU2.plugins.CorePlugin import registered_plugin
-from AU2.plugins.custom_plugins.PageGeneratorPlugin import render_all_events
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.render_utils import render_all_events
 
 
 BOUNTIES_PAGE_TEMPLATE: str
