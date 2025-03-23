@@ -351,7 +351,13 @@ class CorePlugin(AbstractPlugin):
                 ],
                 skippable_explanation=False
             ),
-            HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
+            # use of dependency here is a stop-gap to maintain compatibility with MafiaPlugin
+            Dependency(
+                dependentOn=self.event_html_ids["Assassin Pseudonym"],
+                htmlComponents=[
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms)
+                ]
+            ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
         ]
@@ -396,9 +402,7 @@ class CorePlugin(AbstractPlugin):
         # Convert the format of existing reports into a dict, for use by `report_entry_factory`.
         # Note that this will overwrite multiple reports attributed to the same player,
         # and also will not recognise reports attributed to a different pseudonym.
-        # (This is the same behaviour as `AssassinDependentReportEntry` had.
-        # It is ok at the moment because we don't support multiple reports in the frontend,
-        # but the change of pseudonym issue could be annoying.)
+        # (This is the same behaviour as `AssassinDependentReportEntry` had)
         report_defaults: Dict[str, Dict[str, str]] = {}
         for t in e.reports:
             report_defaults.setdefault(t[0], {})[str(t[1])] = t[2]
@@ -429,7 +433,13 @@ class CorePlugin(AbstractPlugin):
                 options=potential_kills,
                 defaults=default_kills
             ),
-            HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
+            # use of dependency here is a stop-gap to maintain compatibility with MafiaPlugin
+            Dependency(
+                dependentOn=self.event_html_ids["Assassin Pseudonym"],
+                htmlComponents=[
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms)
+                ]
+            ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
@@ -673,7 +683,7 @@ class CorePlugin(AbstractPlugin):
     def gather_events(self) -> List[Tuple[str, str]]:
         # headline is truncated because `inquirer` doesn't deal with overlong options well
         return [
-                (f"[{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline[0:25].rstrip()}", identifier)
+                (f"[{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline[0:64].rstrip()}", identifier)
                 for identifier, event in sorted(EVENTS_DATABASE.events.items(), key=lambda x: x[1].datetime, reverse=True)
         ]
 
