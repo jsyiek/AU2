@@ -1,14 +1,14 @@
 import datetime as dt
 
 from dataclasses_json import dataclass_json, config
-from typing import List, Dict, Any, Optional, Iterator, Union
+from typing import List, Dict, Any, Optional, Iterator, Union, Callable
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model.PersistentFile import PersistentFile
 from dataclasses import dataclass, field, replace
 
-from AU2 import TIMEZONE
 from AU2.plugins.util.date_utils import get_now_dt, dt_to_timestamp, timestamp_to_dt
+from AU2.plugins.util.game import soft_escape
 
 
 @dataclass_json
@@ -202,5 +202,11 @@ class Assassin(PersistentFile):
             if p and self.pseudonym_datetimes.get(i, ts) <= ts:
                 yield p
 
-    def all_pseudonyms(self) -> str:
-        return " AKA ".join(p for p in self.pseudonyms if p)
+    def all_pseudonyms(self, fn: Callable[[str], str] = soft_escape) -> str:
+        """
+        Returns a list of all the assassin's pseudonyms separated by 'AKA'.
+
+        Args:
+            fn: A function to call on each pseudonym. Defaults to `soft_escape`.
+        """
+        return " AKA ".join(fn(p) for p in self.pseudonyms if p)

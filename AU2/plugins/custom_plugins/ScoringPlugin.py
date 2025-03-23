@@ -26,7 +26,7 @@ from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
-from AU2.plugins.util.game import get_game_start, get_game_end
+from AU2.plugins.util.game import get_game_start, get_game_end, soft_escape
 
 OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
@@ -122,8 +122,8 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             wanted_manager.add_event(e)
             killer_model = ASSASSINS_DATABASE.get(killer)
             victim_model = ASSASSINS_DATABASE.get(victim)
-            killer_searchable = f"{killer_model.all_pseudonyms()} ({killer_model.real_name})"
-            victim_searchable = f"{victim_model.all_pseudonyms()} ({victim_model.real_name})"
+            killer_searchable = f"{killer_model.all_pseudonyms(fn=lambda x: x)} ({killer_model.real_name})"
+            victim_searchable = f"{victim_model.all_pseudonyms(fn=lambda x: x)} ({victim_model.real_name})"
             if killer not in added_nodes:
                 net.add_node(
                     killer_searchable,

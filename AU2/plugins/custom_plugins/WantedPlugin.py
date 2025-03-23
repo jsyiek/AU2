@@ -18,6 +18,7 @@ from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFA
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.game import soft_escape
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -154,7 +155,7 @@ class WantedPlugin(AbstractPlugin):
                 rows.append(
                     PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         ADDRESS=escape(player.address),
                         COLLEGE=escape(player.college),
                         WATER_STATUS=escape(player.water_status),
@@ -181,7 +182,7 @@ class WantedPlugin(AbstractPlugin):
                     POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         ADDRESS=escape(player.address),
                         COLLEGE=escape(player.college),
                         WATER_STATUS=escape(player.water_status),
@@ -200,7 +201,7 @@ class WantedPlugin(AbstractPlugin):
                 rows.append(
                     DEAD_PLAYER_TABLE_ROW_TEMPLATE.format(
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         CRIME=escape(wanted_death_event['crime'])
                     )
                 )
@@ -222,7 +223,7 @@ class WantedPlugin(AbstractPlugin):
                     DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
                         REAL_NAME=escape(player.real_name),
-                        PSEUDONYMS=escape(player.all_pseudonyms()),
+                        PSEUDONYMS=player.all_pseudonyms(),
                         CRIME=escape(wanted_death_event['crime'])
                     )
                 )
