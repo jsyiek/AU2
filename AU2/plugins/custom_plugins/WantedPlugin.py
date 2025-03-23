@@ -18,7 +18,6 @@ from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFA
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.game import soft_escape
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">
