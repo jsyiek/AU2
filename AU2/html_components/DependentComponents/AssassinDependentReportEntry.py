@@ -1,5 +1,4 @@
-from html import escape
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 
 from AU2.html_components import HTMLComponent
 

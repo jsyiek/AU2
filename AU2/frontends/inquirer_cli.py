@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
-import itertools
 import random
 import tabulate
-from typing import List, Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import inquirer
 
@@ -210,48 +209,99 @@ def render(html_component, dependency_context={}):
         if not assassins_mapping:
             return {html_component.identifier: [], "skip": True}
 
-        assassins_in_event = [(aId, *rest) for (aId, *rest) in html_component.assassins if aId in assassins_mapping]
-        options = list(itertools.chain.from_iterable([
-            [(aId, i, p) for (i, p) in enumerate(pseudonyms)] for (aId, pseudonyms) in assassins_in_event]))
+        assassin_pseudonyms = {aId : pseudonyms for (aId, pseudonyms) in html_component.assassins if aId in assassins_mapping}
+        reports = list(html_component.default)
+        Report = Tuple[str, Optional[int], str]
 
-        default_options = []
-        for (aId, idx, _) in html_component.default:
-            potential_matches = [(other_aId, p) for (other_aId, p) in assassins_in_event if other_aId == aId]
-            if potential_matches:
-                (_, p) = potential_matches[0]
-                idx_to_use = min(len(p), idx)
-                default_options.append((aId, idx_to_use, p[idx_to_use]))
-        q = [inquirer.Checkbox(
-            name="q",
-            message="Reports (select players with reports)",
-            choices=options,
-            default=default_options
-        )]
-        reporters = inquirer_prompt_with_abort(q)["q"]
-        results = []
-        default_mapping = {
-            a[:2]: a[2] for a in html_component.default
-        }
-        if assassins_mapping:
+        def _render_report_editor(old_report: Report) -> Optional[Report]:
+            """
+            Renders the report editor UI for `report`, returning the edited report,
+            or `None` if the report should be deleted.
+            """
+            q = [inquirer.List(
+                name="author",
+                message="Select the AUTHOR of the report",
+                # TODO: use `snapshot` fn as in `Event -> Summary` (PR #139)
+                choices=[("*DELETE REPORT*", None), *assassins_mapping.keys()],
+                default=old_report[0]
+            )]
+            ident = inquirer_prompt_with_abort(q)["author"]
+            if ident is None:
+                # signals that the report should be deleted
+                return None
+            # ignore deleted pseudonyms
+            # TODO: only show pseudonyms within validity for event?
+            #       (would need to be able to access datetime value)
+            pseudonym_options = ((p, i) for i, p in enumerate(assassin_pseudonyms[ident]) if p)
+            q = [inquirer.List(
+                name="pseudonym",
+                message="Select the PSEUDONYM to attribute the report to",
+                # TODO: Real-name option? Would need to change back-end though!
+                choices=[("(Auto)", None), *pseudonym_options],
+                default=old_report[1]
+            )]
+            pseudonym_id = inquirer_prompt_with_abort(q)["pseudonym"]
+            # if "auto" default to chosen pseudonym for the event
+            # TODO: change backend to allow "auto" to update when selected pseudonym for event changes
+            pseudonym_id = assassins_mapping[ident] if pseudonym_id is None else int(pseudonym_id)
+            pseudonym = assassin_pseudonyms[ident][pseudonym_id]
+
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
-            print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
+            print(
+                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
             print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
             print("    [NX] Renders real name of assassin with ID X (if in the event)")
             print("ASSASSIN IDENTIFIERS")
+            # This is taken from the old AssassinDependentReportEntry implementation
+            # TODO: find a better way of doing this?
             for a in assassins_mapping:
                 assassin_model = ASSASSINS_DATABASE.get(a)
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
-        for r in reporters:
-            key = r[:2]
             q = [inquirer.Editor(
                 name="report",
-                message=f"Report: {escape_format_braces(str(r))}",
-                default=escape_format_braces(default_mapping.get(key, ''))
+                # TODO: use the same rendering of authors as in `Event -> Summary` (PR #139)
+                message=f"Report: {escape_format_braces(ident)} as {pseudonym}",
+                default=old_report[2]
             )]
-            report = inquirer_prompt_with_abort(q)["report"]
-            results.append((r[0], r[1], report))
-        return {html_component.identifier: results}
+            report_text = inquirer_prompt_with_abort(q)["report"]
+            return ident, pseudonym_id, report_text
+
+        while True:
+            report_options = [
+                ("*CONTINUE*", -1),
+                # TODO: use the same rendering of authors as in `Event -> Summary` (PR #139)
+                *((f"{ident} as {assassin_pseudonyms[ident][p]}", i) for i, (ident, p, _) in enumerate(reports)),
+                ("*NEW*", -2)
+            ]
+            q = [inquirer.List(
+                name=html_component.identifier,
+                message=escape_format_braces(html_component.title),
+                choices=report_options
+            )]
+            a = inquirer_prompt_with_abort(q)
+            c = a[html_component.identifier]  # index of choice
+            if c == -2:  # case where "*NEW*" selected
+                try:
+                    new_report = _render_report_editor(("", None, ""))
+                    if new_report is not None:
+                        reports.append(new_report)
+                except KeyboardInterrupt:
+                    continue
+
+            elif c == -1:  # case where "*CONTINUE*" selected
+                break
+            else:  # case where editing existing report
+                old_report = reports[c]
+                try:
+                    new_report = _render_report_editor(old_report)
+                    if new_report is None:
+                        reports.pop(c)
+                    else:
+                        reports[c] = new_report
+                except KeyboardInterrupt:
+                    continue
+        return {html_component.identifier: reports}
 
     # dependent component
     elif isinstance(html_component, AssassinDependentKillEntry):
