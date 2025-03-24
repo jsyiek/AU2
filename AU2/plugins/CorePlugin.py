@@ -290,10 +290,14 @@ class CorePlugin(AbstractPlugin):
                     selected=defaults.get(identifier, "")
                 )]
             else:
-                return [HiddenTextbox(
-                    identifier="pseudonym",
-                    default=choices[0][1]
-                )]
+                forced_choice = choices[0][1]
+                return [
+                    Label(f"Using {player}: {forced_choice}"),
+                    HiddenTextbox(
+                        identifier="pseudonym",
+                        default=forced_choice
+                    )
+                ]
 
         defaults = e.assassins if e is not None else {}
         # include hidden assassins if they are already in the event,
@@ -328,28 +332,30 @@ class CorePlugin(AbstractPlugin):
                     )
 
         html = [
-            SelectorList(
-                identifier=self.event_html_ids["Kills"],
-                title="Select kills",
-                options=potential_kills
-            ),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
+            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
             ForEach(
                 identifier=self.event_html_ids["Reports"],
                 title="Reports (select players with reports)",
                 options=assassins,
                 subcomponents_factory=report_entry_factory,
                 explanation=[
-                    "FORMATTING ADVICE",
-                    "    [PX] Renders pseudonym of assassin with ID X (if in the event)",
-                    "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)",
-                    "    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)",
-                    "    [NX] Renders real name of assassin with ID X (if in the event)",
-                    "ASSASSIN IDENTIFIERS"
-                ] + [
-                    f"    ({a._secret_id}) {a.real_name}"
-                    for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
-                ],
+                                "FORMATTING ADVICE",
+                                "    [PX] Renders pseudonym of assassin with ID X (if in the event)",
+                                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)",
+                                "    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)",
+                                "    [NX] Renders real name of assassin with ID X (if in the event)",
+                                "ASSASSIN IDENTIFIERS"
+                            ] + [
+                                f"    ({a._secret_id}) {a.real_name}"
+                                for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
+                            ],
                 skippable_explanation=False
+            ),
+            SelectorList(
+                identifier=self.event_html_ids["Kills"],
+                title="Select kills",
+                options=potential_kills
             ),
             # use of dependency here is a stop-gap to maintain compatibility with MafiaPlugin
             Dependency(
@@ -358,8 +364,6 @@ class CorePlugin(AbstractPlugin):
                     HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms)
                 ]
             ),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
         ]
         return html
 
@@ -409,6 +413,8 @@ class CorePlugin(AbstractPlugin):
 
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
+            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
             ForEach(
                 identifier=self.event_html_ids["Reports"],
                 title="Reports (select players with reports)",
@@ -440,8 +446,6 @@ class CorePlugin(AbstractPlugin):
                     HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms)
                 ]
             ),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
         return html
 
@@ -657,8 +661,6 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             return_components += p.on_event_create(event, html_response_args)
         EVENTS_DATABASE.add(event)
-
-        print(event)
         return return_components
 
     def ask_core_plugin_update_event(self, event_id: str, assassin_selection: Dict[str, Dict[str, int]]) -> List[HTMLComponent]:
