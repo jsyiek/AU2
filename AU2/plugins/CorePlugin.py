@@ -12,6 +12,7 @@ from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
+from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
@@ -100,7 +101,8 @@ class CorePlugin(AbstractPlugin):
             self.event_html_ids["Assassin Pseudonym"]: "assassins",
             self.event_html_ids["Datetime"]: "datetime",
             self.event_html_ids["Headline"]: "headline",
-            self.event_html_ids["Kills"]: "kills"
+            self.event_html_ids["Kills"]: "kills",
+            self.event_html_ids["Reports"]: "reports"
         }
 
         self.config_html_ids = {
@@ -292,7 +294,7 @@ class CorePlugin(AbstractPlugin):
             else:
                 forced_choice = choices[0][1]
                 return [
-                    Label(f"Using {player}: {forced_choice}"),
+                    Label(f"Using {identifier}: {assassin.get_pseudonym(forced_choice)}"),
                     HiddenTextbox(
                         identifier="pseudonym",
                         default=forced_choice
@@ -313,15 +315,6 @@ class CorePlugin(AbstractPlugin):
         )]
 
     def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
-        def report_entry_factory(identifier: str, _) -> List[HTMLComponent]:
-            pseudonym_id = assassin_pseudonyms[identifier]
-            return [
-                LargeTextEntry(
-                    identifier=str(pseudonym_id),
-                    title=f"Report: {identifier}",
-                )
-            ]
-
         assassins = list(assassin_pseudonyms.keys())
         potential_kills = []
         for a1 in assassins:
@@ -330,68 +323,33 @@ class CorePlugin(AbstractPlugin):
                     potential_kills.append(
                         (f"{a1} kills {a2}", (a1, a2))
                     )
-
         html = [
-            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
-            ForEach(
-                identifier=self.event_html_ids["Reports"],
-                title="Reports (select players with reports)",
-                options=assassins,
-                subcomponents_factory=report_entry_factory,
-                explanation=[
-                                "FORMATTING ADVICE",
-                                "    [PX] Renders pseudonym of assassin with ID X (if in the event)",
-                                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)",
-                                "    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)",
-                                "    [NX] Renders real name of assassin with ID X (if in the event)",
-                                "ASSASSIN IDENTIFIERS"
-                            ] + [
-                                f"    ({a._secret_id}) {a.real_name}"
-                                for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
-                            ],
-                skippable_explanation=False
+            # use of dependency here is a stop-gap, because
+            #   - it means the improvements to the report entry UI can be worked on before this is merged,
+            #     without creating annoying merge conflicts
+            #   - it keeps compatibility with `MafiaPlugin` (which is its own whole can of worms...)
+            Dependency(
+                dependentOn=self.event_html_ids["Assassin Pseudonym"],
+                htmlComponents=[
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
+                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"],
+                                                 self.event_html_ids["Reports"], "Reports")
+                ]
             ),
             SelectorList(
                 identifier=self.event_html_ids["Kills"],
                 title="Select kills",
                 options=potential_kills
             ),
-            # use of dependency here is a stop-gap to maintain compatibility with MafiaPlugin
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms)
-                ]
-            ),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
+            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
         ]
         return html
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        # process the response of the report entry component:
-        # it returns a dict mapping assassin identifiers to dicts mapping (stringified) pseudonym ids to reports,
-        # whereas the database has reports stored as a list of tuples (assassin identifier, pseudonym index, report)
-        reports: List[Tuple[str, int, str]] = []
-        for a_id, p_to_r in htmlResponse[self.event_html_ids["Reports"]].items():
-            for p_index_str, r in p_to_r.items():
-                reports.append(
-                    (a_id, int(p_index_str), r)
-                )
-        e.reports = reports
-
         return [Label("[CORE] Success!")]
 
     def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]):
-        def report_entry_factory(identifier: str, defaults: Dict[str, Dict[str, str]]) -> List[HTMLComponent]:
-            pseudonym_id = str(assassin_pseudonyms[identifier])
-            return [
-                LargeTextEntry(
-                    identifier=pseudonym_id,
-                    title=f"Report: {identifier}",
-                    default=defaults.get(identifier, {}).get(pseudonym_id, '')
-                )
-            ]
-
         assassins = list(assassin_pseudonyms.keys())
         potential_kills = []
         default_kills = []
@@ -403,35 +361,16 @@ class CorePlugin(AbstractPlugin):
                     if (a1, a2) in e.kills:
                         default_kills.append(kill_option)
 
-        # Convert the format of existing reports into a dict, for use by `report_entry_factory`.
-        # Note that this will overwrite multiple reports attributed to the same player,
-        # and also will not recognise reports attributed to a different pseudonym.
-        # (This is the same behaviour as `AssassinDependentReportEntry` had)
-        report_defaults: Dict[str, Dict[str, str]] = {}
-        for t in e.reports:
-            report_defaults.setdefault(t[0], {})[str(t[1])] = t[2]
-
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
-            ForEach(
-                identifier=self.event_html_ids["Reports"],
-                title="Reports (select players with reports)",
-                options=assassins,
-                subcomponents_factory=report_entry_factory,
-                explanation=[
-                                "FORMATTING ADVICE",
-                                "    [PX] Renders pseudonym of assassin with ID X (if in the event)",
-                                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)",
-                                "    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)",
-                                "    [NX] Renders real name of assassin with ID X (if in the event)",
-                                "ASSASSIN IDENTIFIERS"
-                            ] + [
-                                f"    ({a._secret_id}) {a.real_name}"
-                                for a in (ASSASSINS_DATABASE.get(a_id) for a_id in assassin_pseudonyms.keys())
-                            ],
-                defaults=report_defaults
+            # use of dependency here is a stop-gap: see comments in `on_event_request_create`
+            Dependency(
+                dependentOn=self.event_html_ids["Assassin Pseudonym"],
+                htmlComponents=[
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms),
+                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"],
+                                                 self.event_html_ids["Reports"], "Reports", e.reports),
+                ]
             ),
             SelectorList(
                 identifier=self.event_html_ids["Kills"],
@@ -439,13 +378,8 @@ class CorePlugin(AbstractPlugin):
                 options=potential_kills,
                 defaults=default_kills
             ),
-            # use of dependency here is a stop-gap to maintain compatibility with MafiaPlugin
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"], assassin_pseudonyms)
-                ]
-            ),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
+            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
         return html
 
@@ -454,16 +388,7 @@ class CorePlugin(AbstractPlugin):
         event.datetime = htmlResponse[self.event_html_ids["Datetime"]]
         event.headline = htmlResponse[self.event_html_ids["Headline"]]
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
-        # process the response of the report entry component:
-        # it returns a dict mapping assassin identifiers to dicts mapping (stringified) pseudonym ids to reports,
-        # whereas the database has reports stored as a list of tuples (assassin identifier, pseudonym index, report)
-        reports: List[Tuple[str, int, str]] = []
-        for a_id, p_to_r in htmlResponse[self.event_html_ids["Reports"]].items():
-            for p_index_str, r in p_to_r.items():
-                reports.append(
-                    (a_id, int(p_index_str), r)
-                )
-        event.reports = reports
+        event.reports = htmlResponse[self.event_html_ids["Reports"]]
 
         return [Label("[CORE] Success!")]
 

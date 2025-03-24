@@ -116,7 +116,7 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
             if last_step == -1 and h0.noInteraction:
                 raise KeyboardInterrupt()
             out = render(h0, dependency_context)
-            if last_step == -1 and out.pop("__skip", False):
+            if out.pop("__skip", False) and last_step == -1:
                 raise KeyboardInterrupt()
             new_dependency = dependency_context.copy()
             new_dependency.update(out)
@@ -819,8 +819,9 @@ def render_components(components: List[HTMLComponent], dependency_context: Optio
             if last_step == -1 and components[iteration].noInteraction:
                 iteration -= 1
                 continue
-            result = render(components[iteration])
-            if last_step == -1 and result.pop("__skip", False):
+            result = render(components[iteration], dependency_context)
+            # must do condn this way around so that `pop` is always called!
+            if result.pop("__skip", False) and last_step == -1:
                 iteration -= 1
                 continue
             out.update(result)
@@ -898,9 +899,7 @@ def main():
         except KeyboardInterrupt:
             continue
         else:
-            components = exp.answer(inp)
-            for component in components:
-                render(component)
+            render_components(exp.answer(inp))
 
             print("Saving databases...")
             ASSASSINS_DATABASE.save()
