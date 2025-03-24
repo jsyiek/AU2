@@ -105,41 +105,26 @@ def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
     return output
 
 
-def render(html_component, dependency_context={}):
-    """
-    dependency context is a MUTABLE DEFAULT ARGUMENT
-    if you are modifying it THEN MODIFY A COPY
-    TODO: don't use a mutable default arg!
-    """
+def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
+    dependency_context = dependency_context or {}
     if isinstance(html_component, Dependency):
-        iteration = 0
+        h0 = html_component.htmlComponents[0]
+        # if this fails check the sorting function (merge_dependency)
+        assert h0.identifier == html_component.dependentOn
         last_step = 1
-        while iteration < len(html_component.htmlComponents):
-            if iteration == -1:
-                raise KeyboardInterrupt
+        while True:
+            out = render(h0, dependency_context)
+            # allows user to ctrl-C backwards through no-interraction components
+            if last_step == -1 and out.pop("__skip", False):
+                raise KeyboardInterrupt()
+            new_dependency = dependency_context.copy()
+            new_dependency.update(out)
             try:
-                h = html_component.htmlComponents[iteration]
-                if h.noInteraction and last_step == -1:
-                    iteration -= 1
-                    continue
-                if iteration == 0:
-                    # if this fails check the sorting function (merge_dependency)
-                    assert (h.identifier == html_component.dependentOn)
-                    out = render(h, dependency_context)
-                    new_dependency = dependency_context.copy()
-                    new_dependency.update(out)
-                elif iteration > 0:
-                    value = render(h, new_dependency)
-                    if value.pop("__skip", False) and last_step == -1:
-                        iteration -= 1
-                        continue
-                    out.update(value)
-                iteration += 1
-                last_step = 1
+                out.update(render_components(html_component.htmlComponents[1:], new_dependency))
             except KeyboardInterrupt:
-                iteration -= 1
                 last_step = -1
-        return out
+            else:
+                return out
 
     elif isinstance(html_component, _ComponentGroup):
         return {html_component.identifier: render_components(html_component.subcomponents)}
@@ -805,7 +790,8 @@ class _ComponentGroup(HTMLComponent):
         super().__init__()
 
 
-def render_components(components: List[HTMLComponent]) -> Dict:
+def render_components(components: List[HTMLComponent], dependency_context: Optional[Dict[str, Any]] = None) -> Dict:
+    dependency_context = dependency_context or {}
     components = replace_overrides(components)
     components = merge_dependency(components)
     out = {}
