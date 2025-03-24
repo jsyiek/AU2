@@ -105,7 +105,7 @@ def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
     return output
 
 
-def render(html_component, dependency_context={}, last_step: int = 1):
+def render(html_component, dependency_context={}):
     """
     dependency context is a MUTABLE DEFAULT ARGUMENT
     if you are modifying it THEN MODIFY A COPY
@@ -113,7 +113,7 @@ def render(html_component, dependency_context={}, last_step: int = 1):
     """
     if isinstance(html_component, Dependency):
         iteration = 0
-        last_step = last_step
+        last_step = 1
         while iteration < len(html_component.htmlComponents):
             if iteration == -1:
                 raise KeyboardInterrupt
@@ -544,10 +544,10 @@ def render(html_component, dependency_context={}, last_step: int = 1):
         return {html_component.identifier: a["q"] == "Yes"}
 
     elif isinstance(html_component, HiddenTextbox):
-        return {html_component.identifier: html_component.default}
+        return {html_component.identifier: html_component.default, "__skip": True}
 
     elif isinstance(html_component, HiddenJSON):
-        return {html_component.identifier: html_component.default}
+        return {html_component.identifier: html_component.default, "__skip": True}
 
     elif isinstance(html_component, NamedSmallTextbox):
         q = [inquirer.Text(name=html_component.identifier, message=escape_format_braces(html_component.title))]
@@ -811,9 +811,7 @@ def render_components(components: List[HTMLComponent]) -> Dict:
     out = {}
     iteration = 0
     last_step = 1
-    print(components)
     while iteration < len(components):
-        print(iteration, last_step)
         if iteration < 0:
             # signals that the components were not fully rendered
             raise KeyboardInterrupt()
@@ -821,7 +819,7 @@ def render_components(components: List[HTMLComponent]) -> Dict:
             if last_step == -1 and components[iteration].noInteraction:
                 iteration -= 1
                 continue
-            result = render(components[iteration], last_step=last_step)
+            result = render(components[iteration])
             if result.pop("__skip", False) and last_step == -1:
                 iteration -= 1
                 continue
