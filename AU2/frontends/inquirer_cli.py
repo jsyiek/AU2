@@ -144,7 +144,7 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
                 )]
             chosen_options = inquirer_prompt_with_abort(q)["q"]
 
-            if len(chosen_options) > 0 or not html_component.skippable_explanation:
+            if len(chosen_options) > 0:
                 # the lines are stored in a list,
                 # rather than as a single string,
                 # for the sake of the (potential) HTML frontend
