@@ -6,10 +6,12 @@ from AU2.html_components import HTMLComponent
 class NamedSmallTextbox(HTMLComponent):
     name: str = "NamedSmallTextbox"
 
-    def __init__(self, identifier: str, title: str, type_="text"):
+    # TODO: convert `DefaultNamedSmallTextbox`s to `NamedSmallTextbox`s
+    def __init__(self, identifier: str, title: str, default: str = "", type_="text"):
         self.title = title
         self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
+        self.default = default
         self.type_ = type_
         super().__init__()
 

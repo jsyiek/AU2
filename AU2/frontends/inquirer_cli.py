@@ -113,8 +113,9 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
         assert h0.identifier == html_component.dependentOn
         last_step = 1
         while True:
+            if last_step == -1 and h0.noInteraction:
+                raise KeyboardInterrupt()
             out = render(h0, dependency_context)
-            # allows user to ctrl-C backwards through no-interraction components
             if last_step == -1 and out.pop("__skip", False):
                 raise KeyboardInterrupt()
             new_dependency = dependency_context.copy()
@@ -161,6 +162,8 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
                 continue
             else:
                 retry = False
+
+        html_component.defaults = mappings  # makes ctrl-C'ing through components more convenient
         return {html_component.identifier: mappings}
 
     elif isinstance(html_component, Searchable):
@@ -461,8 +464,9 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
             validate=datetime_validator
         )]
         datetime_str = inquirer_prompt_with_abort(q)["dt"]
-        return {
-            html_component.identifier: datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE)}
+        result = datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE)
+        html_component.default = result  # makes ctrl-C'ing through components more convenient
+        return {html_component.identifier: result}
 
     elif isinstance(html_component, OptionalDatetimeEntry):
         default = html_component.default.strftime(DATETIME_FORMAT) if html_component.default else ""
@@ -475,8 +479,8 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
         datetime_str = inquirer_prompt_with_abort(q)["dt"]
         ts = (datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE) if datetime_str
               else None)
-        return {
-            html_component.identifier: ts}
+        html_component.default = ts  # makes ctrl-C'ing through components more convenient
+        return {html_component.identifier: ts}
 
     elif isinstance(html_component, IntegerEntry):
         q = [inquirer.Text(
@@ -485,8 +489,9 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
             default=html_component.default,
             validate=integer_validator
         )]
-        integer = inquirer_prompt_with_abort(q)["int"]
-        return {html_component.identifier: int(integer)}
+        integer = int(inquirer_prompt_with_abort(q)["int"])
+        html_component.default = integer  # makes ctrl-C'ing through components more convenient
+        return {html_component.identifier: integer}
 
     elif isinstance(html_component, FloatEntry):
         q = [inquirer.Text(
@@ -495,8 +500,9 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
             default=html_component.default,
             validate=float_validator
         )]
-        number = inquirer_prompt_with_abort(q)["float"]
-        return {html_component.identifier: float(number)}
+        number = float(inquirer_prompt_with_abort(q)["float"])
+        html_component.default = number  # makes ctrl-C'ing through components more convenient
+        return {html_component.identifier: number}
 
     elif isinstance(html_component, PathEntry):
         q = [inquirer.Path(
@@ -504,7 +510,9 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
             message=escape_format_braces(html_component.title),
             default=html_component.default
         )]
-        return inquirer_prompt_with_abort(q)
+        out = inquirer_prompt_with_abort(q)
+        html_component.default = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
+        return out
 
     elif isinstance(html_component, Label):
         print(html_component.title)
@@ -525,23 +533,22 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
                 choices=choices,
                 default=default
             )]
-        a = inquirer_prompt_with_abort(q)
-        return {html_component.identifier: a["q"] == "Yes"}
+        a = inquirer_prompt_with_abort(q)["q"] == "Yes"
+        html_component.default = a  # makes ctrl-C'ing through components more convenient
+        return {html_component.identifier: a}
 
     elif isinstance(html_component, HiddenTextbox):
-        return {html_component.identifier: html_component.default, "__skip": True}
+        return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, HiddenJSON):
-        return {html_component.identifier: html_component.default, "__skip": True}
-
-    elif isinstance(html_component, NamedSmallTextbox):
-        q = [inquirer.Text(name=html_component.identifier, message=escape_format_braces(html_component.title))]
-        return inquirer_prompt_with_abort(q)
+        return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, LargeTextEntry):
         q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
                              default=escape_format_braces(html_component.default))]
-        return inquirer_prompt_with_abort(q)
+        out = inquirer_prompt_with_abort(q)
+        html_component.default = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
+        return out
 
     elif isinstance(html_component, InputWithDropDown):
         q = [inquirer.List(
@@ -549,17 +556,22 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
             message=escape_format_braces(html_component.title),
             choices=html_component.options,
             default=html_component.selected)]
-        return inquirer_prompt_with_abort(q)
+        out = inquirer_prompt_with_abort(q)
+        html_component.selected = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
+        return out
 
-    elif isinstance(html_component, DefaultNamedSmallTextbox):
+    elif isinstance(html_component, DefaultNamedSmallTextbox) or isinstance(html_component, NamedSmallTextbox):
         q = [inquirer.Text(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
             default=escape_format_braces(html_component.default))]
-        return inquirer_prompt_with_abort(q)
+        out = inquirer_prompt_with_abort(q)
+        html_component.default = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
+        return out
 
     # TODO: fundamentally this component is just editing a list where each entry has multiple parts to this value,
     #       so we may want to abstract this component
+    # TODO: replace `ListUpdates` system with simpler output (c.f. improved report entry!)
     elif isinstance(html_component, EditablePseudonymList):
         values = html_component.values
         old_n_values = len(values)
@@ -671,7 +683,9 @@ def render(html_component, dependency_context: Optional[Dict[str, Any]] = None):
                 default=html_component.defaults
             )
         ]
-        return inquirer_prompt_with_abort(q)
+        out = inquirer_prompt_with_abort(q)
+        html_component.defaults = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
+        return out
 
     elif isinstance(html_component, EmailSelector):
         q = [
@@ -806,7 +820,7 @@ def render_components(components: List[HTMLComponent], dependency_context: Optio
                 iteration -= 1
                 continue
             result = render(components[iteration])
-            if result.pop("__skip", False) and last_step == -1:
+            if last_step == -1 and result.pop("__skip", False):
                 iteration -= 1
                 continue
             out.update(result)
