@@ -133,13 +133,14 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         if len(html_component.options) == 0:
             return {html_component.identifier: {}, "__skip": True}
         retry = True
+        defaults = htmlResponse.get(html_component.identifier, html_component.defaults)
         while retry:
             q = [
                 inquirer.Checkbox(
                     name="q",
                     message=escape_format_braces(html_component.title),
                     choices=html_component.options,
-                    default=list(html_component.defaults.keys())
+                    default=list(defaults.keys())
                 )]
             chosen_options = inquirer_prompt_with_abort(q)["q"]
 
@@ -152,7 +153,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
 
             try:
                 mappings = render_components([
-                    _ComponentGroup(c, html_component.subcomponents_factory(c, html_component.defaults))
+                    _ComponentGroup(c, html_component.subcomponents_factory(c, defaults))
                     for c in chosen_options
                 ])
             # if the user ctrl-C's at the first subcomponent,
@@ -161,8 +162,6 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
                 continue
             else:
                 retry = False
-
-        html_component.defaults = mappings  # makes ctrl-C'ing through components more convenient
         return {html_component.identifier: mappings}
 
     elif isinstance(html_component, Searchable):
@@ -456,19 +455,22 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: points}
 
     elif isinstance(html_component, DatetimeEntry):
+        default = htmlResponse.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name="dt",
             message=f"{escape_format_braces(html_component.title)} (YYYY-MM-DD HH:MM)",
-            default=html_component.default.strftime(DATETIME_FORMAT),
+            default=default.strftime(DATETIME_FORMAT),
             validate=datetime_validator
         )]
         datetime_str = inquirer_prompt_with_abort(q)["dt"]
         result = datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE)
-        html_component.default = result  # makes ctrl-C'ing through components more convenient
         return {html_component.identifier: result}
 
     elif isinstance(html_component, OptionalDatetimeEntry):
-        default = html_component.default.strftime(DATETIME_FORMAT) if html_component.default else ""
+        default = htmlResponse.get(
+            html_component.identifier,
+            html_component.default.strftime(DATETIME_FORMAT) if html_component.default else ""
+        )
         q = [inquirer.Text(
             name="dt",
             message=f"{escape_format_braces(html_component.title)} (YYYY-MM-DD HH:MM)",
@@ -478,40 +480,38 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         datetime_str = inquirer_prompt_with_abort(q)["dt"]
         ts = (datetime.datetime.strptime(datetime_str, DATETIME_FORMAT).astimezone(TIMEZONE) if datetime_str
               else None)
-        html_component.default = ts  # makes ctrl-C'ing through components more convenient
         return {html_component.identifier: ts}
 
     elif isinstance(html_component, IntegerEntry):
+        default = htmlResponse.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name="int",
             message=escape_format_braces(html_component.title),
-            default=html_component.default,
+            default=default,
             validate=integer_validator
         )]
         integer = int(inquirer_prompt_with_abort(q)["int"])
-        html_component.default = integer  # makes ctrl-C'ing through components more convenient
         return {html_component.identifier: integer}
 
     elif isinstance(html_component, FloatEntry):
+        default = htmlResponse.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name="float",
             message=escape_format_braces(html_component.title),
-            default=html_component.default,
+            default=default,
             validate=float_validator
         )]
         number = float(inquirer_prompt_with_abort(q)["float"])
-        html_component.default = number  # makes ctrl-C'ing through components more convenient
         return {html_component.identifier: number}
 
     elif isinstance(html_component, PathEntry):
+        default = htmlResponse.get(html_component.identifier, html_component.default)
         q = [inquirer.Path(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
-            default=html_component.default
+            default=default
         )]
-        out = inquirer_prompt_with_abort(q)
-        html_component.default = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
-        return out
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, Label):
         print(html_component.title)
@@ -523,7 +523,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {}
 
     elif isinstance(html_component, Checkbox):
-        default = html_component.checked and "Yes" or "No"
+        default = htmlResponse.get(html_component.identifier, html_component.checked) and "Yes" or "No"
         choices = [default] if html_component.force_default else ["No", "Yes"]
         q = [
             inquirer.List(
@@ -533,7 +533,6 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
                 default=default
             )]
         a = inquirer_prompt_with_abort(q)["q"] == "Yes"
-        html_component.default = a  # makes ctrl-C'ing through components more convenient
         return {html_component.identifier: a}
 
     elif isinstance(html_component, HiddenTextbox):
@@ -543,30 +542,27 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, LargeTextEntry):
+        default = htmlResponse.get(html_component.identifier, html_component.default)
         q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
-                             default=escape_format_braces(html_component.default))]
-        out = inquirer_prompt_with_abort(q)
-        html_component.default = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
-        return out
+                             default=escape_format_braces(default))]
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
+        default = htmlResponse.get(html_component.identifier, html_component.selected)
         q = [inquirer.List(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
             choices=html_component.options,
-            default=html_component.selected)]
-        out = inquirer_prompt_with_abort(q)
-        html_component.selected = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
-        return out
+            default=default)]
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, DefaultNamedSmallTextbox) or isinstance(html_component, NamedSmallTextbox):
+        default = htmlResponse.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
-            default=escape_format_braces(html_component.default))]
-        out = inquirer_prompt_with_abort(q)
-        html_component.default = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
-        return out
+            default=escape_format_braces(default))]
+        return inquirer_prompt_with_abort(q)
 
     # TODO: fundamentally this component is just editing a list where each entry has multiple parts to this value,
     #       so we may want to abstract this component
@@ -674,17 +670,16 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     elif isinstance(html_component, SelectorList):
         if len(html_component.options) == 0:
             return {html_component.identifier: [], "__skip": True}
+        default = htmlResponse.get(html_component.identifier, html_component.defaults)
         q = [
             inquirer.Checkbox(
                 name=html_component.identifier,
                 message=escape_format_braces(html_component.title),
                 choices=html_component.options,
-                default=html_component.defaults
+                default=default
             )
         ]
-        out = inquirer_prompt_with_abort(q)
-        html_component.defaults = out[html_component.identifier]  # makes ctrl-C'ing through components more convenient
-        return out
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, EmailSelector):
         q = [
