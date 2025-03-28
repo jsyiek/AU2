@@ -159,9 +159,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 self.CONFIG_PARAMETER_EXPORT,
                 "Plugin config -> Plugin-specific parameters",
-                self.ask_config,
-                self.answer_config,
-                (self.gather_config_options,)
+                (self.gather_config_options, self.ask_config),
+                self.answer_config
             ),
             Export(
                 identifier="core_plugin_reset_database",
@@ -555,7 +554,7 @@ class CorePlugin(AbstractPlugin):
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
 
-    def gather_assassin_pseudonym_pairs(self, e_id: Optional[str] = None) -> HTMLComponent:
+    def gather_assassin_pseudonym_pairs(self, e_id: Optional[str] = None) -> List[HTMLComponent]:
         """
         One of the `options_functions` of Event -> Create and Event-> Update.
         The point of this is to return the assassin-pseudonym selector.
@@ -782,20 +781,21 @@ class CorePlugin(AbstractPlugin):
 
         return components
 
-    def gather_config_options(self) -> ConfigOptionsList:
+    def gather_config_options(self) -> List[ConfigOptionsList]:
         """
-        Gathers the name of all ConfigExports from all plugins, and returns a ConfigOptionsList
+        Gathers the name of all ConfigExports from all plugins, and returns a ConfigOptionsList (wrapped in a list).
         """
         config_options = [c for p in PLUGINS for c in p.config_exports]
         config_options.sort(key=lambda c: c.display_name)
-        return ConfigOptionsList(identifier="config_option",
-                                 title="",
-                                 config_options=config_options)
+        return [ConfigOptionsList(identifier=self.identifier + "config_option",
+                                  title="",
+                                  config_options=config_options)]
 
-    def ask_config(self, config_option: ConfigExport):
+    def ask_config(self, htmlResponse: Dict[str, str]):
         """
         Opens the menu for a chosen config option
         """
+        config_option = htmlResponse[self.identifier + "config_option"]
         if isinstance(config_option, ConfigExport):
             return [
                 HiddenTextbox(
