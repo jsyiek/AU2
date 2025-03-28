@@ -105,8 +105,8 @@ def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
     return output
 
 
-def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
-    htmlResponse = htmlResponse or {}
+def render(html_component, context: Optional[Dict[str, Any]] = None):
+    context = context or {}  # used both to track dependencies and to "cache" previously entered values
     if isinstance(html_component, Dependency):
         h0 = html_component.htmlComponents[0]
         # if this fails check the sorting function (merge_dependency)
@@ -115,32 +115,37 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         while True:
             if last_step == -1 and h0.noInteraction:
                 raise KeyboardInterrupt()
-            out = render(h0, htmlResponse)
+            out = render(h0, context)
             if out.pop("__skip", False) and last_step == -1:
                 raise KeyboardInterrupt()
-            htmlResponse.update(out)
+            context.update(out)
             try:
-                out.update(render_components(html_component.htmlComponents[1:], htmlResponse))
+                out.update(render_components(html_component.htmlComponents[1:], context))
             except KeyboardInterrupt:
                 last_step = -1
             else:
                 return out
 
     elif isinstance(html_component, _ComponentGroup):
-        return {html_component.identifier: render_components(html_component.subcomponents)}
+        return {
+            html_component.identifier: render_components(
+                html_component.subcomponents, context.get(html_component.identifier, {})
+            )
+        }
 
     elif isinstance(html_component, ForEach):
         if len(html_component.options) == 0:
             return {html_component.identifier: {}, "__skip": True}
         retry = True
-        defaults = htmlResponse.get(html_component.identifier, html_component.defaults)
+        defaults = context.get(html_component.identifier, html_component.defaults)
+        default_selection = list(defaults.keys())
         while retry:
             q = [
                 inquirer.Checkbox(
                     name="q",
                     message=escape_format_braces(html_component.title),
                     choices=html_component.options,
-                    default=list(defaults.keys())
+                    default=default_selection
                 )]
             chosen_options = inquirer_prompt_with_abort(q)["q"]
 
@@ -159,6 +164,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
             # if the user ctrl-C's at the first subcomponent,
             # we want to return to the list of options
             except KeyboardInterrupt:
+                default_selection = chosen_options
                 continue
             else:
                 retry = False
@@ -183,7 +189,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
                 options = [o for o in options if any(f.lower() in o.lower() for f in filters) or is_default(o)]
             html_component.setter(component_copy, options)
             try:
-                return render(component_copy, htmlResponse)
+                return render(component_copy, context)
             except KeyboardInterrupt:
                 continue
 
@@ -224,8 +230,8 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     # dependent component
     elif isinstance(html_component, AssassinDependentReportEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert (dependent in htmlResponse)
-        assassins_mapping = htmlResponse[dependent]
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "__skip": True}
         q = [inquirer.Checkbox(
@@ -264,8 +270,8 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     # dependent component
     elif isinstance(html_component, AssassinDependentKillEntry):
         dependent = html_component.assassins_list_identifier
-        assert (dependent in htmlResponse)
-        assassins_mapping = htmlResponse[dependent]
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "__skip": True}
         assassins = list(assassins_mapping.keys())
@@ -293,8 +299,8 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     # dependent component
     elif isinstance(html_component, AssassinDependentCrimeEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert (dependent in htmlResponse)
-        assassins_mapping = htmlResponse[dependent]
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "__skip": True}
         q = [inquirer.Checkbox(
@@ -361,8 +367,8 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     # dependent component
     elif isinstance(html_component, AssassinDependentSelector):
         dependent = html_component.pseudonym_list_identifier
-        assert (dependent in htmlResponse)
-        assassins_mapping = htmlResponse[dependent]
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "__skip": True}
         assassins = [a for a in assassins_mapping]
@@ -377,8 +383,8 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     # dependent component
     elif isinstance(html_component, AssassinDependentFloatEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert (dependent in htmlResponse)
-        assassins_mapping = htmlResponse[dependent]
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "__skip": True}
         assassins = [a for a in assassins_mapping]
@@ -403,8 +409,8 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     # dependent component
     elif isinstance(html_component, AssassinDependentIntegerEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert (dependent in htmlResponse)
-        assassins_mapping = htmlResponse[dependent]
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "__skip": True}
         assassins = [a for a in assassins_mapping]
@@ -430,8 +436,8 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     # dependent component
     elif isinstance(html_component, AssassinDependentTextEntry):
         dependent = html_component.pseudonym_list_identifier
-        assert (dependent in htmlResponse)
-        assassins_mapping = htmlResponse[dependent]
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "__skip": True}
         assassins = [a for a in assassins_mapping]
@@ -455,7 +461,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: points}
 
     elif isinstance(html_component, DatetimeEntry):
-        default = htmlResponse.get(html_component.identifier, html_component.default)
+        default = context.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name="dt",
             message=f"{escape_format_braces(html_component.title)} (YYYY-MM-DD HH:MM)",
@@ -467,7 +473,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: result}
 
     elif isinstance(html_component, OptionalDatetimeEntry):
-        default = htmlResponse.get(
+        default = context.get(
             html_component.identifier,
             html_component.default.strftime(DATETIME_FORMAT) if html_component.default else ""
         )
@@ -483,7 +489,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: ts}
 
     elif isinstance(html_component, IntegerEntry):
-        default = htmlResponse.get(html_component.identifier, html_component.default)
+        default = context.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name="int",
             message=escape_format_braces(html_component.title),
@@ -494,7 +500,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: integer}
 
     elif isinstance(html_component, FloatEntry):
-        default = htmlResponse.get(html_component.identifier, html_component.default)
+        default = context.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name="float",
             message=escape_format_braces(html_component.title),
@@ -505,7 +511,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: number}
 
     elif isinstance(html_component, PathEntry):
-        default = htmlResponse.get(html_component.identifier, html_component.default)
+        default = context.get(html_component.identifier, html_component.default)
         q = [inquirer.Path(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
@@ -523,7 +529,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {}
 
     elif isinstance(html_component, Checkbox):
-        default = htmlResponse.get(html_component.identifier, html_component.checked) and "Yes" or "No"
+        default = context.get(html_component.identifier, html_component.checked) and "Yes" or "No"
         choices = [default] if html_component.force_default else ["No", "Yes"]
         q = [
             inquirer.List(
@@ -542,13 +548,13 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, LargeTextEntry):
-        default = htmlResponse.get(html_component.identifier, html_component.default)
+        default = context.get(html_component.identifier, html_component.default)
         q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
                              default=escape_format_braces(default))]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
-        default = htmlResponse.get(html_component.identifier, html_component.selected)
+        default = context.get(html_component.identifier, html_component.selected)
         q = [inquirer.List(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
@@ -557,7 +563,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, DefaultNamedSmallTextbox) or isinstance(html_component, NamedSmallTextbox):
-        default = htmlResponse.get(html_component.identifier, html_component.default)
+        default = context.get(html_component.identifier, html_component.default)
         q = [inquirer.Text(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
@@ -670,7 +676,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
     elif isinstance(html_component, SelectorList):
         if len(html_component.options) == 0:
             return {html_component.identifier: [], "__skip": True}
-        default = htmlResponse.get(html_component.identifier, html_component.defaults)
+        default = context.get(html_component.identifier, html_component.defaults)
         q = [
             inquirer.Checkbox(
                 name=html_component.identifier,
@@ -798,8 +804,8 @@ class _ComponentGroup(HTMLComponent):
         super().__init__()
 
 
-def render_components(components: List[HTMLComponent], htmlResponse: Optional[Dict[str, Any]] = None) -> Dict:
-    htmlResponse = htmlResponse or {}
+def render_components(components: List[HTMLComponent], context: Optional[Dict[str, Any]] = None) -> Dict:
+    context = context or {}
     components = replace_overrides(components)
     components = merge_dependency(components)
     out = {}
@@ -813,12 +819,13 @@ def render_components(components: List[HTMLComponent], htmlResponse: Optional[Di
             if last_step == -1 and components[iteration].noInteraction:
                 iteration -= 1
                 continue
-            result = render(components[iteration], htmlResponse)
+            result = render(components[iteration], context)
             # must do condn this way around so that `pop` is always called!
             if result.pop("__skip", False) and last_step == -1:
                 iteration -= 1
                 continue
             out.update(result)
+            context.update(result)
             iteration += 1
             last_step = 1
         except KeyboardInterrupt:
@@ -887,25 +894,25 @@ def main():
         if abort:
             continue
 
-        htmlResponse = {}
         if isinstance(exp.ask, tuple):
             ask_functions = exp.ask
         else:
             ask_functions = (exp.ask, )
+        htmlResponses = [{} for _ in ask_functions]
         curr_index = 0
         while 0 <= curr_index < len(ask_functions):
             try:
                 if curr_index == 0:
                     components = exp.ask[curr_index](*params, **kwargs)
                 else:
-                    components = exp.ask[curr_index](htmlResponse)
-                htmlResponse.update(render_components(components, htmlResponse))
+                    components = exp.ask[curr_index](htmlResponses[curr_index - 1])
+                htmlResponses[curr_index] = render_components(components, htmlResponses[curr_index])
                 curr_index += 1
             except KeyboardInterrupt:
                 curr_index -= 1
 
         if curr_index == len(ask_functions):
-            render_components(exp.answer(htmlResponse))
+            render_components(exp.answer(htmlResponses[-1]))
             print("Saving databases...")
             ASSASSINS_DATABASE.save()
             EVENTS_DATABASE.save()
