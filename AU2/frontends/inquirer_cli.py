@@ -844,13 +844,15 @@ def main():
     except:
         pass
 
+    exit_val = None
+    exit_option: List[Tuple[str, Optional[Export]]] = [("Exit", exit_val)]
+    exp: Optional[Export] = exit_val
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
         exports = core_plugin.get_all_exports()
-        exit_val = None
-        exit_option: List[Tuple[str, Optional[Export]]] = [("Exit", exit_val)]
         q = [inquirer.List(name="mode", message="Select mode",
-                           choices=exit_option + [(e.display_name, e) for e in exports])]
+                           choices=exit_option + [(e.display_name, e) for e in exports],
+                           default=exp)]
         try:
             exp: Optional[Export] = inquirer_prompt_with_abort(q)["mode"]
         except KeyboardInterrupt:
@@ -862,7 +864,6 @@ def main():
         exp: Export
 
         params = []
-        kwargs = {}
         abort = False
         for f in exp.options_functions:
             options = f(*params)
@@ -892,7 +893,7 @@ def main():
         while 0 <= curr_index < len(ask_functions):
             try:
                 if curr_index == 0:
-                    components = exp.ask[curr_index](*params, **kwargs)
+                    components = exp.ask[curr_index](*params)
                 else:
                     components = exp.ask[curr_index](htmlResponses[curr_index - 1])
                 htmlResponses[curr_index] = render_components(components, htmlResponses[curr_index])
