@@ -155,7 +155,7 @@ def render(html_component, htmlResponse: Optional[Dict[str, Any]] = None):
                 mappings = render_components([
                     _ComponentGroup(c, html_component.subcomponents_factory(c, defaults))
                     for c in chosen_options
-                ])
+                ], defaults)
             # if the user ctrl-C's at the first subcomponent,
             # we want to return to the list of options
             except KeyboardInterrupt:

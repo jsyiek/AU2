@@ -127,9 +127,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 "core_event_create_event",
                 "Event -> Create",
-                self.ask_core_plugin_create_event,
-                self.answer_core_plugin_create_event,
-                (self.gather_assassin_pseudonym_pairs,)
+                (self.gather_assassin_pseudonym_pairs, self.ask_core_plugin_create_event),
+                self.answer_core_plugin_create_event
             ),
             Export(
                 "core_event_delete_event",
@@ -141,9 +140,9 @@ class CorePlugin(AbstractPlugin):
             Export(
                 "core_event_update_event",
                 "Event -> Update",
-                self.ask_core_plugin_update_event,
+                (self.gather_assassin_pseudonym_pairs, self.ask_core_plugin_update_event),
                 self.answer_core_plugin_update_event,
-                (self.gather_events, self.gather_assassin_pseudonym_pairs)
+                (self.gather_events,)
             ),
             Export(
                 self.PLUGIN_ENABLE_EXPORT,
@@ -307,12 +306,12 @@ class CorePlugin(AbstractPlugin):
         assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda a: a.identifier in defaults)
 
         return [ForEach(
-            identifier="assassin_selection",
+            identifier=self.event_html_ids["Assassin Pseudonym"],
             title="Choose which assassins are in this event",
             options=assassins,
             defaults=defaults,
             subcomponents_factory=pseudonym_list_factory
-        )]
+        ), HiddenTextbox(self.HTML_SECRET_ID, e.identifier if e else "")]
 
     def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
         assassins = list(assassin_pseudonyms.keys())
@@ -568,10 +567,12 @@ class CorePlugin(AbstractPlugin):
             components += p.on_gather_assassin_pseudonym_pairs(e)
         return components
 
-    def ask_core_plugin_create_event(self, assassin_selection: Dict[str, Dict[str, int]]) -> List[HTMLComponent]:
-        # each value of `assassin_selection` is a dict with a single key "pseudonym"
+    def ask_core_plugin_create_event(self, htmlResponse: Dict) -> List[HTMLComponent]:
+        # each value of the ForEach response is a dict with a single key "pseudonym"
         # so convert this into a direct mapping
-        assassin_pseudonyms = {a_id: info["pseudonym"] for a_id, info in assassin_selection.items()}
+        assassin_pseudonyms = {
+            a_id: info["pseudonym"] for a_id, info in htmlResponse[self.event_html_ids["Assassin Pseudonym"]].items()
+        }
         components = []
         for p in PLUGINS:
             components += p.on_event_request_create(assassin_pseudonyms)
@@ -588,11 +589,13 @@ class CorePlugin(AbstractPlugin):
         EVENTS_DATABASE.add(event)
         return return_components
 
-    def ask_core_plugin_update_event(self, event_id: str, assassin_selection: Dict[str, Dict[str, int]]) -> List[HTMLComponent]:
-        event = EVENTS_DATABASE.get(event_id)
-        # each value of `assassin_selection` is a dict with a single key "pseudonym"
+    def ask_core_plugin_update_event(self, htmlResponse: Dict) -> List[HTMLComponent]:
+        event = EVENTS_DATABASE.get(htmlResponse[self.HTML_SECRET_ID])
+        # each value of the ForEach response is a dict with a single key "pseudonym"
         # so convert this into a direct mapping
-        assassin_pseudonyms = {a_id: info["pseudonym"] for a_id, info in assassin_selection.items()}
+        assassin_pseudonyms = {
+            a_id: info["pseudonym"] for a_id, info in htmlResponse[self.event_html_ids["Assassin Pseudonym"]].items()
+        }
         components = []
         for p in PLUGINS:
             components += p.on_event_request_update(event, assassin_pseudonyms)
