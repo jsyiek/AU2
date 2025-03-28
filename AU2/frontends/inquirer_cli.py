@@ -129,7 +129,7 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
     elif isinstance(html_component, _ComponentGroup):
         return {
             html_component.identifier: render_components(
-                html_component.subcomponents, context.get(html_component.identifier, {})
+                html_component.subcomponents, context.setdefault(html_component.identifier, {})
             )
         }
 
@@ -139,6 +139,7 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
         retry = True
         defaults = context.get(html_component.identifier, html_component.defaults)
         default_selection = list(defaults.keys())
+        response_cache = {}
         while retry:
             q = [
                 inquirer.Checkbox(
@@ -160,7 +161,7 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
                 mappings = render_components([
                     _ComponentGroup(c, html_component.subcomponents_factory(c, defaults))
                     for c in chosen_options
-                ], defaults)
+                ], response_cache)
             # if the user ctrl-C's at the first subcomponent,
             # we want to return to the list of options
             except KeyboardInterrupt:
@@ -865,31 +866,19 @@ def main():
         abort = False
         for f in exp.options_functions:
             options = f(*params)
-            # "old style" options_functions outputs
-            fallback = isinstance(options, list) and len(options) > 0 and not isinstance(options[0], HTMLComponent)
-            if fallback:
-                components = [InputWithDropDown(identifier="options",
-                                                title="",
-                                                options=["*EXIT*"] + options)]
-            elif isinstance(options, HTMLComponent):
-                components = [options]
-            else:  # the assumption here is that options is a list of HTMLcomponents
-                components = options
-
             try:
-                result = render_components(components)
+                result = render(InputWithDropDown(identifier="options",
+                                                  title="",
+                                                  options=["*EXIT*", *options]))
             except KeyboardInterrupt:
                 abort = True
                 break
 
-            if fallback:
-                selection = result["options"]
-                abort = selection == "*EXIT*"
-                if abort:
-                    break
-                params.append(selection)
-            else:
-                kwargs.update(result)
+            selection = result["options"]
+            abort = selection == "*EXIT*"
+            if abort:
+                break
+            params.append(selection)
 
         if abort:
             continue
