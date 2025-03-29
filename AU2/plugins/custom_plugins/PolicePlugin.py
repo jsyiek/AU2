@@ -241,7 +241,7 @@ class PolicePlugin(AbstractPlugin):
         # filter for police only
         police = [ident for ident in assassin_pseudonyms if ASSASSINS_DATABASE.get(ident).is_police]
 
-        def rank_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+        def rank_entry_factory(identifier: str) -> List[HTMLComponent]:
             return [
                 IntegerEntry(
                     identifier="relative_rank",
@@ -270,8 +270,8 @@ class PolicePlugin(AbstractPlugin):
             return []
         # filter for police only
         police = [ident for ident in assassin_pseudonyms if ASSASSINS_DATABASE.get(ident).is_police]
-
-        def rank_entry_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+        defaults = e.pluginState.get(self.identifier, {})
+        def rank_entry_factory(identifier: str) -> List[HTMLComponent]:
             return [
                 IntegerEntry(
                     identifier="relative_rank",
@@ -285,7 +285,7 @@ class PolicePlugin(AbstractPlugin):
                 title="Select Police to adjust rank (relative to current rank)",
                 options=police,
                 subcomponents_factory=rank_entry_factory,
-                defaults=e.pluginState.get(self.identifier, {})
+                default_selection=list(defaults.keys())
             )
         ]
 

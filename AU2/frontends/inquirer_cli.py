@@ -106,7 +106,7 @@ def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
 
 
 def render(html_component, context: Optional[Dict[str, Any]] = None):
-    context = context or {}  # used both to track dependencies and to "cache" previously entered values
+    context = context if context is not None else {}  # used both to track dependencies and to "cache" previously entered values
     if isinstance(html_component, Dependency):
         h0 = html_component.htmlComponents[0]
         # if this fails check the sorting function (merge_dependency)
@@ -137,9 +137,8 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
         if len(html_component.options) == 0:
             return {html_component.identifier: {}, "__skip": True}
         retry = True
-        defaults = context.get(html_component.identifier, html_component.defaults)
-        default_selection = list(defaults.keys())
-        response_cache = {}
+        default_selection = list(context.get(html_component.identifier, html_component.default_selection))
+        subcontext = context.get(html_component.identifier, {})
         while retry:
             q = [
                 inquirer.Checkbox(
@@ -149,6 +148,7 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
                     default=default_selection
                 )]
             chosen_options = inquirer_prompt_with_abort(q)["q"]
+            default_selection = chosen_options
 
             if len(chosen_options) > 0:
                 # the lines are stored in a list,
@@ -159,9 +159,9 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
 
             try:
                 mappings = render_components([
-                    _ComponentGroup(c, html_component.subcomponents_factory(c, defaults))
+                    _ComponentGroup(c, html_component.subcomponents_factory(c))
                     for c in chosen_options
-                ], response_cache)
+                ], subcontext)
             # if the user ctrl-C's at the first subcomponent,
             # we want to return to the list of options
             except KeyboardInterrupt:
@@ -806,7 +806,7 @@ class _ComponentGroup(HTMLComponent):
 
 
 def render_components(components: List[HTMLComponent], context: Optional[Dict[str, Any]] = None) -> Dict:
-    context = context or {}
+    context = context if context is not None else {}
     components = replace_overrides(components)
     components = merge_dependency(components)
     out = {}
@@ -893,9 +893,9 @@ def main():
         while 0 <= curr_index < len(ask_functions):
             try:
                 if curr_index == 0:
-                    components = exp.ask[curr_index](*params)
+                    components = ask_functions[curr_index](*params)
                 else:
-                    components = exp.ask[curr_index](htmlResponses[curr_index - 1])
+                    components = ask_functions[curr_index](htmlResponses[curr_index - 1])
                 htmlResponses[curr_index] = render_components(components, htmlResponses[curr_index])
                 curr_index += 1
             except KeyboardInterrupt:

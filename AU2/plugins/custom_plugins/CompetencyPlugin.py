@@ -291,7 +291,7 @@ class CompetencyPlugin(AbstractPlugin):
         assassins = [identifier for identifier in assassin_pseudonyms
                      if not ASSASSINS_DATABASE.get(identifier).is_police]
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Full Auto":
-            def competency_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+            def competency_entry_factory(identifier: str) -> List[HTMLComponent]:
                 return [
                     IntegerEntry(
                         identifier="competency_extension",
@@ -308,7 +308,7 @@ class CompetencyPlugin(AbstractPlugin):
                 )
             )
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
-            def attempts_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+            def attempts_entry_factory(identifier: str) -> List[HTMLComponent]:
                 return [
                     IntegerEntry(
                         identifier="attempts",
@@ -348,12 +348,13 @@ class CompetencyPlugin(AbstractPlugin):
         assassins = [identifier for identifier in assassin_pseudonyms
                      if not ASSASSINS_DATABASE.get(identifier).is_police]
         # Allow competency editing on event update even if full auto competency enabled.
-        def competency_entry_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+        competency_defaults = e.pluginState.get(self.identifier, {}).get(self.plugin_state["COMPETENCY"], {})
+        def competency_entry_factory(identifier: str) -> List[HTMLComponent]:
             return [
                 IntegerEntry(
                     identifier="competency_extension",
                     title=f"Value for {identifier}",
-                    default=defaults.get(identifier,
+                    default=competency_defaults.get(identifier,
                                          GENERIC_STATE_DATABASE.arb_int_state.get(
                                              self.plugin_state["DEFAULT"], DEFAULT_EXTENSION
                                          ))
@@ -365,7 +366,7 @@ class CompetencyPlugin(AbstractPlugin):
                 title="Extend competency?",
                 options=assassins,
                 subcomponents_factory=competency_entry_factory,
-                defaults=e.pluginState.get(self.identifier, {}).get(self.plugin_state["COMPETENCY"], {})
+                default_selection=list(competency_defaults.keys())
             )
         ]
         if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
@@ -378,12 +379,15 @@ class CompetencyPlugin(AbstractPlugin):
                 for item in l:
                     ms[item] = ms.get(item, 0) + 1
                 return ms
-            def attempts_entry_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+            attempts_defaults = list_to_multiset(
+                e.pluginState.get(self.identifier, {}).get(self.plugin_state["ATTEMPTS"], {})
+            )
+            def attempts_entry_factory(identifier: str) -> List[HTMLComponent]:
                 return [
                     IntegerEntry(
                         identifier="attempts",
                         title=f"Value for {identifier}",
-                        default=defaults.get(identifier, 1)
+                        default=attempts_defaults.get(identifier, 1)
                     )
                 ]
             questions.append(
@@ -392,9 +396,7 @@ class CompetencyPlugin(AbstractPlugin):
                     title="Add attempts/assists",
                     options=assassins,
                     subcomponents_factory=attempts_entry_factory,
-                    defaults=list_to_multiset(
-                                e.pluginState.get(self.identifier, {}).get(self.plugin_state["ATTEMPTS"], {})
-                            )
+                    default_selection=list(attempts_defaults.keys())
                 )
             )
         return questions

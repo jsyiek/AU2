@@ -67,7 +67,11 @@ class UIConfigPlugin(AbstractPlugin):
         ]
 
         def filter_options(component: Union[SelectorList, ForEach], l: List[str]):
-            component.options = [o for o in component.options if o in l or o in component.defaults]
+            component.options = [o for o in component.options if o in l
+                                 or o in (
+                                     component.default_selection if isinstance(component, ForEach)
+                                     else component.defaults
+                                 )]
 
         def assassin_selector_to_searchable(old_component: Union[SelectorList, ForEach]) -> Searchable:
             return Searchable(
@@ -80,7 +84,7 @@ class UIConfigPlugin(AbstractPlugin):
         self.ui_changes = [
             UIChange(
                 name="Searchable Assassins (Events)",
-                replaces="assassin_selection",
+                replaces="CorePlugin_assassin_pseudonym",
                 replacement_factory=assassin_selector_to_searchable,
                 enabled_for=EnabledFor(call=Call.GATHER_ASSASSIN_PSEUDONYM_PAIRS),
             ),

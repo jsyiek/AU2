@@ -85,7 +85,7 @@ class WantedPlugin(AbstractPlugin):
         }
 
     def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
-        def crime_entry_factory(identifier: str, _) -> List[HTMLComponent]:
+        def crime_entry_factory(identifier: str) -> List[HTMLComponent]:
             return [
                 CrimeEntry(
                     identifier="crime",
@@ -115,7 +115,8 @@ class WantedPlugin(AbstractPlugin):
         return [Label("[WANTED] Success!")]
 
     def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
-        def crime_entry_factory(identifier: str, defaults: Dict[str, Tuple[int, str, str]]) -> List[HTMLComponent]:
+        defaults = e.pluginState.get(self.identifier, {})
+        def crime_entry_factory(identifier: str) -> List[HTMLComponent]:
             return [
                 CrimeEntry(
                     identifier="crime",
@@ -129,7 +130,7 @@ class WantedPlugin(AbstractPlugin):
                 title="WANTED: Choose players to set a new Wanted duration",
                 options=list(assassin_pseudonyms.keys()),
                 subcomponents_factory=crime_entry_factory,
-                defaults=e.pluginState.get(self.identifier, {}),
+                default_selection=list(defaults.keys()),
                 explanation=[
                     "Duration is specified in days:",
                     "    >0 sets them as WANTED",

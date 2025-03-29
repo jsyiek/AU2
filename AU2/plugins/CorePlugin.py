@@ -279,9 +279,10 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_gather_assassin_pseudonym_pairs(self, e: Optional[Event]) -> List[HTMLComponent]:
-        def pseudonym_list_factory(identifier: str, defaults: Dict[str, int]) -> List[HTMLComponent]:
+        defaults = e.assassins if e is not None else {}
+        def pseudonym_list_factory(identifier: str) -> List[HTMLComponent]:
             assassin = ASSASSINS_DATABASE.get(identifier)
-            choices = [(c, i) for i, c in enumerate(assassin.pseudonyms) if c]  # hide any null (i.e. deleted) pseudonyms
+            choices = [(c, str(i)) for i, c in enumerate(assassin.pseudonyms) if c]  # hide any null (i.e. deleted) pseudonyms
             if len(choices) != 1:
                 return [InputWithDropDown(
                     identifier="pseudonym",
@@ -292,23 +293,20 @@ class CorePlugin(AbstractPlugin):
             else:
                 forced_choice = choices[0][1]
                 return [
-                    Label(f"Using {identifier}: {assassin.get_pseudonym(forced_choice)}"),
+                    Label(f"Using {identifier}: {assassin.get_pseudonym(int(forced_choice))}"),
                     HiddenTextbox(
                         identifier="pseudonym",
                         default=forced_choice
                     )
                 ]
-
-        defaults = e.assassins if e is not None else {}
         # include hidden assassins if they are already in the event,
         # so that the umpire doesn't accidentally remove them from the event
         assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda a: a.identifier in defaults)
-
         return [ForEach(
             identifier=self.event_html_ids["Assassin Pseudonym"],
             title="Choose which assassins are in this event",
             options=assassins,
-            defaults=defaults,
+            default_selection=list(defaults.keys()),
             subcomponents_factory=pseudonym_list_factory
         ), HiddenTextbox(self.HTML_SECRET_ID, e.identifier if e else "")]
 
@@ -570,7 +568,7 @@ class CorePlugin(AbstractPlugin):
         # each value of the ForEach response is a dict with a single key "pseudonym"
         # so convert this into a direct mapping
         assassin_pseudonyms = {
-            a_id: info["pseudonym"] for a_id, info in htmlResponse[self.event_html_ids["Assassin Pseudonym"]].items()
+            a_id: int(info["pseudonym"]) for a_id, info in htmlResponse[self.event_html_ids["Assassin Pseudonym"]].items()
         }
         components = []
         for p in PLUGINS:
@@ -593,7 +591,7 @@ class CorePlugin(AbstractPlugin):
         # each value of the ForEach response is a dict with a single key "pseudonym"
         # so convert this into a direct mapping
         assassin_pseudonyms = {
-            a_id: info["pseudonym"] for a_id, info in htmlResponse[self.event_html_ids["Assassin Pseudonym"]].items()
+            a_id: int(info["pseudonym"]) for a_id, info in htmlResponse[self.event_html_ids["Assassin Pseudonym"]].items()
         }
         components = []
         for p in PLUGINS:
