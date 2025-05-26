@@ -136,12 +136,14 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
         is_gigainco = a.identifier not in active_players
         is_inco = competency_manager.is_inco_at(a, from_date)
         is_dead = death_manager.is_dead(a)
+
+        # Ordering of the below is important - don't reorder!
         if a.is_police:
             status = PlayerStatus.POLICE
-        elif is_gigainco and not is_dead:
-            status = PlayerStatus.GIGAINCOMPETENT
-        elif is_inco and is_dead:
+        elif is_dead:
             status = PlayerStatus.DEAD
+        elif is_gigainco:
+            status = PlayerStatus.GIGAINCOMPETENT
         elif is_inco:
             status = PlayerStatus.INCOMPETENT
         infos[a.identifier] = PlayerInfo(

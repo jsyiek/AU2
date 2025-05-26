@@ -120,7 +120,7 @@ class WantedPlugin(AbstractPlugin):
 
     def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
         results = []
-        for playerID in event.pluginState[self.identifier]:
+        for playerID in event.pluginState.get(self.identifier, ()):
             a = ASSASSINS_DATABASE.get(playerID)
             sec_id = a._sec_id
             name = a.real_name.split(" ")

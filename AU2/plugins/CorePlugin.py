@@ -238,7 +238,8 @@ class CorePlugin(AbstractPlugin):
             ("ID", str(assassin._secret_id)),
             ("Type", f"{hidden} {player_type}"),
             ("Name", assassin.real_name),
-            *((f"Pseudonym {i+1}", p) for i, p in enumerate(assassin.pseudonyms) if p),
+            *((f"Pseudonym {i} [P{assassin._secret_id}_{i}]", p)
+                for i, p in enumerate(assassin.pseudonyms) if p),
             ("Pronouns", assassin.pronouns),
             ("Email", assassin.email),
             ("Address", assassin.address),
