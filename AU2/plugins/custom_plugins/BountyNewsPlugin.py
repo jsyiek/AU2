@@ -14,8 +14,8 @@ from AU2.plugins.util.render_utils import render_all_events
 
 
 BOUNTIES_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "bounty-news.html"), "r", encoding="utf-8",
-          errors="ignore") as F:
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "bounty-news.html",
+           "r", encoding="utf-8", errors="ignore") as F:
     BOUNTIES_PAGE_TEMPLATE = F.read()
 
 
@@ -68,7 +68,7 @@ class BountyNewsPlugin(AbstractPlugin):
         if bounty_content == "":
             bounty_content = "<p>Ah, no bounties yet.</p>"
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "bounty-news.html"), "w+", encoding="utf-8") as F:
+        with open(WEBPAGE_WRITE_LOCATION / "bounty-news.html", "w+", encoding="utf-8") as F:
             F.write(
                 BOUNTIES_PAGE_TEMPLATE.format(
                     CONTENT=bounty_content,

@@ -3,7 +3,7 @@ import re
 import zlib
 import itertools
 
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -73,7 +73,6 @@ WANTED_COLS = [
     "#ff0033", "#cc3333", "#ff3300"
 ]
 
-
 HEAD_HEADLINE_TEMPLATE = """
     <div xmlns="" class="event">
   [<a href="{URL}">{TIME}</a>]
@@ -115,7 +114,23 @@ def get_color(pseudonym: str,
     return HEX_COLS[ind % len(HEX_COLS)]
 
 
-def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: datetime.datetime = get_now_dt()) -> str:
+def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: Optional[datetime.datetime] = None) -> str:
+    """
+    Renders [PX], [DX], [NX], [PX_i] pseudonym codes as HTML, for a single assassin
+
+    Args:
+        string (str): the string to render
+        main_pseudonym (str): the pseudonym for [PX]
+        assassin (Assassin): the assassin to render pseudonyym codes for
+        color (str): hexcode (including #) of the colour to render the pseudonym in
+        dt (datetime.datetime, optional): controls which pseudonyms will be rendered by [DX];
+            only those set as valid from before this datetime will be rendered
+            (needed for cases where players gain pseudonyms after dying)
+
+    Returns:
+        `string` with relevant pseudonym codes pertaining to `assassin` replaced by HTML renderings
+    """
+    dt = dt or get_now_dt()
     id_ = assassin._secret_id
     string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
     for i in range(len(assassin.pseudonyms)):
@@ -131,6 +146,20 @@ def render_headline_and_reports(e: Event,
                                 death_manager: DeathManager,
                                 competency_manager: CompetencyManager,
                                 wanted_manager: WantedManager) -> (str, List[str]):
+    """
+    Produces the HTML renderings of an events headline and its reports
+
+    Args:
+        e (Event): the event to render the headline and reports of
+        death_manager (DeathManager): a DeathManager with events added chronologically up to and including `e`
+        competency_manager (CompetencyManager): a CompetencyManager with events added chronologically up to and including `e`
+        wanted_manager (WantedManager): a WantedManager with events added chronologically up to and including `e`
+
+    Returns:
+        (str, List[str]): A tuple of:
+            - the event `e`'s headline rendered as HTML
+            - a list of its reports rendered as HTML
+    """
     headline = e.headline
 
     reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in

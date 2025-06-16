@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from typing import Dict, Any, List
 
 from AU2 import ROOT_DIR
@@ -34,13 +35,10 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
     BOUNTIES_PAGE_TEMPLATE = F.read()
 
 
-@dataclass
+@dataclass_json
 class Bounty:
     identifier: str = ""
 
-    # for backwards-compatibility, but note that creating a new bounty and loading the save in versions of AU2 up to
-    # v1.4.0-pre3 will cause a crash when using `Generate Pages` with `BountyPlugin` enabled, because those versions
-    # can't deal with a `Bounty`'s `target_id` being blank
     target_id: str = ""
 
     target_str: str = ""
@@ -49,32 +47,8 @@ class Bounty:
     reward: str = ""
     active: bool = True
 
-    @staticmethod
-    def from_dict(identifier: str, d: Dict[str, Any]):
-        b = Bounty(
-            identifier,
-            d.get("target_id", ""),
-            d.get("target_str", ""),
-            d.get("placer_id", ""),
-            d.get("crime", "Nothing...?"),
-            d.get("reward", "Nothing...?"),
-            d.get("active", False)
-        )
-        b.make_identifier()
-        return b
-
-    def make_identifier(self):
+    def __post_init__(self):
         self.identifier = self.identifier or f"({GENERIC_STATE_DATABASE.get_unique_str()}) {self.target_id[0:8]} from {self.placer_id[0:8]}"
-
-    def to_dict(self):
-        return {
-            "target_id": self.target_id,
-            "target_str": self.target_str,
-            "placer_id": self.placer_id,
-            "crime": self.crime,
-            "reward": self.reward,
-            "active": self.active
-        }
 
 
 @registered_plugin
@@ -121,7 +95,11 @@ class BountyPlugin(AbstractPlugin):
 
     def _bounty_questions(self, default=Bounty()):
 
-        def setter(component, options):
+        def searchable_setter(component, options):
+            """
+            Setter for the Searchable component for selecting an assassin.
+            Ensures that the default selection comes up in search results.
+            """
             component.options = options
             if component.selected and component.selected not in options:
                 component.options.append(component.selected)
@@ -138,7 +116,7 @@ class BountyPlugin(AbstractPlugin):
             ),
             DefaultNamedSmallTextbox(
                 identifier=self.html_ids["target"],
-                title="Who is the bounty on?",
+                title="Who is the bounty's target?",
                 default=target_str
             ),
             Searchable(
@@ -150,7 +128,7 @@ class BountyPlugin(AbstractPlugin):
                 ),
                 title="Who is placing the bounty? (Search)",
                 accessor=lambda i: i.options,
-                setter=setter
+                setter=searchable_setter
             ),
             DefaultNamedSmallTextbox(
                 identifier=self.html_ids["crime"],
@@ -164,7 +142,7 @@ class BountyPlugin(AbstractPlugin):
             ),
             Checkbox(
                 identifier=self.html_ids["active"],
-                title="Should the bounty be posted on the website?",
+                title="Post on the website?",
                 checked=True
             )
         ]
@@ -209,4 +187,4 @@ class BountyPlugin(AbstractPlugin):
         )
 
     def get_bounty_ids(self):
-        return list(GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("bounties", {}).keys())
+        return list(GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).get("bounties", {}))
