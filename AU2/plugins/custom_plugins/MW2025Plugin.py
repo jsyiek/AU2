@@ -1,11 +1,11 @@
 import random
 import datetime
-from typing import List, Tuple, Any, Dict, Optional, Sequence
+from typing import List, Tuple, Any, Dict, Optional
+from collections import Counter
 
 from AU2.database.model.Event import Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.custom_plugins.PageGeneratorPlugin import HEX_COLS
@@ -14,9 +14,9 @@ from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import Defaul
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
 from AU2.html_components.MetaComponents.Dependency import Dependency
-from AU2.plugins.util.date_utils import get_now_dt
 
 
 def random_hexcode() -> str:
@@ -38,10 +38,15 @@ class CrewManager:
     """
     def __init__(self):
         self.crew_map: Dict[str, str] = {}
+        self.macguffins = Counter()
 
     def add_event(self, e: Event):
         crew_memb_changes = e.pluginState.get("MW2025Plugin", {}).get("MW2025Plugin_crew_membership_changes", {})
+        crew_macguffin_gains = e.pluginState.get("MW2025Plugin", {}).get("MW2025Plugin_crew_macguffin_gains", {})
+        crew_macguffin_losses = e.pluginState.get("MW2025Plugin", {}).get("MW2025Plugin_crew_macguffin_losses", {})
         self.crew_map.update(crew_memb_changes)
+        self.macguffins.update(crew_macguffin_gains)
+        self.macguffins.subtract(crew_macguffin_losses)
 
     def process_events_until(self, dt: Optional[datetime.datetime] = None) -> "CrewManager":
         for e in sorted(EVENTS_DATABASE.events.values(), key=lambda x: x.datetime):
@@ -68,11 +73,15 @@ class MW2025Plugin(AbstractPlugin):
             "Crew Name": self.identifier + "_crew_name",
             "Crew Colour": self.identifier + "_crew_colour",
             "Crew ID": self.identifier + "_crew_id",
-            "Membership Changes": self.identifier + "_crew_membership_changes"
+            "Membership Changes": self.identifier + "_crew_membership_changes",
+            "MacGuffin Gains": self.identifier + "_macguffin_gains",
+            "MacGuffin Losses": self.identifier + "_macguffin_losses"
         }
 
         self.event_plugin_state = {
-            "Membership Changes": {'id': self.identifier + "_crew_membership_changes", 'default': {}}
+            "Membership Changes": {'id': self.identifier + "_crew_membership_changes", 'default': {}},
+            "MacGuffin Gains": {'id': self.identifier + "_crew_macguffin_gains", 'default': []},
+            "MacGuffin Losses": {'id': self.identifier + "_crew_macguffin_losses", 'default': []},
         }
 
         self.exports = [
@@ -149,25 +158,28 @@ class MW2025Plugin(AbstractPlugin):
 
     def answer_crews_summary(self, htmlResponse) -> List[HTMLComponent]:
         rows = []
-        member_map = CrewManager().process_events_until().member_map()
+        crew_manager = CrewManager().process_events_until()
+        member_map = crew_manager.member_map()
         for crew_id, members in sorted(member_map.items(), key=lambda x: self.get_crew(x[0]).get("NAME", "").lower()):
-            # "merge" rows in the crew column
-            left = self.get_crew(crew_id).get("NAME", "")
-            if not left:
+            crew_name = self.get_crew(crew_id).get("NAME", "")
+            crew_macguffins = crew_manager.macguffins[crew_id]
+            if not crew_name:
                 continue
             for member in members:
-                rows.append([left, member])
-                left = ""
+                rows.append([crew_name, member, crew_macguffins])
+                # "merge" rows in the crew name and macguffin (mythic compass) status columns
+                crew_name = ""
+                crew_macguffins = ""
         print(rows)
         return [
             Table(
                 rows or [[]],
-                headings=["Crew" + " "*50, "Members" + " "*50]
+                headings=["Crew" + " "*50, "Members" + " "*50, "Mythic Compasses"]
             )
         ]
 
-
     def on_event_request_create(self) -> List[HTMLComponent]:
+        crew_options = [(crew["NAME"], ident) for ident, crew in self.get_crews().items()]
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
@@ -176,20 +188,32 @@ class MW2025Plugin(AbstractPlugin):
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["Membership Changes"],
                         title="Crews: select players who changed crew",
-                        options=[("(Individual)", ""), *((crew["NAME"], identifier)
-                                                         for identifier, crew in self.get_crews().items())],
+                        options=[("(Individual)", ""),
+                                 *((crew["NAME"], identifier) for identifier, crew in self.get_crews().items())],
                     )
                 ]
-            )
+            ),
+            # possible TODO: allow the macguffin to be renamed by config
+            SelectorList(self.html_ids["MacGuffin Gains"],
+                         title="Select crews who GAINED a mythic compass",
+                         options=crew_options),
+            SelectorList(self.html_ids["MacGuffin Losses"],
+                         title="Select crews who LOST a mythic compass",
+                         options=crew_options),
         ]
 
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         self.eps_set(e, "Membership Changes", htmlResponse[self.html_ids["Membership Changes"]])
+        self.eps_set(e, "MacGuffin Gains", htmlResponse[self.html_ids["MacGuffin Gains"]])
+        self.eps_set(e, "MacGuffin Losses", htmlResponse[self.html_ids["MacGuffin Losses"]])
         return [Label("[MW2025] Success!")]
 
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+        crew_options = [(crew["NAME"], ident) for ident, crew in self.get_crews().items()]
+        macguffin_gains = self.eps_get(e, "MacGuffin Gains")
+        macguffin_losses = self.eps_get(e, "MacGuffin Losses")
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
@@ -203,9 +227,19 @@ class MW2025Plugin(AbstractPlugin):
                         default=self.eps_get(e, "Membership Changes")
                     )
                 ]
-            )
+            ),
+            SelectorList(self.html_ids["MacGuffin Gains"],
+                         title="Select crews who GAINED a mythic compass",
+                         options=crew_options,
+                         defaults=macguffin_gains),
+            SelectorList(self.html_ids["MacGuffin Losses"],
+                         title="Select crews who LOST a mythic compass",
+                         options=crew_options,
+                         defaults=macguffin_losses),
         ]
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         self.eps_set(e, "Membership Changes", htmlResponse[self.html_ids["Membership Changes"]])
+        self.eps_set(e, "MacGuffin Gains", htmlResponse[self.html_ids["MacGuffin Gains"]])
+        self.eps_set(e, "MacGuffin Losses", htmlResponse[self.html_ids["MacGuffin Losses"]])
         return [Label("[MW2025] Success!")]
