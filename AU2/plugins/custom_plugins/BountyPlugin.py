@@ -7,12 +7,11 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
-from AU2.html_components.MetaComponents.Searchable import Searchable
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
-from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SearchableDerivatives.SearchableInputDropdown import SearchableInputDropdown
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -34,8 +33,10 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
           errors="ignore") as F:
     BOUNTIES_PAGE_TEMPLATE = F.read()
 
+BOUNTYPLUGIN_IDENTIFIER = "BountyPlugin"
 
 @dataclass_json
+@dataclass
 class Bounty:
     identifier: str = ""
 
@@ -43,18 +44,33 @@ class Bounty:
 
     target_str: str = ""
     placer_id: str = ""
-    crime: str = ""
-    reward: str = ""
+    crime: str = "No crime set."
+    reward: str = "No reward set."
     active: bool = True
 
     def __post_init__(self):
         self.identifier = self.identifier or f"({GENERIC_STATE_DATABASE.get_unique_str()}) {self.target_id[0:8]} from {self.placer_id[0:8]}"
 
+    @classmethod
+    def read_bounty(cls, bounty_id: str):
+        return cls.from_id_and_dict(
+            bounty_id,
+            GENERIC_STATE_DATABASE.arb_state.setdefault(BOUNTYPLUGIN_IDENTIFIER, {}).setdefault("bounties", {}).setdefault(
+                bounty_id, {})
+        )
+
+    @classmethod
+    def from_id_and_dict(cls, bounty_id: str, d: Dict[str, Any]):
+        """Reads a Bounty from a dict but overrides its identifier"""
+        bounty = cls.from_dict(d)
+        bounty.identifier = bounty_id
+        return bounty
+
 
 @registered_plugin
 class BountyPlugin(AbstractPlugin):
     def __init__(self):
-        super().__init__("BountyPlugin")
+        super().__init__(BOUNTYPLUGIN_IDENTIFIER)
 
         self.html_ids = {
             "identifier": "identifier",
@@ -85,24 +101,15 @@ class BountyPlugin(AbstractPlugin):
         return self._bounty_questions()
 
     def ask_update_bounty(self, bounty_id: str):
-        return self._bounty_questions(self._read_bounty(bounty_id))
+        return self._bounty_questions(Bounty.read_bounty(bounty_id))
 
     def answer_set_bounty(self, html_response):
         bounties_dict = GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("bounties", {})
-        bounty = Bounty.from_dict(html_response[self.html_ids["identifier"]], html_response)
+        bounty = Bounty.from_id_and_dict(html_response[self.html_ids["identifier"]], html_response)
         bounties_dict[bounty.identifier] = bounty.to_dict()
         return [Label("[BOUNTY] Success!")]
 
     def _bounty_questions(self, default=Bounty()):
-
-        def searchable_setter(component, options):
-            """
-            Setter for the Searchable component for selecting an assassin.
-            Ensures that the default selection comes up in search results.
-            """
-            component.options = options
-            if component.selected and component.selected not in options:
-                component.options.append(component.selected)
 
         if not default.target_str and default.target_id:
             target_str = ASSASSINS_DATABASE.get(default.target_id).real_name
@@ -119,16 +126,11 @@ class BountyPlugin(AbstractPlugin):
                 title="Who is the bounty's target?",
                 default=target_str
             ),
-            Searchable(
-                InputWithDropDown(
+            SearchableInputDropdown(
                     identifier=self.html_ids["placer"],
                     title="Who is placing the bounty?",
                     options=ASSASSINS_DATABASE.get_identifiers(),
                     selected=default.placer_id
-                ),
-                title="Who is placing the bounty? (Search)",
-                accessor=lambda i: i.options,
-                setter=searchable_setter
             ),
             DefaultNamedSmallTextbox(
                 identifier=self.html_ids["crime"],
@@ -149,7 +151,7 @@ class BountyPlugin(AbstractPlugin):
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
         bounties_dict = GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("bounties", {})
-        bounties = [Bounty.from_dict(identifier, bounties_dict[identifier]) for identifier in bounties_dict]
+        bounties = [Bounty.from_id_and_dict(identifier, bounties_dict[identifier]) for identifier in bounties_dict]
         bounties = [b for b in bounties if b.active]
 
         table_str = "<p>Ah, no bounties yet.</p>"
@@ -178,13 +180,6 @@ class BountyPlugin(AbstractPlugin):
                 )
             )
         return [Label("[BOUNTY] Success!")]
-
-    def _read_bounty(self, bounty_id: str):
-        return Bounty.from_dict(
-            bounty_id,
-            GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("bounties", {}).setdefault(
-                bounty_id, {})
-        )
 
     def get_bounty_ids(self):
         return list(GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).get("bounties", {}))
