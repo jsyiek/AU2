@@ -321,6 +321,10 @@ def render(html_component, dependency_context={}):
             if (a1, a2) in html_component.default:
                 defaults.append(key)
 
+        # if there are no kills don't render anything
+        if not mapping:
+            return {html_component.identifier: [], "skip": True}
+
         q = [inquirer.Checkbox(
             name="q",
             message=html_component.title,
@@ -764,7 +768,12 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
                 move_dependent_to_front(d1)
                 d1 = d2
         final.insert(0, d1)
+        # merge nested dependencies
+        for c in final:
+            if isinstance(c, Dependency):
+                c.htmlComponents = merge_dependency(c.htmlComponents)
         move_dependent_to_front(d1)
+
     return final
 
 

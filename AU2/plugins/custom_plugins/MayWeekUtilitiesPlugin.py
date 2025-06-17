@@ -9,6 +9,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
 from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
+from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
@@ -145,7 +146,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         self.plugin_state.update({param.name: param.name.lower() for param in self.scoring_parameters})
 
         for p in self.scoring_parameters:
-            self.gsdb_set(p.identifier(), p.default_value)
+            self.gsdb_set(p.name, p.default_value)
 
         self.printable_gain_formula = "Points gained from kills: ((V*b + B)*t + T)*m + M"
         self.printable_loss_formula = "Points lost from death: -V*d - D"
@@ -320,7 +321,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def get_multiplier_owners(self, max_event: int = float("inf")) -> List[str]:
         owners = set()
         for event in EVENTS_DATABASE.events.values():
-            if int(e._Event__secret_id) > max_event:
+            if int(event._Event__secret_id) > max_event:
                 continue
             key = self.plugin_state["Multiplier Transfers"]
             for (loser, gainer) in event.pluginState.get(self.identifier, {}).get(key, []):
@@ -334,16 +335,21 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
         teams_str = self.get_cosmetic_name("Teams").lower()
         return [
-            AssassinDependentIntegerEntry(
-                pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                identifier=self.html_ids["BS Points"],
-                title="Want to award any BS points?"
-            ),
-            AssassinDependentTransferEntry(
-                assassins_list_identifier="CorePlugin_assassin_pseudonym",
-                identifier=self.html_ids["Multiplier Transfer"],
-                owners=self.get_multiplier_owners(),
-                title=f"[MAY WEEK] Any {multiplier_str} transfers? (None -> A adds a new {multiplier_str}, A -> None deletes it)"
+            Dependency(
+                dependentOn="CorePlugin_assassin_pseudonym",
+                htmlComponents=[
+                    AssassinDependentIntegerEntry(
+                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                        identifier=self.html_ids["BS Points"],
+                        title="Want to award any BS points?"
+                    ),
+                    AssassinDependentTransferEntry(
+                        assassins_list_identifier="CorePlugin_assassin_pseudonym",
+                        identifier=self.html_ids["Multiplier Transfer"],
+                        owners=self.get_multiplier_owners(),
+                        title=f"[MAY WEEK] Any {multiplier_str} transfers? (None -> A adds a new {multiplier_str}, A -> None deletes it)"
+                    ),
+                ]
             ),
             *(KillDependentSelector(
                 identifier=self.html_ids["Kills as Team"],
@@ -362,32 +368,43 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
         teams_str = self.get_cosmetic_name("Teams").lower()
         return [
-            AssassinDependentIntegerEntry(
-                pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                identifier=self.html_ids["BS Points"],
-                title="Want to award any BS points?",
-                default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["BS Points"], {})
+            Dependency(
+                dependentOn="CorePlugin_assassin_pseudonym",
+                htmlComponents=[
+                    AssassinDependentIntegerEntry(
+                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                        identifier=self.html_ids["BS Points"],
+                        title="Want to award any BS points?",
+                        default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["BS Points"], {})
+                    ),
+                    Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
+                          "transferred again after this!"),
+                    AssassinDependentTransferEntry(
+                        assassins_list_identifier="CorePlugin_assassin_pseudonym",
+                        identifier=self.html_ids["Multiplier Transfer"],
+                        owners=self.get_multiplier_owners(max_event=int(e._Event__secret_id)),
+                        title=f"[MAY WEEK] Any {multiplier_str} transfers?"
+                    ),
+                    Dependency(
+                        dependentOn="CorePlugin_kills",
+                        htmlComponents=[
+                            *(KillDependentSelector(
+                                identifier=self.html_ids["Kills as Team"],
+                                kills_identifier="CorePlugin_kills",
+                                title=f"[MAY WEEK] Which kills were made in a {teams_str}, for the purposes of scoring?",
+                                default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["Kills as Team"], [])
+                            ) for _ in range(self.gsdb_get("Enable Teams?", False)))
+                        ]
+                    )
+                ]
             ),
-            Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
-                  "transferred again after this!"),
-            AssassinDependentTransferEntry(
-                assassins_list_identifier="CorePlugin_assassin_pseudonym",
-                identifier=self.html_ids["Multiplier Transfer"],
-                owners=self.get_multiplier_owners(max_event=int(e._Event__secret_id)),
-                title=f"[MAY WEEK] Any {multiplier_str} transfers?"
-            ),
-            *(KillDependentSelector(
-                identifier=self.html_ids["Kills as Team"],
-                kills_identifier="CorePlugin_kills",
-                title=f"[MAY WEEK] Which kills were made in a {teams_str}, for the purposes of scoring?",
-                default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["Kills as Team"], [])
-            ) for _ in range(self.gsdb_get("Enable Teams?", False)))
         ]
 
     def on_event_update(self, e: Event, html_response) -> List[HTMLComponent]:
-        e.pluginState[self.plugin_state["Multiplier Transfer"]] = html_response[self.html_ids["Multiplier Transfer"]]
-        e.pluginState[self.identifier][self.plugin_state["Kills as Team"]] = html_response[self.html_ids["Kills as Team"]]
-        e.pluginState[self.identifier][self.plugin_state["BS Points"]] = html_response[self.html_ids["BS Points"]]
+        self.gsdb_set("Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
+        self.gsdb_set("BS Points",  html_response[self.html_ids["BS Points"]])
+        if self.html_ids["Kills as Team"] in html_response:
+            self.gsdb_set("Kills as Team", html_response[self.html_ids["Kills as Team"]])
         return [Label("[MAY WEEK] Success!")]
 
     def calculate_scores(self, max_event: int = float("inf")) -> Dict[str, float]:
