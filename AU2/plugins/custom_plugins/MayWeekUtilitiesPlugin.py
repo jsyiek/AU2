@@ -264,9 +264,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
     def answer_name_teams(self, html_response):
         team_list = list(
-            map(str.split,
-                filter(lambda t: not t.strip().startswith("#"),
-                       html_response[self.html_ids["Team Names"]].split("\n"))))
+            filter(lambda t: t.strip() and not t.strip().startswith("#") ,
+                html_response[self.html_ids["Team Names"]].split("\n")))
         if not team_list:
             return [Label("ERROR! You must specify at least one team. (They can't start with #.)")]
         self.gsdb_set("Team Names", team_list)
