@@ -214,6 +214,13 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]] = data
 
+    def esdb_get(self, e: Event, plugin_state_id, default):
+        return e.pluginState.get(self.identifier, {}).get(self.plugin_state[plugin_state_id], default)
+
+    def esdb_set(self, e: Event, plugin_state_id, data):
+        e.pluginState.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]] = data
+
+
     def ask_enable_teams(self):
         return [Checkbox(
             title="Enable teams?",
@@ -372,9 +379,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def on_event_create(self, e: Event, html_response) -> List[HTMLComponent]:
-        e.pluginState[self.identifier][self.plugin_state["Multiplier Transfer"]] = html_response[self.html_ids["Multiplier Transfer"]]
-        e.pluginState[self.identifier][self.plugin_state["Kills as Team"]] = html_response[self.html_ids["Kills as Team"]]
-        e.pluginState[self.identifier][self.plugin_state["BS Points"]] = html_response[self.html_ids["BS Points"]]
+        self.esdb_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
+        self.esdb_set(e, "BS Points",  html_response[self.html_ids["BS Points"]])
+        if self.html_ids["Kills as Team"] in html_response:
+            self.esdb_set(e, html_response[self.html_ids["Kills as Team"]])
         return [Label("[MAY WEEK] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
@@ -388,7 +396,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["BS Points"],
                         title="Want to award any BS points?",
-                        default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["BS Points"], {})
+                        default=self.esdb_get(e, "BS Points", {})
                     ),
                     Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
                           "transferred again after this!"),
@@ -414,10 +422,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def on_event_update(self, e: Event, html_response) -> List[HTMLComponent]:
-        self.gsdb_set("Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
-        self.gsdb_set("BS Points",  html_response[self.html_ids["BS Points"]])
+        self.esdb_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
+        self.esdb_set(e, "BS Points",  html_response[self.html_ids["BS Points"]])
         if self.html_ids["Kills as Team"] in html_response:
-            self.gsdb_set("Kills as Team", html_response[self.html_ids["Kills as Team"]])
+            self.esdb_set(e, "Kills as Team", html_response[self.html_ids["Kills as Team"]])
         return [Label("[MAY WEEK] Success!")]
 
     def calculate_scores_and_multiplier_state(self, max_event: int = float("inf")) -> (Dict[str, float], Set[str], Set[str]):
@@ -462,8 +470,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             if int(e._Event__secret_id) > max_event:
                 continue
 
-            kills_made_as_team = e.pluginState.get(self.identifier, {}).get(self.plugin_state["Kills as Team"], [])
-            bs_points = e.pluginState.get(self.identifier, {}).get(self.plugin_state["BS Points"], {}).items()
+            kills_made_as_team = self.esdb_get(e, "Kills as Team", [])
+            bs_points = self.esdb_get(e, "BS Points", {}).items()
 
             # updates happen atomically, so we calculate them as a batch and then add them back in
             point_deltas = {player: bs_allotment for (player, bs_allotment) in bs_points}
@@ -501,7 +509,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 if gainer is not None:
                     multiplier_owners.add(gainer)
 
-        multiplier_beneficiaries = {members_to_teams[owner] for owner in multiplier_owners}
+        multiplier_beneficiaries = {memb for owner in multiplier_owners
+                                        for team in members_to_teams[owner]
+                                        for memb in team_to_members[team]}
 
         return scores, multiplier_owners, multiplier_beneficiaries
 
