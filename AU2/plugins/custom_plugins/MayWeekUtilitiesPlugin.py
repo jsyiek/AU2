@@ -75,6 +75,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         self.html_ids = {
             "Team Names": self.identifier + "_team_names",
             "Enable Teams?": self.identifier + "_enable_teams",
+            "Share Multipliers?": self.identifier + "_share_multipliers",
             "Assassins": self.identifier + "_assassins",
             "Team ID": self.identifier + "_team_id",
             "Multiplier Transfer": self.identifier + "_multiplier_transfer",
@@ -93,7 +94,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         }
 
         self.ps_defaults = {
-            "Team Names": ["Team 1", "Team 2", "Team 3"]
+            "Team Names": ["Team 1", "Team 2", "Team 3"],
+            "Share Multipliers?": False
         }
 
         self.cosmetics = [
@@ -239,7 +241,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return [Checkbox(
             title="Should multipliers be shared within teams?",
             identifier=self.html_ids["Share Multipliers?"],
-            checked=self.gsdb_get("Share Multipliers?", False)
+            checked=self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
         )]
 
     def answer_enable_multiplier_team_sharing(self, html_response):
@@ -453,7 +455,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         )}
         multiplier_owners = set()
         teams_enabled = self.gsdb_get("Enable Teams?", False)
-        team_multiplier_sharing_enabled = teams_enabled and self.gsdb_get("Share Multipliers?", False)
+        team_multiplier_sharing_enabled = teams_enabled and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
         team_to_members = self.gsdb_get("Team Members", {})
         members_to_teams = {}
         for (t, member_list) in team_to_members.items():
@@ -509,12 +511,23 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         scores = self.calculate_scores()
         multiplier_owners = set(self.get_multiplier_owners())
         teams_enabled = self.gsdb_get("Enable Teams?", False)
+        sharing_multipliers = teams_enabled and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
         team_to_members = self.gsdb_get("Team Members", {})
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         members_to_teams = {}
         for (t, member_list) in team_to_members.items():
             for m in member_list:
                 members_to_teams.setdefault(m, set()).add(t)
+
+        multiplier_beneficiaries = multiplier_owners
+        # gives all players on a team with a holder of a multiplier,
+        # for the case of shared multipliers
+        if sharing_multipliers:
+            multiplier_beneficiaries = {
+                member for owner in multiplier_owners
+                        for team in members_to_teams[owner]
+                        for member in team_to_members[team]
+            }
 
         team_to_hex_col = {}
         for (i, team) in enumerate(team_to_members):
@@ -537,7 +550,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     CREW_COLOR=crew_color,
                     PSEUDONYM=assassin.all_pseudonyms(),
                     POINTS=score,
-                    MULTIPLIER="Y" if a_id in multiplier_owners else "N",
+                    MULTIPLIER="Y" if a_id in multiplier_beneficiaries else "",
                     TEAM_ENTRY=team_entry
                 )
             )
