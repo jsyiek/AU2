@@ -23,6 +23,7 @@ from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry impor
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.DependentComponents.AssassinDependentTextEntry import AssassinDependentTextEntry
+from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
@@ -474,6 +475,30 @@ def render(html_component, dependency_context={}):
         if q:
             points = inquirer_prompt_with_abort(q)
         return {html_component.identifier: points}
+
+    # dependent component
+    elif isinstance(html_component, AssassinDependentInputWithDropDown):
+        dependent = html_component.pseudonym_list_identifier
+        assert (dependent in dependency_context)
+        assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: {}, "skip": True}
+        assassins = [a for a in assassins_mapping]
+        q = [inquirer.Checkbox(
+            name="assassins",
+            message=escape_format_braces(html_component.title),
+            choices=assassins,
+            default=list(html_component.default.keys())
+        )]
+        selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
+        q = []
+        for a in selected_assassins:
+            q.append(inquirer.List(
+                name=a,
+                message=f"Value for {escape_format_braces(a)}",
+                choices=html_component.options,
+                default=html_component.default.get(a)))
+        return {html_component.identifier: inquirer_prompt_with_abort(q) if q else {}}
 
     elif isinstance(html_component, DatetimeEntry):
         q = [inquirer.Text(
