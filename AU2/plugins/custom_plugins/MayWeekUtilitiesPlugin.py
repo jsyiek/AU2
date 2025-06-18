@@ -1,5 +1,5 @@
 import dataclasses
-from typing import List, Dict
+from typing import List, Dict, Set
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -143,7 +143,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             )
         ]
         self.html_ids.update({param.name: self.identifier + "_" + param.name.lower() for param in self.scoring_parameters})
-        self.plugin_state.update({param.name: param.name.lower() for param in self.scoring_parameters})
+        self.plugin_state.update({param.name: param.identifier() for param in self.scoring_parameters})
 
         for p in self.scoring_parameters:
             self.gsdb_set(p.name, p.default_value)
@@ -407,25 +407,41 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             self.gsdb_set("Kills as Team", html_response[self.html_ids["Kills as Team"]])
         return [Label("[MAY WEEK] Success!")]
 
-    def calculate_scores(self, max_event: int = float("inf")) -> Dict[str, float]:
-        d = self.gsdb_get("may_week_scoring_death_penalty_pct", 0) / 100
-        D = self.gsdb_get("may_week_scoring_death_penalty_fixed", 0)
-        b = self.gsdb_get("may_week_scoring_kill_bonus_pct", 0) / 100
-        B = self.gsdb_get("may_week_scoring_kill_bonus_fixed", 0)
-        t = self.gsdb_get("may_week_scoring_team_bonus_pct", 0) / 100
-        T = self.gsdb_get("may_week_scoring_team_bonus_fixed", 0)
-        m = self.gsdb_get("may_week_scoring_multiplier_bonus_pct", 0) / 100
-        M = self.gsdb_get("may_week_scoring_multiplier_bonus_fixed", 0)
-        Sc = self.gsdb_get("may_week_scoring_starting_score_casual", 0)
-        Sf = self.gsdb_get("may_week_scoring_starting_score_full", 0)
+    def calculate_scores_and_multiplier_state(self, max_event: int = float("inf")) -> (Dict[str, float], Set[str], Set[str]):
+        """
+        Calculates the scores and multiplier owners up to a given event.
 
-        scores: Dict[str, float] = {a: Sf if not a.is_police else Sc for a in ASSASSINS_DATABASE.get_filtered()}
+        Args:
+            max_event: the secret id of the last event to process (note: events are processed in order of secret id
+                (i.e. the order they were created) rather than by datetime
+
+        Returns:
+            (Dict[str, float], Set[str]): A tuple of
+                - A dictionary mapping assassin identifiers to their scores
+                - A set of multiplier owners
+                - A set of those benefiting from multipliers via their teams
+        """
+        d = self.gsdb_get("death_penalty_pct", 0) / 100
+        D = self.gsdb_get("death_penalty_fixed", 0)
+        b = self.gsdb_get("kill_bonus_pct", 0) / 100
+        B = self.gsdb_get("kill_bonus_fixed", 0)
+        t = self.gsdb_get("team_bonus_pct", 0) / 100
+        T = self.gsdb_get("team_bonus_fixed", 0)
+        m = self.gsdb_get("multiplier_bonus_pct", 0) / 100
+        M = self.gsdb_get("multiplier_bonus_fixed", 0)
+        Sc = self.gsdb_get("starting_score_casual", 0)
+        Sf = self.gsdb_get("starting_score_full", 0)
+
+        scores: Dict[str, float] = {a.identifier: Sf if not a.is_police else Sc for a in ASSASSINS_DATABASE.get_filtered(
+            include_hidden = lambda _: True # probably not necessary in May Week (since no resurrection as police),
+                                            # but just in case...
+        )}
         multiplier_owners = set()
         teams_enabled = self.gsdb_get("Enable Teams?", False)
-        team_multiplier_sharing_enabled = teams_enabled and self.gsdb_get("Sharing Multipliers?", False)
+        team_multiplier_sharing_enabled = teams_enabled and self.gsdb_get("Share Multipliers?", False)
         team_to_members = self.gsdb_get("Team Members", {})
         members_to_teams = {}
-        for (t, member_list) in team_to_members:
+        for (t, member_list) in team_to_members.items():
             for m in member_list:
                 members_to_teams.setdefault(m, set()).add(t)
 
@@ -437,9 +453,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             bs_points = e.pluginState.get(self.identifier, {}).get(self.plugin_state["BS Points"], {}).items()
 
             # updates happen atomically, so we calculate them as a batch and then add them back in
-            point_deltas = {player: bs_allotment for (player, bs_allotment) in bs_points.items()}
+            point_deltas = {player: bs_allotment for (player, bs_allotment) in bs_points}
 
-            for (killer, victim) in e.kills.items():
+            for (killer, victim) in e.kills:
                 is_as_team = teams_enabled and (killer, victim) in kills_made_as_team
                 is_with_multiplier = killer in multiplier_owners
 
@@ -447,6 +463,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     for owner in multiplier_owners:
                         is_with_multiplier |= len(members_to_teams[owner].intersection(members_to_teams[killer])) > 0
 
+                # apply team and multiplier bonuses (% and fixed) iff they apply
+                # (side note: maybe calling the items that grant bonuses multipliers is a little confusing in this
+                #  context, since they are neither the only ways to get multiplicative bonuses (teams do that)
+                #  nor do they only grant multiplicative bonuses)
                 t_now = t if is_as_team else 1
                 T_now = T if is_as_team else 0
                 m_now = m if is_with_multiplier else 1
@@ -458,6 +478,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # resolve deltas once all worked out
             for player in point_deltas:
                 # use max or else you can LOSE points by killing someone!
+                # (specifically, if killing a player with negative points would lose you points)
                 scores[player] = max(0, scores[player] + point_deltas[player])
 
             # work out any multiplier transfers
@@ -467,14 +488,16 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 if gainer is not None:
                     multiplier_owners.add(gainer)
 
-        return scores
+        multiplier_beneficiaries = {members_to_teams[owner] for owner in multiplier_owners}
+
+        return scores, multiplier_owners, multiplier_beneficiaries
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
-        scores = self.calculate_scores()
-        teams_enabled = self.gsdb_get(self.plugin_state["Enable Teams?"], False)
+        scores, multiplier_owners, multiplier_beneficiaries = self.calculate_scores_and_multiplier_state()
+        teams_enabled = self.gsdb_get("Enable Teams?", False)
         team_to_members = self.gsdb_get("Team Members", {})
         members_to_teams = {}
-        for (t, member_list) in team_to_members:
+        for (t, member_list) in team_to_members.items():
             for m in member_list:
                 members_to_teams.setdefault(m, set()).add(t)
 
@@ -485,19 +508,21 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         player_rows = []
         pseudonym_rows = []
         for (score, a_id) in sorted((v, k) for (k, v) in scores.items()):
-            # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_TEMPLATE}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
-            crew_color = (CREW_COLOR_TEMPLATE.format(bg_color=team_to_hex_col[members_to_teams[a_id][0]])
-                          if teams_enabled and members_to_teams.get(a_id, []) else "")
-            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=members_to_teams[a_id][0])
-                          if members_to_teams.get(a_id, []) else "")
+            # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
+            team = next(iter(members_to_teams[a_id])) if teams_enabled and members_to_teams.get(a_id, []) else ""
+            crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team]) if team else "")
+            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team) if team else "")
             assassin = ASSASSINS_DATABASE.get(a_id)
             pseudonym_rows.append(
                 PSEUDONYM_ROW_TEMPLATE.format(
                     CREW_COLOR=crew_color,
-                    PSEUDONYM=assassin.all_pseudonyms()
+                    PSEUDONYM=assassin.all_pseudonyms(),
+                    POINTS=score,
+                    MULTIPLIER="Y" if a_id in multiplier_owners else "N",
+                    TEAM_ENTRY = team_entry
                 )
             )
-        for a in ASSASSINS_DATABASE.get_filtered():
-            pseudo
+        #for a in ASSASSINS_DATABASE.get_filtered():
+            #pseudo
 
         return [Label("[MAY WEEK] Success!")]
