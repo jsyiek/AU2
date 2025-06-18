@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 COLLEGES = [
     "Christ's College",
@@ -75,7 +76,7 @@ WATER_STATUSES = [
     "Full water"
 ]
 
-WEBPAGE_WRITE_LOCATION = os.path.expanduser("~/pages")
+WEBPAGE_WRITE_LOCATION = pathlib.Path(os.path.expanduser("~/pages"))
 
 if not os.path.exists(WEBPAGE_WRITE_LOCATION):
     os.makedirs(WEBPAGE_WRITE_LOCATION)

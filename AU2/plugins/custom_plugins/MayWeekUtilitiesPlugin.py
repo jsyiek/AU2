@@ -1,6 +1,7 @@
 import dataclasses
 from typing import List, Dict, Set
 
+from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -19,6 +20,8 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.date_utils import get_now_dt
 
 
 HEX_COLS = [
@@ -31,8 +34,14 @@ HEX_COLS = [
 
 CREW_COLOR_TEMPLATE = 'bgcolor="{HEX}"'
 TEAM_ENTRY_TEMPLATE = "<td>{TEAM}</td>"
+TEAM_HDR_TEMPLATE = "<th>{TEAM_STR}</th>"
 PLAYER_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PLAYER_TYPE}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
-PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
+PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td>{TEAM_ENTRY}</tr>"
+
+MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
+with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
+    MAYWEEK_PLAYERS_TEMPLATE = F.read()
+
 
 @dataclasses.dataclass
 class ScoringParameter:
@@ -81,6 +90,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Multiplier Transfers": "multiplier_transfers",
             "Kills as Team": "kills_as_team",
             "BS Points": "bs_points",
+        }
+
+        self.ps_defaults = {
+            "Team Names": ["Team 1", "Team 2", "Team 3"]
         }
 
         self.cosmetics = [
@@ -230,7 +243,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def ask_name_teams(self):
-        existing_ranks: List[str] = self.gsdb_get("Team Names", ["Team 1", "Team 2", "Team 3"])
+        existing_ranks: List[str] = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         default_text = "# Enter team names each on a new line.\n# Lines starting with hashtags will be ignored.\n"
         return [
             LargeTextEntry(
@@ -433,8 +446,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         Sf = self.gsdb_get("starting_score_full", 0)
 
         scores: Dict[str, float] = {a.identifier: Sf if not a.is_police else Sc for a in ASSASSINS_DATABASE.get_filtered(
-            include_hidden = lambda _: True # probably not necessary in May Week (since no resurrection as police),
-                                            # but just in case...
+            include_hidden = lambda _: True  # probably not necessary in May Week (since no resurrection as police),
+                                             # but just in case...
         )}
         multiplier_owners = set()
         teams_enabled = self.gsdb_get("Enable Teams?", False)
@@ -496,6 +509,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         scores, multiplier_owners, multiplier_beneficiaries = self.calculate_scores_and_multiplier_state()
         teams_enabled = self.gsdb_get("Enable Teams?", False)
         team_to_members = self.gsdb_get("Team Members", {})
+        team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         members_to_teams = {}
         for (t, member_list) in team_to_members.items():
             for m in member_list:
@@ -505,13 +519,17 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         for (i, team) in enumerate(team_to_members):
             team_to_hex_col[team] = HEX_COLS[i % len(HEX_COLS)]
 
-        player_rows = []
+        # discard hidden players from scores -- in case a dummy casual player is added to represent a civilian
+        for hidden_id in ASSASSINS_DATABASE.get_identifiers(include = lambda _: False,
+                                                            include_hidden = lambda _: True):
+            scores.pop(hidden_id, None)
+
         pseudonym_rows = []
-        for (score, a_id) in sorted((v, k) for (k, v) in scores.items()):
+        for (score, a_id) in sorted(((v, k) for (k, v) in scores.items()), reverse=True):
             # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
-            team = next(iter(members_to_teams[a_id])) if teams_enabled and members_to_teams.get(a_id, []) else ""
-            crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team]) if team else "")
-            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team) if team else "")
+            team_id = int(next(iter(members_to_teams[a_id]))) if teams_enabled and members_to_teams.get(a_id, []) else None
+            crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team]) if team_id is not None else "")
+            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id]) if team_id is not None else "")
             assassin = ASSASSINS_DATABASE.get(a_id)
             pseudonym_rows.append(
                 PSEUDONYM_ROW_TEMPLATE.format(
@@ -519,10 +537,32 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     PSEUDONYM=assassin.all_pseudonyms(),
                     POINTS=score,
                     MULTIPLIER="Y" if a_id in multiplier_owners else "N",
-                    TEAM_ENTRY = team_entry
+                    TEAM_ENTRY=team_entry
                 )
             )
-        #for a in ASSASSINS_DATABASE.get_filtered():
-            #pseudo
+
+        player_rows = []
+        for player in sorted(ASSASSINS_DATABASE.get_filtered(), key=lambda a: a.real_name.lower()):
+            player_rows.append(
+                PLAYER_ROW_TEMPLATE.format(
+                    REAL_NAME = player.real_name,
+                    PLAYER_TYPE = "Casual" if player.is_police else "Full",
+                    ADDRESS = player.address,
+                    COLLEGE = player.college,
+                    WATER_STATUS = player.water_status,
+                    NOTES = player.notes
+                )
+            )
+
+        with open(WEBPAGE_WRITE_LOCATION / "mw-players.html", "w+", encoding="utf-8") as F:
+            F.write(MAYWEEK_PLAYERS_TEMPLATE.format(
+                PSEUDONYM_ROWS = "\n".join(pseudonym_rows),
+                PLAYER_ROWS = "\n".join(player_rows),
+                YEAR = get_now_dt().year,
+                MULTIPLIER_STR = self.gsdb_get("Multiplier", "Multiplier"),
+                TEAM_COLUMN_HDR = TEAM_HDR_TEMPLATE.format(
+                    TEAM_STR = self.gsdb_get("Teams", "Teams") if teams_enabled else ""
+                )
+            ))
 
         return [Label("[MAY WEEK] Success!")]
