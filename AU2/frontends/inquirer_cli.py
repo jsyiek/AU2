@@ -286,7 +286,7 @@ def render(html_component, dependency_context={}):
             return {html_component.identifier: tuple(), "skip": True}
         potential_transfers = {}
         defaults = []
-        owners = [a for a in html_component.owners if a not in assassins]
+        owners = [a for a in html_component.owners if a in assassins]
         receivers = [a for a in assassins if a not in owners]
         for a1 in itertools.chain(owners, [None]):
             for a2 in itertools.chain(receivers, [None]):

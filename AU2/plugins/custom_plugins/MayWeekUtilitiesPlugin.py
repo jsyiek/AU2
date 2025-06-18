@@ -361,28 +361,35 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     AssassinDependentIntegerEntry(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["BS Points"],
-                        title="Want to award any BS points?"
+                        title="Want to award any BS points?",
                     ),
+                    Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
+                          "transferred again after this!"),
                     AssassinDependentTransferEntry(
                         assassins_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["Multiplier Transfer"],
                         owners=self.get_multiplier_owners(),
                         title=f"[MAY WEEK] Any {multiplier_str} transfers? (None -> A adds a new {multiplier_str}, A -> None deletes it)"
                     ),
+                    Dependency(
+                        dependentOn="CorePlugin_kills",
+                        htmlComponents=[
+                            *(KillDependentSelector(
+                                identifier=self.html_ids["Kills as Team"],
+                                kills_identifier="CorePlugin_kills",
+                                title=f"[MAY WEEK] Which kills were made in a {teams_str}, for the purposes of scoring?",
+                            ) for _ in range(self.gsdb_get("Enable Teams?", False)))
+                        ]
+                    )
                 ]
             ),
-            *(KillDependentSelector(
-                identifier=self.html_ids["Kills as Team"],
-                kills_identifier="CorePlugin_kills",
-                title=f"[MAY WEEK] Which kills were made in a {teams_str}, for the purposes of scoring?"
-            ) for _ in range(self.gsdb_get("Enable Teams?", False)))
         ]
 
     def on_event_create(self, e: Event, html_response) -> List[HTMLComponent]:
         self.esdb_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
         self.esdb_set(e, "BS Points",  html_response[self.html_ids["BS Points"]])
         if self.html_ids["Kills as Team"] in html_response:
-            self.esdb_set(e, html_response[self.html_ids["Kills as Team"]])
+            self.esdb_set(e, "Kills as Team", html_response[self.html_ids["Kills as Team"]])
         return [Label("[MAY WEEK] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
@@ -428,20 +435,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             self.esdb_set(e, "Kills as Team", html_response[self.html_ids["Kills as Team"]])
         return [Label("[MAY WEEK] Success!")]
 
-    def calculate_scores_and_multiplier_state(self, max_event: int = float("inf")) -> (Dict[str, float], Set[str], Set[str]):
-        """
-        Calculates the scores and multiplier owners up to a given event.
-
-        Args:
-            max_event: the secret id of the last event to process (note: events are processed in order of secret id
-                (i.e. the order they were created) rather than by datetime
-
-        Returns:
-            (Dict[str, float], Set[str]): A tuple of
-                - A dictionary mapping assassin identifiers to their scores
-                - A set of multiplier owners
-                - A set of those benefiting from multipliers via their teams
-        """
+    def calculate_scores(self, max_event: int = float("inf")) -> Dict[str, float]:
         d = self.gsdb_get("death_penalty_pct", 0) / 100
         D = self.gsdb_get("death_penalty_fixed", 0)
         b = self.gsdb_get("kill_bonus_pct", 0) / 100
@@ -509,14 +503,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 if gainer is not None:
                     multiplier_owners.add(gainer)
 
-        multiplier_beneficiaries = {memb for owner in multiplier_owners
-                                        for team in members_to_teams[owner]
-                                        for memb in team_to_members[team]}
-
-        return scores, multiplier_owners, multiplier_beneficiaries
+        return scores
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
-        scores, multiplier_owners, multiplier_beneficiaries = self.calculate_scores_and_multiplier_state()
+        scores = self.calculate_scores()
+        multiplier_owners = set(self.get_multiplier_owners())
         teams_enabled = self.gsdb_get("Enable Teams?", False)
         team_to_members = self.gsdb_get("Team Members", {})
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
