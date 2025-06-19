@@ -658,7 +658,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         member_to_team = team_manager.member_to_team
         team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-        multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners)
+        multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
 
         team_to_hex_col = {}
         for (i, team) in enumerate(team_to_members):
