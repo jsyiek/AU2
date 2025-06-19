@@ -76,7 +76,7 @@ WATER_STATUSES = [
     "Full water"
 ]
 
-WEBPAGE_WRITE_LOCATION = pathlib.Path("~/pages").resolve()
+WEBPAGE_WRITE_LOCATION = pathlib.Path.home() / "pages"
 
 if not os.path.exists(WEBPAGE_WRITE_LOCATION):
     os.makedirs(WEBPAGE_WRITE_LOCATION)
