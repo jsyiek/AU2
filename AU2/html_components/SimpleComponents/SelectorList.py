@@ -12,7 +12,7 @@ class SelectorList(HTMLComponent):
             identifier: str,
             title: str,
             options: List[str],
-            defaults: List[str] = []):
+            defaults: List[str] = []) -> object:
         self.title = escape(title)
         self.identifier = escape(identifier)
         self.uniqueStr = self.get_unique_str()

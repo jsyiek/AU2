@@ -387,7 +387,12 @@ class CorePlugin(AbstractPlugin):
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
+                        ]
+                    )
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
@@ -409,7 +414,12 @@ class CorePlugin(AbstractPlugin):
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                        ]
+                    )
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),

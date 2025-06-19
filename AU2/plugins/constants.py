@@ -78,6 +78,5 @@ WATER_STATUSES = [
 
 WEBPAGE_WRITE_LOCATION = pathlib.Path.home() / "pages"
 
-
 if not os.path.exists(WEBPAGE_WRITE_LOCATION):
     os.makedirs(WEBPAGE_WRITE_LOCATION)

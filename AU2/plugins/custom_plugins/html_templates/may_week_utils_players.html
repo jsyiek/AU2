@@ -1,0 +1,44 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xml:lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa+Ink:wght@700&family=Roboto+Slab&display=swap" rel="stylesheet">
+	<link rel="stylesheet" type="text/css" href="newassassins.css">
+ 	<link rel="shortcut icon" href="img/cloak3.png">
+	<script src="main.js"></script>
+ 	<title>The Assassins' Guild</title> 
+</head>
+<body> 
+<div class="backgroundimg">
+<div class="wrapper">
+	
+	<div w3-include-html="header.html"></div>
+
+	<!--Main Content--><h2>Player List</h2> 
+	<h3>Pseudonyms</h3> 
+	<table xmlns="" class="playerlist">
+		<!-- TODO: We should just have used jinja2 -->
+		<tr><th>Pseudonyms</th><th>Points</th><th>{MULTIPLIER_STR}</th>{TEAM_COLUMN_HDR}</tr>
+		{PSEUDONYM_ROWS}
+	</table>
+
+	<h3>Player names</h3> 
+	<table xmlns="" class="playerlist">  
+		<tr><th>Real Name</th><th>Player Type</th><th>Address</th><th>College</th><th>Water Status</th><th>Notes</th></tr>
+		{PLAYER_ROWS}
+	</table>
+	
+	<div class="footer">
+		<h5>Assassins' Guild {YEAR}</h5>
+	</div>
+</div>
+</div>
+
+<script>
+	includeHTML();
+</script>
+</body></html>
