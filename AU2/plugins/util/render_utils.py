@@ -1,9 +1,8 @@
 import datetime
 import re
-import zlib
 import itertools
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Iterable, Tuple
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -90,13 +89,36 @@ def event_url(e: Event) -> str:
     week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
     return f"news{week:02}.html#{e._Event__secret_id}"
 
+# Generic colour function type
+ColorFn = Callable[[str, Assassin, Event, Iterable], str]
+# default colour function
+def default_color_fn(pseudonym: str,
+                     assassin_model: Assassin,
+                     e: Event,
+                     plugin_managers: Iterable) -> str:
+    is_police = assassin_model.is_police
 
+    # retrieve info from managers
+    is_wanted, dead, incompetent = (False,) * 3
+    for manager in plugin_managers:
+        if isinstance(manager, DeathManager):
+            dead = manager.is_dead(assassin_model)
+        elif isinstance(manager, CompetencyManager):
+            incompetent = manager.is_inco_at(assassin_model, e.datetime),
+        elif isinstance(manager, WantedManager):
+            is_wanted = manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
+
+    return get_color(pseudonym, dead, incompetent, is_police, is_wanted)
+
+
+# basic colouring rules
 def get_color(pseudonym: str,
               dead: bool = False,
               incompetent: bool = False,
               is_police: bool = False,
               is_wanted: bool = False) -> str:
-    ind = zlib.adler32(pseudonym.encode(encoding="utf-8"))
+    ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
+    # colour appropriately
     if is_wanted:
         if is_police:
             return CORRUPT_POLICE_COLS[ind % len(CORRUPT_POLICE_COLS)]
@@ -143,23 +165,25 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
 
 
 def render_headline_and_reports(e: Event,
-                                death_manager: DeathManager,
-                                competency_manager: CompetencyManager,
-                                wanted_manager: WantedManager) -> (str, List[str]):
+                                plugin_managers: Optional[Iterable] = None,
+                                color_fn: ColorFn = default_color_fn) -> (str, Dict[Tuple[str, int], str]):
     """
     Produces the HTML renderings of an events headline and its reports
 
     Args:
         e (Event): the event to render the headline and reports of
-        death_manager (DeathManager): a DeathManager with events added chronologically up to and including `e`
-        competency_manager (CompetencyManager): a CompetencyManager with events added chronologically up to and including `e`
-        wanted_manager (WantedManager): a WantedManager with events added chronologically up to and including `e`
+        plugin_managers (Iterable, optional): An iterable yielding managers (i.e. DeathManager, CompetencyManager,
+            WantedManager) that have been updated up to the event `e`
+        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and an iterable of managers and
+            returning a colour hexcode (including #). Defaults to `default_color_fn`.
 
     Returns:
-        (str, List[str]): A tuple of:
+        (str, Dict[Tuple[str, int], str]): A tuple of:
             - the event `e`'s headline rendered as HTML
-            - a list of its reports rendered as HTML
+            - a dict mapping tuples (assasin identifier, pseudonym index) to rendered HTML report bodies
     """
+    plugin_managers = plugin_managers or tuple()
+
     headline = e.headline
 
     reports = {(playerID, pseudonymID): soft_escape(report) for (playerID, pseudonymID, report) in
@@ -187,12 +211,11 @@ def render_headline_and_reports(e: Event,
             pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
             pseudonym = assassin_model.get_pseudonym(pseudonym_index)
 
-            color = get_color(
+            color = color_fn(
                 pseudonym,
-                dead=death_manager.is_dead(assassin_model),
-                incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-                is_police=assassin_model.is_police,
-                is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
+                assassin_model,
+                e,
+                plugin_managers
             )
 
             candidate_pseudonyms.append((assassin_model, pseudonym, color))
@@ -206,18 +229,17 @@ def render_headline_and_reports(e: Event,
 
 
 def render_event(e: Event,
-                 death_manager: DeathManager,
-                 competency_manager: CompetencyManager,
-                 wanted_manager: WantedManager) -> (str, str):
+                 plugin_managers: Optional[Iterable] = None,
+                 color_fn: ColorFn = default_color_fn) -> (str, str):
     """
     Renders the full HTML for the event, including headline and reports
     Also gives the HTML rendering of the headline for the headlines page.
     """
+    plugin_managers = plugin_managers or tuple()
     headline, reports = render_headline_and_reports(
         e,
-        death_manager=death_manager,
-        competency_manager=competency_manager,
-        wanted_manager=wanted_manager
+        plugin_managers=plugin_managers,
+        color_fn=color_fn
     )
     report_list = []
     for ((assassin, pseudonym_index), r) in reports.items():
@@ -226,12 +248,11 @@ def render_event(e: Event,
         # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
         assassin_model = ASSASSINS_DATABASE.get(assassin)
         pseudonym = assassin_model.get_pseudonym(pseudonym_index)
-        color = get_color(
+        color = color_fn(
             pseudonym,
-            dead=death_manager.is_dead(assassin_model),
-            incompetent=competency_manager.is_inco_at(assassin_model, e.datetime),
-            is_police=assassin_model.is_police,
-            is_wanted=wanted_manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
+            assassin_model,
+            e,
+            plugin_managers
         )
 
         painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
@@ -256,12 +277,19 @@ def render_event(e: Event,
     return event_text, headline_text
 
 
-def render_all_events(exclude: Callable[[Event], bool]) -> (List[str], Dict[int, List[str]]):
+def render_all_events(exclude: Callable[[Event], bool],
+                      color_fn: ColorFn = default_color_fn,
+                      plugin_managers: Optional[Iterable] = None) -> (List[str], Dict[int, List[str]]):
     """
     Produces a rendering of all events not excluded by `exclude`.
 
     Args:
         exclude: a function taking an Event as input and returning a boolean for whether or not it should be rendered.
+        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and an iterable of managers and
+            returning a colour hexcode (including #). Defaults to `default_color_fn`.
+        plugin_managers (optional): Iterable of 'manager' objects that will get passed into `color_fn` along with a
+            CompetencyManager, DeathManager, and WantedManager. Only requirement is that they all have `add_event`
+            methods taking an Event as the only argument. Events are added in chronological order.
 
     Returns:
         A tuple of: a list of strings where each element is the HTML rendering of one day's headlines, and a dict
@@ -280,12 +308,12 @@ def render_all_events(exclude: Callable[[Event], bool]) -> (List[str], Dict[int,
     competency_manager = CompetencyManager(start_datetime)
     death_manager = DeathManager(perma_death=True)
     wanted_manager = WantedManager()
+    plugin_managers = (competency_manager, death_manager, wanted_manager, *(plugin_managers or tuple()))
 
     for e in events:
         # don't skip adding hidden events to managers, in case a player dies in a hidden event, etc.
-        wanted_manager.add_event(e)
-        competency_manager.add_event(e)
-        death_manager.add_event(e)
+        for manager in plugin_managers:
+            manager.add_event(e)
 
         if exclude(e):
             continue
@@ -295,9 +323,8 @@ def render_all_events(exclude: Callable[[Event], bool]) -> (List[str], Dict[int,
 
         event_text, headline_text = render_event(
             e,
-            death_manager=death_manager,
-            competency_manager=competency_manager,
-            wanted_manager=wanted_manager
+            color_fn=color_fn,
+            plugin_managers=plugin_managers,
         )
 
         events_for_chapter[week].setdefault(day, []).append(event_text)

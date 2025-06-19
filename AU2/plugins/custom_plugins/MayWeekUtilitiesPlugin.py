@@ -1,7 +1,6 @@
 import dataclasses
-import datetime
 import functools
-from typing import List, Dict, Set, Optional, DefaultDict
+from typing import List, Dict, Set, Optional, DefaultDict, Iterable
 from collections import defaultdict
 
 from AU2 import ROOT_DIR
@@ -17,18 +16,17 @@ from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown 
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
-from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
-from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.render_utils import render_all_events, get_color
+from AU2.plugins.util.DeathManager import DeathManager
 
 
 HEX_COLS = [
@@ -49,6 +47,9 @@ MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
     MAYWEEK_PLAYERS_TEMPLATE = F.read()
 
+MAYWEEK_NEWS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_news.html"
+with open(MAYWEEK_NEWS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
+    MAYWEEK_NEWS_TEMPLATE = F.read()
 
 @dataclasses.dataclass
 class ScoringParameter:
@@ -651,6 +652,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return scores
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+        # generate player info page
         team_manager = self.TeamManager()
         scores = self.calculate_scores(team_manager=team_manager)
         multiplier_owners = set(self.get_multiplier_owners())
@@ -709,5 +711,47 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     TEAM_STR = self.get_cosmetic_name("Teams") if teams_enabled else ""
                 )
             ))
+
+        # generate may week news page
+        # (this is so that the news is on one page rather than split into weeks)
+        def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Iterable) -> str:
+            """"""
+            # get info from managers
+            team = None
+            dead = False
+            for manager in managers:
+                if isinstance(manager, self.TeamManager):
+                    team = manager.member_to_team[assassin_model.identifier]
+                elif isinstance(manager, DeathManager):
+                    dead = manager.is_dead(assassin_model)
+
+            # render dead colour
+            if dead:
+                return get_color(pseudonym, dead=True)
+
+            # but otherwise use team colours
+            if team is not None:
+                return team_to_hex_col[team]
+
+            # fallback for individual
+            return get_color(pseudonym)
+
+        _, mw_weeks = render_all_events(
+            exclude=lambda e: (
+                    # TODO: when a game is not live, move hidden-ness of an event into core?
+                    e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)
+            ),
+            color_fn=mw_color_fn,
+            plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
+        )
+        mw_content = "".join("".join(day_news) for _, day_news in sorted(mw_weeks.items()))
+
+        with open(WEBPAGE_WRITE_LOCATION / "mw-news.html", "w+", encoding="utf-8") as F:
+            F.write(
+                MAYWEEK_NEWS_TEMPLATE.format(
+                    CONTENT=mw_content,
+                    YEAR=str(get_now_dt().year)
+                )
+            )
 
         return [Label("[MAY WEEK] Success!")]
