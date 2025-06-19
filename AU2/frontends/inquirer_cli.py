@@ -285,6 +285,11 @@ def render(html_component, dependency_context={}):
         assassins = list(assassins_mapping.keys())
         if len(assassins) == 0:
             return {html_component.identifier: tuple(), "skip": True}
+
+        # correct the defaults format -- sometimes it seems to end up as tuples
+        # (also turn into a set so that `in` is faster)
+        html_component.default = {tuple(l) for l in html_component.default}
+
         potential_transfers = {}
         defaults = []
         owners = [a for a in html_component.owners if a in assassins]
