@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import functools
 from typing import List, Dict, Set, Optional, DefaultDict
 from collections import defaultdict
 
@@ -7,7 +8,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event
+from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
@@ -24,7 +25,7 @@ from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalD
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
@@ -226,6 +227,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 nonlocal self
                 team_memb_changes = self.eps_get(e, "Team Changes", {})
                 TeamManager_self.member_to_team.update(team_memb_changes)
+                TeamManager_self.team_to_member_map.cache_clear()
 
             def process_events_until(self, before_event: int = float("Inf")) -> "TeamManager":
                 for e in EVENTS_DATABASE.events.values():
@@ -234,6 +236,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     self.add_event(e)
                 return self
 
+            @functools.cache
             def team_to_member_map(self) -> DefaultDict[Optional[int], Set[str]]:
                 """Produces the 'inverse' of member_to_team, i.e. a map from teams to sets of assassin identifiers"""
                 memb_map = defaultdict(lambda: set())
@@ -381,6 +384,27 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             )
         ]
 
+    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+        team_str = self.get_cosmetic_name("Teams").capitalize()
+        multiplier_str = self.get_cosmetic_name("Multiplier").lower()
+        teams_enabled = self.gsdb_get("Enable Teams?", False)
+        team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
+        team_manager = self.TeamManager()
+        scores = self.calculate_scores(team_manager=team_manager)
+        multiplier_owners = self.get_multiplier_owners()
+        multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
+
+        team = team_manager.member_to_team[assassin.identifier]
+        team_name = team_names[team] if team is not None else "(Individual)"
+
+        return [
+            ("Score", scores[assassin.identifier]),
+            # will render as plural, but eh
+            *((team_str, team_name) for _ in range(teams_enabled)),
+            (f"Has {multiplier_str}", "Y" if assassin.identifier in multiplier_owners else "N"),
+            (f"Benefits from {multiplier_str}", "Y" if assassin.identifier in multiplier_beneficiaries else "N")
+        ]
+
     def get_cosmetic_name(self, name: str) -> str:
         return self.gsdb_get(name, name.lower())
 
@@ -396,6 +420,22 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 if gainer is not None:
                     owners.add(gainer)
         return list(owners)
+
+    def get_multiplier_beneficiaries(self, multiplier_owners: List[str], team_manager) -> List[str]:
+        teams_enabled = self.gsdb_get("Enable Teams?", False)
+        if teams_enabled:
+            member_to_team = team_manager.member_to_team
+            team_to_members = team_manager.team_to_member_map()
+
+        multiplier_beneficiaries = multiplier_owners
+        # gives all players on a team with a holder of a multiplier,
+        # for the case of shared multipliers
+        sharing_multipliers = teams_enabled and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
+        if sharing_multipliers:
+            multiplier_beneficiaries = [
+                member for owner in multiplier_owners for member in team_to_members[member_to_team[owner]]
+            ]
+        return multiplier_beneficiaries
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
@@ -583,17 +623,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         scores = self.calculate_scores(team_manager=team_manager)
         multiplier_owners = set(self.get_multiplier_owners())
         teams_enabled = self.gsdb_get("Enable Teams?", False)
-        sharing_multipliers = teams_enabled and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
         member_to_team = team_manager.member_to_team
         team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-        multiplier_beneficiaries = multiplier_owners
-        # gives all players on a team with a holder of a multiplier,
-        # for the case of shared multipliers
-        if sharing_multipliers:
-            multiplier_beneficiaries = {
-                member for owner in multiplier_owners for member in team_to_members[member_to_team[owner]]
-            }
+        multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners)
 
         team_to_hex_col = {}
         for (i, team) in enumerate(team_to_members):
