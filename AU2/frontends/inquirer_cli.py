@@ -23,6 +23,7 @@ from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry impor
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.DependentComponents.AssassinDependentTextEntry import AssassinDependentTextEntry
+from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
@@ -284,9 +285,14 @@ def render(html_component, dependency_context={}):
         assassins = list(assassins_mapping.keys())
         if len(assassins) == 0:
             return {html_component.identifier: tuple(), "skip": True}
+
+        # correct the defaults format -- sometimes it seems to end up as tuples
+        # (also turn into a set so that `in` is faster)
+        html_component.default = {tuple(l) for l in html_component.default}
+
         potential_transfers = {}
         defaults = []
-        owners = [a for a in html_component.owners if a not in assassins]
+        owners = [a for a in html_component.owners if a in assassins]
         receivers = [a for a in assassins if a not in owners]
         for a1 in itertools.chain(owners, [None]):
             for a2 in itertools.chain(receivers, [None]):
@@ -320,6 +326,10 @@ def render(html_component, dependency_context={}):
             mapping[key] = (a1, a2)
             if (a1, a2) in html_component.default:
                 defaults.append(key)
+
+        # if there are no kills don't render anything
+        if not mapping:
+            return {html_component.identifier: [], "skip": True}
 
         q = [inquirer.Checkbox(
             name="q",
@@ -470,6 +480,30 @@ def render(html_component, dependency_context={}):
         if q:
             points = inquirer_prompt_with_abort(q)
         return {html_component.identifier: points}
+
+    # dependent component
+    elif isinstance(html_component, AssassinDependentInputWithDropDown):
+        dependent = html_component.pseudonym_list_identifier
+        assert (dependent in dependency_context)
+        assassins_mapping = dependency_context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: {}, "skip": True}
+        assassins = [a for a in assassins_mapping]
+        q = [inquirer.Checkbox(
+            name="assassins",
+            message=escape_format_braces(html_component.title),
+            choices=assassins,
+            default=list(html_component.default.keys())
+        )]
+        selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
+        q = []
+        for a in selected_assassins:
+            q.append(inquirer.List(
+                name=a,
+                message=f"Value for {escape_format_braces(a)}",
+                choices=html_component.options,
+                default=html_component.default.get(a)))
+        return {html_component.identifier: inquirer_prompt_with_abort(q) if q else {}}
 
     elif isinstance(html_component, DatetimeEntry):
         q = [inquirer.Text(
@@ -764,7 +798,12 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
                 move_dependent_to_front(d1)
                 d1 = d2
         final.insert(0, d1)
+        # merge nested dependencies
+        for c in final:
+            if isinstance(c, Dependency):
+                c.htmlComponents = merge_dependency(c.htmlComponents)
         move_dependent_to_front(d1)
+
     return final
 
 

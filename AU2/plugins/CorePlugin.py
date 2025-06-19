@@ -1,15 +1,19 @@
+import datetime
 import glob
 import os.path
 import random
 
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Callable
+
 from AU2 import BASE_WRITE_LOCATION
+from typing import Dict, List, Tuple, Any, Callable
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
@@ -27,7 +31,8 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
+    AttributePairTableRow
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
@@ -63,6 +68,8 @@ class CorePlugin(AbstractPlugin):
         self.HTML_SECRET_ID = "CorePlugin_identifier"
 
         self.html_ids = {
+            "Assassins": self.identifier + "_assassin",
+            "Events": self.identifier + "_events",
             "Pseudonym": self.identifier + "_pseudonym",
             "Real Name": self.identifier + "_real_name",
             "Pronouns": self.identifier + "_pronouns",
@@ -125,6 +132,12 @@ class CorePlugin(AbstractPlugin):
                 ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
             ),
             Export(
+                "core_assassin_summary",
+                "Assassin -> Summary",
+                self.ask_core_plugin_summary_assassin,
+                self.answer_core_plugin_summary_assassin
+            ),
+            Export(
                 "core_event_create_event",
                 "Event -> Create",
                 self.ask_core_plugin_create_event,
@@ -136,6 +149,12 @@ class CorePlugin(AbstractPlugin):
                 self.ask_core_plugin_delete_event,
                 self.answer_core_plugin_delete_event,
                 (self.gather_events,)
+            ),
+            Export(
+                "core_event_status",
+                "Event -> Summary",
+                self.ask_core_plugin_summary_event,
+                self.answer_core_plugin_summary_event
             ),
             Export(
                 "core_event_update_event",
@@ -212,6 +231,87 @@ class CorePlugin(AbstractPlugin):
             )
         ]
 
+    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+        player_type = assassin.is_police and "Police" or "Player"
+        hidden = assassin.hidden and "HIDDEN" or ""
+        return [
+            ("ID", str(assassin._secret_id)),
+            ("Type", f"{hidden} {player_type}"),
+            ("Name", assassin.real_name),
+            *((f"Pseudonym {i} [P{assassin._secret_id}_{i}]", p)
+                for i, p in enumerate(assassin.pseudonyms) if p),
+            ("Pronouns", assassin.pronouns),
+            ("Email", assassin.email),
+            ("Address", assassin.address),
+            ("Water status", assassin.water_status),
+            ("College", assassin.college),
+            ("Notes", assassin.notes)
+        ]
+
+    def ask_core_plugin_summary_assassin(self):
+        return [
+            InputWithDropDown(
+                self.html_ids["Assassins"],
+                title="Select assassin to show status for",
+                options=ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda _: True))
+        ] + sum((p.on_request_assassin_summary() for p in PLUGINS), start=[])
+
+    def answer_core_plugin_summary_assassin(self, htmlResponse) -> List[HTMLComponent]:
+        ident = htmlResponse[self.html_ids["Assassins"]]
+        assassin = ASSASSINS_DATABASE.get(ident)
+        return self._answer_rendering(assassin, lambda p, a: p.render_assassin_summary(a))
+
+    def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
+        response = [
+            ("ID", str(event._Event__secret_id)),
+            ("Headline", event.headline),
+            ("Date/time", event.datetime),
+            ("Deaths", ", ".join(kill[1] for kill in event.kills))
+        ]
+
+        snapshot = lambda a: f"{a.real_name} ({a._secret_id})"
+        for (i, ident) in enumerate(event.assassins):
+            a = ASSASSINS_DATABASE.get(ident)
+            pseudonym = a.get_pseudonym(event.assassins[ident])
+            response.append((f"Participant {i+1}", f"{snapshot(a)} as {pseudonym}"))
+
+        for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
+            a = ASSASSINS_DATABASE.get(ident)
+            pseudonym = a.get_pseudonym(pseudonym_idx)
+            response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
+
+        for (i, (killer_id, victim_id)) in enumerate(event.kills):
+            killer = ASSASSINS_DATABASE.get(killer_id)
+            victim = ASSASSINS_DATABASE.get(victim_id)
+            response.append((f"Kill {i+1}", f"{snapshot(killer)} kills {snapshot(victim)}"))
+        return response
+
+    def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:
+        return [
+            InputWithDropDown(
+                self.html_ids["Events"],
+                title="Select events to show status for",
+                options=self.gather_events()
+            )
+        ] + sum((p.on_request_event_summary() for p in PLUGINS), start=[])
+
+    def answer_core_plugin_summary_event(self, htmlResponse) -> List[HTMLComponent]:
+        ident = htmlResponse[self.html_ids["Events"]]
+        event = EVENTS_DATABASE.get(ident)
+        return self._answer_rendering(event, lambda p, e: p.render_event_summary(e))
+
+    def _answer_rendering(self, obj: object, renderer: Callable[[AbstractPlugin, object], List[AttributePairTableRow]]) -> List[HTMLComponent]:
+        results: List[Tuple[str, str]] = renderer(self, obj)
+        for p in PLUGINS:
+            if isinstance(p, CorePlugin):
+                continue
+            results += renderer(p, obj)
+        headings = (
+            "Attribute" + " "*25,
+            "Value" + " "*80
+        )
+        return [Table(results, headings=headings)]
+
     def on_assassin_request_create(self):
         # use this to detect whether the game has started or not, since sending the first email is the point when
         # targets are "locked in" and adding new non-police players becomes dangerous
@@ -287,7 +387,12 @@ class CorePlugin(AbstractPlugin):
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
+                        ]
+                    )
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
@@ -309,7 +414,12 @@ class CorePlugin(AbstractPlugin):
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                        ]
+                    )
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
