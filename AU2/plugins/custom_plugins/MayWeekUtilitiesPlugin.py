@@ -339,7 +339,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
     def answer_set_scoring_params(self, html_response):
         for param in self.scoring_parameters:
-            self.gsdb_set(param.identifier(), html_response[self.html_ids[param.name]])
+            self.gsdb_set(param.name, html_response[self.html_ids[param.name]])
 
         return [
             Label(title=f"Parameter {param.name} set to {html_response[self.html_ids[param.name]]}")
