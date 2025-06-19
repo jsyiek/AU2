@@ -11,14 +11,13 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.game import soft_escape
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -119,6 +118,22 @@ class WantedPlugin(AbstractPlugin):
         e.pluginState[self.identifier] = htmlResponse[self.event_html_ids["Wanted"]]
         return [Label("[WANTED] Success!")]
 
+    def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
+        results = []
+        for playerID in event.pluginState.get(self.identifier, ()):
+            a = ASSASSINS_DATABASE.get(playerID)
+            sec_id = a._sec_id
+            name = a.real_name.split(" ")
+            if len(name) > 0:
+                name = name[0]
+            else:
+                name = "<no name...?!>"
+            duration, crime, redemption = event.pluginState[self.identifier][playerID]
+            results.append((f"Wanted duration ({name} {sec_id})", str(duration) + " days"))
+            results.append((f"Wanted crime ({name} {sec_id})", crime))
+            results.append((f"Wanted redemption ({name} {sec_id})", redemption))
+        return results
+
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         messages = []
         # sort by datetime to ensure we read events in chronological order
@@ -169,6 +184,7 @@ class WantedPlugin(AbstractPlugin):
             )
         if wanted_police:
             rows = []
+            # TODO: These look like they can be deleted? Pycharm identifies default_rank and ranks as unread vars
             if police_ranks_enabled:
                 default_rank = GENERIC_STATE_DATABASE.arb_state.get(
                     "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
@@ -210,6 +226,7 @@ class WantedPlugin(AbstractPlugin):
             )
         if wanted_police_deaths:
             rows = []
+            # TODO: These look like they can be deleted? Pycharm identifies default_rank and ranks as unread vars
             if police_ranks_enabled:
                 default_rank = GENERIC_STATE_DATABASE.arb_state.get(
                     "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
