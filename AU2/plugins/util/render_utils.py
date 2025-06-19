@@ -104,7 +104,7 @@ def default_color_fn(pseudonym: str,
         if isinstance(manager, DeathManager):
             dead = manager.is_dead(assassin_model)
         elif isinstance(manager, CompetencyManager):
-            incompetent = manager.is_inco_at(assassin_model, e.datetime),
+            incompetent = manager.is_inco_at(assassin_model, e.datetime)
         elif isinstance(manager, WantedManager):
             is_wanted = manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
 
