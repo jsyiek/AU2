@@ -122,7 +122,7 @@ class WantedPlugin(AbstractPlugin):
         results = []
         for playerID in event.pluginState.get(self.identifier, ()):
             a = ASSASSINS_DATABASE.get(playerID)
-            sec_id = a._sec_id
+            sec_id = a._secret_id
             name = a.real_name.split(" ")
             if len(name) > 0:
                 name = name[0]
