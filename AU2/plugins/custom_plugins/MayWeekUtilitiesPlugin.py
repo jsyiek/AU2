@@ -22,6 +22,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
@@ -87,7 +88,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Multiplier Transfer": self.identifier + "_multiplier_transfer",
             "Kills as Team": self.identifier + "_kills_as_team",
             "BS Points": self.identifier + "_bs_points",
-            "Datetime": self.identifier + "_datetime"
+            "Event Secret ID": self.identifier + "_event_secret_id"
         }
 
         self.plugin_state = {
@@ -226,10 +227,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 team_memb_changes = self.eps_get(e, "Team Changes", {})
                 TeamManager_self.member_to_team.update(team_memb_changes)
 
-            def process_events_until(self, dt: Optional[datetime.datetime] = None) -> "TeamManager":
-                for e in sorted(EVENTS_DATABASE.events.values(), key=lambda x: x.datetime):
-                    if dt and e.datetime > dt:
-                        break
+            def process_events_until(self, max_event: int = float("Inf")) -> "TeamManager":
+                for e in EVENTS_DATABASE.events.values():
+                    if e._Event__secret_id > max_event:
+                        continue
                     self.add_event(e)
                 return self
 
@@ -344,17 +345,23 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
     def ask_teams_summary(self) -> List[HTMLComponent]:
         return [
-            OptionalDatetimeEntry(
-                self.html_ids["Datetime"],
-                title="View team status at",
-                default=get_now_dt()
-            )
+            # TODO: PR #143 might be able to solve this
+            Label(f"Note: due to technical limitations, {self.identifier} processes events in the order in which they "
+                  f"were added, not in order of the datetimes assigned to each event."),
+            InputWithDropDown(identifier=self.html_ids["Event Secret ID"],
+                              title="Select the event after which to view team status",
+                              options=[
+                                  (f"({e._Event__secret_id}) "
+                                   f"[{e.datetime.strftime('%Y-%m-%d %H:%M %p')}] {e.headline[0:25].rstrip()}",
+                                   e._Event__secret_id)
+                                  for e in reversed(EVENTS_DATABASE.events.values())
+                              ])
         ]
 
     def answer_teams_summary(self, htmlResponse) -> List[HTMLComponent]:
         teams_str = self.get_cosmetic_name("Teams").capitalize()
         multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
-        team_manager = self.TeamManager().process_events_until(htmlResponse[self.html_ids["Datetime"]])
+        team_manager = self.TeamManager().process_events_until(max_event=htmlResponse[self.html_ids["Event Secret ID"]])
         team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         multiplier_owners = self.get_multiplier_owners()
@@ -375,10 +382,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def get_cosmetic_name(self, name: str) -> str:
         return self.gsdb_get(name, name.lower())
 
-    def get_multiplier_owners(self, at: Optional[datetime.datetime] = None) -> List[str]:
+    def get_multiplier_owners(self, max_event: int = float("inf")) -> List[str]:
         owners = set()
-        for event in sorted(EVENTS_DATABASE.events.values(), key=lambda e: e.datetime):
-            if at is not None and event.datetime > at:
+        for event in EVENTS_DATABASE.events.values():
+            if int(event._Event__secret_id) > max_event:
                 continue
             key = self.plugin_state["Multiplier Transfers"]
             for (loser, gainer) in event.pluginState.get(self.identifier, {}).get(key, []):
@@ -495,7 +502,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             self.eps_set(e, "Team Changes", html_response[self.html_ids["Team Changes"]])
         return [Label("[MAY WEEK] Success!")]
 
-    def calculate_scores(self, at: Optional[datetime.datetime] = None, team_manager = None) -> Dict[str, float]:
+    def calculate_scores(self, max_event: int = float("inf"), team_manager = None) -> Dict[str, float]:
         d = self.gsdb_get("death_penalty_pct", 0) / 100
         D = self.gsdb_get("death_penalty_fixed", 0)
         b = self.gsdb_get("kill_bonus_pct", 0) / 100
@@ -507,6 +514,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         Sc = self.gsdb_get("starting_score_casual", 0)
         Sf = self.gsdb_get("starting_score_full", 0)
 
+        # passing a team manager allows us to extract team information after this function runs
         team_manager = team_manager or self.TeamManager()
 
         scores: Dict[str, float] = {a.identifier: Sf if not a.is_police else Sc for a in ASSASSINS_DATABASE.get_filtered(
@@ -517,8 +525,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         teams_enabled = self.gsdb_get("Enable Teams?", False)
         team_multiplier_sharing_enabled = teams_enabled and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
 
-        for e in sorted(EVENTS_DATABASE.events.values(), key=lambda x: x.datetime):
-            if at is not None and e.datetime > at:
+        # unfortunately events have to processed in order of secret id (i.e. in the order they were created)
+        # so that the multiplier transfer interface in Event -> Create / Event -> Update  works correctly...
+        for e in EVENTS_DATABASE.events.values():
+            if int(e._Event__secret_id) > max_event:
                 continue
             kills_made_as_team = self.eps_get(e, "Kills as Team", [])
             bs_points = self.eps_get(e, "BS Points", {}).items()
