@@ -1,8 +1,7 @@
-import dataclasses
-import datetime
-import functools
-from typing import List, Dict, Set, Optional, DefaultDict
 from collections import defaultdict
+import dataclasses
+import functools
+from typing import DefaultDict, Dict, Iterable, List, Optional, Sequence, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -17,18 +16,16 @@ from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown 
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
-from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
-from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
-from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.render_utils import render_all_events, get_color, Manager
 
 
 HEX_COLS = [
@@ -39,16 +36,22 @@ HEX_COLS = [
     '#b7a020', '#637777', '#f28110'
 ]
 
-CREW_COLOR_TEMPLATE = 'bgcolor="{HEX}"'
-TEAM_ENTRY_TEMPLATE = "<td>{TEAM}</td>"
+CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
+TEAM_ENTRY_TEMPLATE = "<td {CREW_COLOR}>{TEAM}</td>"
 TEAM_HDR_TEMPLATE = "<th>{TEAM_STR}</th>"
 PLAYER_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PLAYER_TYPE}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
-PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td>{TEAM_ENTRY}</tr>"
+PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
+                         "<td {CREW_COLOR}>{POINTS}</td>"
+                         "<td {CREW_COLOR}>{MULTIPLIER}</td>"
+                         "{TEAM_ENTRY}</tr>")
 
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
     MAYWEEK_PLAYERS_TEMPLATE = F.read()
 
+MAYWEEK_NEWS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_news.html"
+with open(MAYWEEK_NEWS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
+    MAYWEEK_NEWS_TEMPLATE = F.read()
 
 @dataclasses.dataclass
 class ScoringParameter:
@@ -651,6 +654,19 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return scores
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+        """
+        Generates player info page and may week news page.
+
+        The player info page displays two lists, one giving player pseudonyms, scores, teams (if applicable) and
+        multipliers, the other giving the real names and other targeting information for all the players.
+
+        The may week news page collates all the events onto a single page (rather than paginating like
+        PageGeneratorPlugin) and applies May Week name colouring (i.e. crews share a colour, don't colour police (casual
+        players) differently, don't colour dead players differently outside the event in which they died, don't colour
+        incos).
+        """
+
+        # player info page
         team_manager = self.TeamManager()
         scores = self.calculate_scores(team_manager=team_manager)
         multiplier_owners = set(self.get_multiplier_owners())
@@ -674,7 +690,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
             team_id = member_to_team[a_id]
             crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team_id]) if team_id is not None else "")
-            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id]) if team_id is not None else "")
+            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id], CREW_COLOR=crew_color) if team_id is not None else "")
             assassin = ASSASSINS_DATABASE.get(a_id)
             pseudonym_rows.append(
                 PSEUDONYM_ROW_TEMPLATE.format(
@@ -709,5 +725,44 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     TEAM_STR = self.get_cosmetic_name("Teams") if teams_enabled else ""
                 )
             ))
+
+        # may week news page
+
+        # colour players by crew and don't do police, or inco colouring
+        def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Sequence[Manager]) -> str:
+            # render dead colour -- but only if died *in this event*
+            if any(victim_id == assassin_model.identifier for (_, victim_id) in e.kills):
+                return get_color(pseudonym, dead=True)
+
+            # but otherwise use team colours,
+            # getting the team from TeamManager
+            team = None
+            for manager in managers:
+                if isinstance(manager, self.TeamManager):
+                    team = manager.member_to_team[assassin_model.identifier]
+                    break
+            if team is not None:
+                return team_to_hex_col[team]
+
+            # fallback for individual
+            return get_color(pseudonym)
+
+        _, mw_weeks = render_all_events(
+            exclude=lambda e: (
+                    # TODO: when a game is not live, move hidden-ness of an event into core?
+                    e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)
+            ),
+            color_fn=mw_color_fn,
+            plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
+        )
+        mw_content = "".join("".join(day_news) for _, day_news in sorted(mw_weeks.items()))
+
+        with open(WEBPAGE_WRITE_LOCATION / "mw-news.html", "w+", encoding="utf-8") as F:
+            F.write(
+                MAYWEEK_NEWS_TEMPLATE.format(
+                    CONTENT=mw_content,
+                    YEAR=str(get_now_dt().year)
+                )
+            )
 
         return [Label("[MAY WEEK] Success!")]

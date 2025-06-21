@@ -144,12 +144,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                     value=1 + score_manager.get_conkers(victim_model)
                 )
                 added_nodes.add(victim)
-            headline, _ = render_headline_and_reports(
-                e,
-                death_manager=DeathManager(),
-                competency_manager=competency_manager,
-                wanted_manager=wanted_manager
-            )
+            headline, _ = render_headline_and_reports(e, plugin_managers=(competency_manager, wanted_manager))
             plaintext_headline = lxml.html.fromstring(f"<html>{headline}</html>").text_content()
             net.add_edge(killer_searchable, victim_searchable,
                          label=e.datetime.strftime(DATETIME_FORMAT),
