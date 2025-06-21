@@ -1,7 +1,7 @@
+from collections import defaultdict
 import dataclasses
 import functools
-from typing import List, Dict, Set, Optional, DefaultDict, Iterable
-from collections import defaultdict
+from typing import DefaultDict, Dict, Iterable, List, Optional, Sequence, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -25,7 +25,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, Att
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import render_all_events, get_color
+from AU2.plugins.util.render_utils import render_all_events, get_color, Manager
 
 
 HEX_COLS = [
@@ -40,10 +40,10 @@ CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
 TEAM_ENTRY_TEMPLATE = "<td {CREW_COLOR}>{TEAM}</td>"
 TEAM_HDR_TEMPLATE = "<th>{TEAM_STR}</th>"
 PLAYER_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PLAYER_TYPE}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
-PSEUDONYM_ROW_TEMPLATE = "<tr><td {CREW_COLOR}>{PSEUDONYM}</td>" \
-                         "<td {CREW_COLOR}>{POINTS}</td>" \
-                         "<td {CREW_COLOR}>{MULTIPLIER}</td>" \
-                         "{TEAM_ENTRY}</tr>"
+PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
+                         "<td {CREW_COLOR}>{POINTS}</td>"
+                         "<td {CREW_COLOR}>{MULTIPLIER}</td>"
+                         "{TEAM_ENTRY}</tr>")
 
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -456,7 +456,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     owners.add(gainer)
         return list(owners)
 
-    def get_multiplier_beneficiaries(self, multiplier_owners: List[str], team_manager) -> List[str]:
+    def get_multiplier_beneficiaries(self, multiplier_owners: Iterable[str], team_manager) -> List[str]:
         teams_enabled = self.gsdb_get("Enable Teams?", False)
         if teams_enabled:
             member_to_team = team_manager.member_to_team
@@ -654,7 +654,19 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return scores
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
-        # generate player info page
+        """
+        Generates player info page and may week news page.
+
+        The player info page displays two lists, one giving player pseudonyms, scores, teams (if applicable) and
+        multipliers, the other giving the real names and other targeting information for all the players.
+
+        The may week news page collates all the events onto a single page (rather than paginating like
+        PageGeneratorPlugin) and applies May Week name colouring (i.e. crews share a colour, don't colour police (casual
+        players) differently, don't colour dead players differently outside the event in which they died, don't colour
+        incos).
+        """
+
+        # player info page
         team_manager = self.TeamManager()
         scores = self.calculate_scores(team_manager=team_manager)
         multiplier_owners = set(self.get_multiplier_owners())
@@ -714,22 +726,21 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 )
             ))
 
-        # generate may week news page
-        # (this is so that the news is on one page rather than split into weeks)
+        # may week news page
 
         # colour players by crew and don't do police, or inco colouring
-        def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Iterable) -> str:
-            # get crew info from manager
-            team = None
-            for manager in managers:
-                if isinstance(manager, self.TeamManager):
-                    team = manager.member_to_team[assassin_model.identifier]
-
+        def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Sequence[Manager]) -> str:
             # render dead colour -- but only if died *in this event*
             if any(victim_id == assassin_model.identifier for (_, victim_id) in e.kills):
                 return get_color(pseudonym, dead=True)
 
-            # but otherwise use team colours
+            # but otherwise use team colours,
+            # getting the team from TeamManager
+            team = None
+            for manager in managers:
+                if isinstance(manager, self.TeamManager):
+                    team = manager.member_to_team[assassin_model.identifier]
+                    break
             if team is not None:
                 return team_to_hex_col[team]
 

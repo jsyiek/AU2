@@ -1,8 +1,8 @@
+from abc import abstractmethod
 import datetime
-import re
 import itertools
-
-from typing import Callable, Dict, List, Optional, Iterable, Tuple
+import re
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Protocol
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -89,17 +89,34 @@ def event_url(e: Event) -> str:
     week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
     return f"news{week:02}.html#{e._Event__secret_id}"
 
-# Generic colour function type
-ColorFn = Callable[[str, Assassin, Event, Iterable], str]
-# default colour function
+
+class Manager(Protocol):
+    """
+    Interface for managers to process game state for correct player colouring.
+    Implemented by CompetencyManager, DeathManager, WantedManager, and also TeamManager from MayWeekUtilitiesPlugin
+    """
+    @abstractmethod
+    def add_event(self, e: Event):
+        """Interface for having a manager process an event."""
+        raise NotImplementedError
+
+
 def default_color_fn(pseudonym: str,
                      assassin_model: Assassin,
                      e: Event,
-                     plugin_managers: Iterable) -> str:
+                     plugin_managers: Sequence[Manager]) -> str:
+    """
+    Default rules for colouring pseudonyms.
+
+    Determines competency, wantedness, and vitality at the event `e` from managers in `plugin_manager` that have been
+    updated chronologically up to the event `e`.
+
+    Colour is then assigned by `get_color` using this information.
+    """
     is_police = assassin_model.is_police
 
     # retrieve info from managers
-    is_wanted, dead, incompetent = (False,) * 3
+    is_wanted, dead, incompetent = False, False, False
     for manager in plugin_managers:
         if isinstance(manager, DeathManager):
             dead = manager.is_dead(assassin_model)
@@ -111,12 +128,12 @@ def default_color_fn(pseudonym: str,
     return get_color(pseudonym, dead, incompetent, is_police, is_wanted)
 
 
-# basic colouring rules
 def get_color(pseudonym: str,
               dead: bool = False,
               incompetent: bool = False,
               is_police: bool = False,
               is_wanted: bool = False) -> str:
+    """Basic colouring rules that can be used by `ColorFn`s."""
     ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
     # colour appropriately
     if is_wanted:
@@ -164,17 +181,22 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     return string
 
 
+# required signature when replacing default_color_fn
+ColorFn = Callable[[str, Assassin, Event, Sequence[Manager]], str]
+
+
 def render_headline_and_reports(e: Event,
-                                plugin_managers: Optional[Iterable] = None,
+                                plugin_managers: Optional[Sequence[Manager]] = None,
                                 color_fn: ColorFn = default_color_fn) -> (str, Dict[Tuple[str, int], str]):
     """
     Produces the HTML renderings of an events headline and its reports
 
     Args:
         e (Event): the event to render the headline and reports of
-        plugin_managers (Iterable, optional): An iterable yielding managers (i.e. DeathManager, CompetencyManager,
-            WantedManager) that have been updated up to the event `e`
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and an iterable of managers and
+        plugin_managers (Optional[Sequence[Manager]]): A sequence of managers that have been updated up to the event
+            `e`. When called by PageGeneratorPlugin this will contain a CompetencyManager, DeathManager, and
+            WantedManager, but other plugins may use it differently.
+        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
             returning a colour hexcode (including #). Defaults to `default_color_fn`.
 
     Returns:
@@ -229,11 +251,23 @@ def render_headline_and_reports(e: Event,
 
 
 def render_event(e: Event,
-                 plugin_managers: Optional[Iterable] = None,
+                 plugin_managers: Optional[Sequence[Manager]] = None,
                  color_fn: ColorFn = default_color_fn) -> (str, str):
     """
     Renders the full HTML for the event, including headline and reports
     Also gives the HTML rendering of the headline for the headlines page.
+
+    Args:
+        e (Event): the event to render as html
+        plugin_managers (Optional[Sequence[Manager]]): A sequence of managers that have been updated up to the event
+            `e`. When called by PageGeneratorPlugin this will contain a CompetencyManager, DeathManager, and
+            WantedManager, but other plugins may use it differently.
+        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
+            returning a colour hexcode (including #). Defaults to `default_color_fn`.
+
+    Returns:
+        (str, str): A tuple of (event_html, headline_html), i.e. html renderings of, respectively, the whole event
+        (headline and reports, for news pages), and the headline only (for the headlines page).
     """
     plugin_managers = plugin_managers or tuple()
     headline, reports = render_headline_and_reports(
@@ -263,33 +297,33 @@ def render_event(e: Event,
 
     report_text = "".join(report_list)
     time_str = datetime_to_time_str(e.datetime)
-    event_text = EVENT_TEMPLATE.format(
+    event_html = EVENT_TEMPLATE.format(
         ID=e._Event__secret_id,
         TIME=time_str,
         HEADLINE=headline,
         REPORTS=report_text
     )
-    headline_text = HEAD_HEADLINE_TEMPLATE.format(
+    headline_html = HEAD_HEADLINE_TEMPLATE.format(
         URL=event_url(e),
         TIME=time_str,
         HEADLINE=headline
     )
-    return event_text, headline_text
+    return event_html, headline_html
 
 
 def render_all_events(exclude: Callable[[Event], bool],
                       color_fn: ColorFn = default_color_fn,
-                      plugin_managers: Optional[Iterable] = None) -> (List[str], Dict[int, List[str]]):
+                      plugin_managers: Optional[Sequence[Manager]] = None) -> (List[str], Dict[int, List[str]]):
     """
     Produces a rendering of all events not excluded by `exclude`.
 
     Args:
         exclude: a function taking an Event as input and returning a boolean for whether or not it should be rendered.
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and an iterable of managers and
+        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
             returning a colour hexcode (including #). Defaults to `default_color_fn`.
-        plugin_managers (optional): Iterable of 'manager' objects that will get passed into `color_fn` along with a
-            CompetencyManager, DeathManager, and WantedManager. Only requirement is that they all have `add_event`
-            methods taking an Event as the only argument. Events are added in chronological order.
+        plugin_managers (Optional[Sequence[Manager]]): Sequence of additional, newly-initialised Managers that will be
+            passed into `color_fn` along with a CompetencyManager, DeathManager, and WantedManager. Events are added to
+            these managers in chronological order.
 
     Returns:
         A tuple of: a list of strings where each element is the HTML rendering of one day's headlines, and a dict
