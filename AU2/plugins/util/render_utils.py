@@ -1,4 +1,3 @@
-from abc import abstractmethod
 import datetime
 import itertools
 import re
@@ -95,10 +94,8 @@ class Manager(Protocol):
     Interface for managers to process game state for correct player colouring.
     Implemented by CompetencyManager, DeathManager, WantedManager, and also TeamManager from MayWeekUtilitiesPlugin
     """
-    @abstractmethod
     def add_event(self, e: Event):
         """Interface for having a manager process an event."""
-        raise NotImplementedError
 
 
 def default_color_fn(pseudonym: str,

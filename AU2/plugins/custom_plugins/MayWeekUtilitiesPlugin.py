@@ -456,7 +456,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     owners.add(gainer)
         return list(owners)
 
-    def get_multiplier_beneficiaries(self, multiplier_owners: Iterable[str], team_manager) -> List[str]:
+    def get_multiplier_beneficiaries(self, multiplier_owners: List[str], team_manager) -> List[str]:
         teams_enabled = self.gsdb_get("Enable Teams?", False)
         if teams_enabled:
             member_to_team = team_manager.member_to_team
