@@ -37,11 +37,14 @@ HEX_COLS = [
     '#b7a020', '#637777', '#f28110'
 ]
 
-CREW_COLOR_TEMPLATE = 'bgcolor="{HEX}"'
-TEAM_ENTRY_TEMPLATE = "<td>{TEAM}</td>"
+CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
+TEAM_ENTRY_TEMPLATE = "<td {CREW_COLOR}>{TEAM}</td>"
 TEAM_HDR_TEMPLATE = "<th>{TEAM_STR}</th>"
 PLAYER_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PLAYER_TYPE}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
-PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td>{TEAM_ENTRY}</tr>"
+PSEUDONYM_ROW_TEMPLATE = "<tr><td {CREW_COLOR}>{PSEUDONYM}</td>" \
+                         "<td {CREW_COLOR}>{POINTS}</td>" \
+                         "<td {CREW_COLOR}>{MULTIPLIER}</td>" \
+                         "{TEAM_ENTRY}</tr>"
 
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -676,7 +679,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
             team_id = member_to_team[a_id]
             crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team_id]) if team_id is not None else "")
-            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id]) if team_id is not None else "")
+            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id], CREW_COLOR=crew_color) if team_id is not None else "")
             assassin = ASSASSINS_DATABASE.get(a_id)
             pseudonym_rows.append(
                 PSEUDONYM_ROW_TEMPLATE.format(
