@@ -26,7 +26,6 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.render_utils import render_all_events, get_color
-from AU2.plugins.util.DeathManager import DeathManager
 
 
 HEX_COLS = [
@@ -717,19 +716,17 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         # generate may week news page
         # (this is so that the news is on one page rather than split into weeks)
+
+        # colour players by crew and don't do police, or inco colouring
         def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Iterable) -> str:
-            """"""
-            # get info from managers
+            # get crew info from manager
             team = None
-            dead = False
             for manager in managers:
                 if isinstance(manager, self.TeamManager):
                     team = manager.member_to_team[assassin_model.identifier]
-                elif isinstance(manager, DeathManager):
-                    dead = manager.is_dead(assassin_model)
 
-            # render dead colour
-            if dead:
+            # render dead colour -- but only if died *in this event*
+            if any(victim_id == assassin_model.identifier for (_, victim_id) in e.kills):
                 return get_color(pseudonym, dead=True)
 
             # but otherwise use team colours
