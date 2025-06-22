@@ -1,3 +1,5 @@
+"""Tests for MalformedPlayerCode sanity check."""
+
 from AU2.database.model import Event
 from AU2.plugins.sanity_checks.MalformedPlayerCode import MalformedPlayerCode
 from AU2.test.test_utils import plugin_test, dummy_event

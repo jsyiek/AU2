@@ -9,34 +9,31 @@ from AU2.plugins.sanity_checks.model.SanityCheck import Suggestion
 
 class MalformedPlayerCode(SanityCheck):
     """
-    Finds and detects cases where player pseudonym/name codes like [PX], [DX], [NX] have
-    incorrect brackets and suggests corrections, preserving outer context.
+    Detects and fixes malformed player codes in event headlines and reports.
+    
+    Player codes should use the format [PX], [DX], or [NX] where X is a number.
+    Some codes may be contextually wrapped in parentheses as ([CODE]).
     
     Detects various bracket mistakes including:
-    - Wrong closing bracket: [P123) -> [P123]
-    - Wrong opening bracket: (P123] -> [P123] 
-    - Mixed brackets: {P123) -> [P123]
-    - Missing brackets: P123] -> [P123]
-    - Parentheses instead of brackets: (P123) -> [P123]
-    - Preserves outer context: ([P120)] -> ([P120])
+    - Mismatched brackets: [P123) -> [P123]
+    - Wrong bracket types: (P123) -> [P123] or {P123} -> [P123]
+    - Mixed bracket patterns: ([P123)] -> ([P123])
+    - Missing brackets on isolated codes: P123 -> [P123]
+    - Contextual corrections: [(P123)] -> ([P123])
     """
 
     identifier = "Malformed_Player_Code"
 
     def _find_malformed_codes(self, string: str, fixes: Dict[str, str]):
         """
-        Find malformed player pseudonym/name codes in the given string and add corrections to fixes dict.
+        Find malformed player codes in the string and add corrections to fixes dict.
         
-        Detects various bracket mistakes while preserving outer context:
-        - Wrong closing bracket: [P123) -> [P123]
-        - Wrong opening bracket: (P123] -> [P123]
-        - Mixed brackets: {P123) -> [P123]
-        - Missing opening bracket: P123] -> [P123]
-        - Parentheses instead: (P123) -> [P123]
-        - Mixed outer/inner brackets: ([P123)] -> [P123]
+        Args:
+            string: Text to search for malformed player codes
+            fixes: Dictionary to store original -> corrected mappings
         """
-        # Pattern to match player codes with various bracket configurations
-        # Captures any surrounding brackets and the player code
+        # Regex to match player codes: [P/D/N][digits][optional_index]
+        # Captures surrounding brackets, core code, and closing brackets
         pattern = r"([\(\{\[]*)([PND]\d+(?:_\d+)?)([\]\)\}]*)"
         
         for match in re.finditer(pattern, string):
@@ -45,20 +42,9 @@ class MalformedPlayerCode(SanityCheck):
             suffix_brackets = match.group(3)  # Closing brackets
             full_match = match.group(0)
             
-            # Skip if no brackets at all and not clearly isolated
+            # Skip unbracketed codes that aren't clearly isolated
             if not prefix_brackets and not suffix_brackets:
-                before_pos = match.start()
-                after_pos = match.end()
-                
-                before_char = string[before_pos - 1] if before_pos > 0 else ' '
-                after_char = string[after_pos] if after_pos < len(string) else ' '
-                
-                # Skip if it's likely part of a larger word/identifier
-                if before_char.isalnum() or after_char.isalnum():
-                    continue
-                    
-                # Only suggest brackets if it's clearly a standalone code
-                if not (before_char in ' .,;:!?' and after_char in ' .,;:!?'):
+                if not self._is_isolated_code(string, match.start(), match.end()):
                     continue
             
             # Determine if this needs fixing
@@ -105,6 +91,18 @@ class MalformedPlayerCode(SanityCheck):
             # Add to fixes if malformed
             if needs_fixing and corrected_code and full_match != corrected_code:
                 fixes[full_match] = corrected_code
+
+    def _is_isolated_code(self, string: str, start_pos: int, end_pos: int) -> bool:
+        """Check if a player code is isolated (not part of a larger word)."""
+        before_char = string[start_pos - 1] if start_pos > 0 else ' '
+        after_char = string[end_pos] if end_pos < len(string) else ' '
+        
+        # Skip if it's likely part of a larger word/identifier
+        if before_char.isalnum() or after_char.isalnum():
+            return False
+            
+        # Only consider isolated if surrounded by proper separators
+        return before_char in ' .,;:!?' and after_char in ' .,;:!?'
 
     def _gather_fixes(self, e: Event):
         """Gather all needed fixes for an event."""

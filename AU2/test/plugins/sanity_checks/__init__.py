@@ -1,1 +1,1 @@
-# Test package for sanity checks
+"""Test package for sanity checks."""
