@@ -85,9 +85,17 @@ class MalformedPlayerCode(SanityCheck):
                 # - [(CODE] - incomplete reversed  
                 # - ([CODE] - incomplete correct start
                 # - ([CODE)] - mixed brackets (paren-bracket start, bracket-paren end)
-                elif (full_match.startswith('[') or full_match.startswith('([')) and ('(' in full_match or ')' in full_match):
+                elif (full_match.startswith('[(') or 
+                      full_match.startswith('([') or 
+                      (full_match.startswith('[') and full_match.endswith(')]'))):
                     # This looks like it should be ([CODE]) format
                     corrected_code = f"([{player_code}])"
+                    needs_fixing = True
+                # Check for simple bracket mismatches like [CODE) or (CODE] 
+                elif ((full_match.startswith('[') and full_match.endswith(')')) or 
+                      (full_match.startswith('(') and full_match.endswith(']'))):
+                    # Simple bracket mismatch - fix to [CODE]
+                    corrected_code = f"[{player_code}]"
                     needs_fixing = True
                 else:
                     # Default: replace with square brackets only
