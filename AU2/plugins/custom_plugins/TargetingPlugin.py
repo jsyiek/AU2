@@ -69,13 +69,20 @@ class TargetingPlugin(AbstractPlugin):
                 "Targeting Graph -> Seed only for updates",
                 self.ask_set_initial_seeding,
                 self.answer_set_initial_seeding
+            ),
+            DangerousConfigExport(
+                "targeting_disable_update_seeding",
+                "Targeting Graph -> Disable seeds for updates",
+                self.ask_disable_update_seeding,
+                self.answer_disable_update_seeding
             )
         ]
 
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
             "Random Seed": self.identifier + "_random_seed",
-            "Initial Seeding": self.identifier + "_initial_seeding"
+            "Initial Seeding": self.identifier + "_initial_seeding",
+            "Disable Update Seeding": self.identifier + "_disable_update_seeding"
         }
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
@@ -176,6 +183,21 @@ class TargetingPlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["use_seeds_for_updates_only"] = use_seeds_for_updates_only
         answer = "won't" if use_seeds_for_updates_only else "will"
         return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
+
+    def ask_disable_update_seeding(self):
+        return [
+            Checkbox(
+                identifier=self.html_ids["Disable Update Seeding"],
+                title="Disable seed constraints for updates?",
+                checked=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("disable_seeds_for_updates", False)
+            )
+        ]
+
+    def answer_disable_update_seeding(self, htmlResponse):
+        disable_seeds_for_updates = htmlResponse[self.html_ids["Disable Update Seeding"]]
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["disable_seeds_for_updates"] = disable_seeds_for_updates
+        answer = "disabled" if disable_seeds_for_updates else "enabled"
+        return [Label(f"[TARGETING] Seed constraints for updates are now {answer}.")]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
         graph = self.compute_targets([]) # we don't care about any issues that arise
@@ -325,7 +347,10 @@ class TargetingPlugin(AbstractPlugin):
 
             # try to fix with triangle elimination
             # this function has side effects
-            success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
+            disable_seeds_for_updates = GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("disable_seeds_for_updates", False)
+            seeds_to_use = set() if disable_seeds_for_updates else player_seeds_set
+            
+            success = self.update_graph(response, targeting_graph, targeters_graph, deaths, seeds_to_use)
             if success:
                 continue
 
@@ -334,7 +359,7 @@ class TargetingPlugin(AbstractPlugin):
                 targeting_graph,
                 targeters_graph,
                 deaths,
-                player_seeds_set,
+                seeds_to_use,
                 allow_mutual_seed_targets=True
             )
 
@@ -348,7 +373,7 @@ class TargetingPlugin(AbstractPlugin):
                 targeting_graph,
                 targeters_graph,
                 deaths,
-                player_seeds_set,
+                seeds_to_use,
                 allow_mutual_seed_targets=True,
                 allow_mutual_targets=True
             )
