@@ -10,7 +10,7 @@ from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
 class TestCompetencyPlugin:
 
     def get_manager(self, mockGame, auto_competency=False, initial_competency_period=7) -> CompetencyManager:
-        m = CompetencyManager(game_start=mockGame.new_datetime())
+        m = CompetencyManager(game_start=mockGame.game_start)
         m.activated = True
         m.auto_competency = auto_competency
         m.initial_competency_period = datetime.timedelta(days=initial_competency_period)
@@ -176,3 +176,65 @@ class TestCompetencyPlugin:
         game.refresh_deaths_from_db()
 
         assert len(game.get_remaining_players()) == 8
+
+    @plugin_test
+    def test_list_of_inco_corpses(self, auto_competency: bool = True):
+        """
+        Tests that the list of corpses for the inco page is computed correctly.
+        """
+        p = some_players(250)
+        game = MockGame().having_assassins(p)
+
+        # first players 51-100 die while not inco
+        for i, j in zip(range(50), range(51, 100)):
+            game.assassin(p[i]).kills(p[j])
+
+        # fast forwards 15 days so all players are inco
+        game.new_datetime(minutes=60 * 24 * 15)
+
+        # players 101-150 die while inco, and players 1-50 gain competency
+        for i, j in zip(range(1, 50), range(101, 150)):
+            game.assassin(p[i]).kills(p[j])
+
+        # fast forwards 1 day
+        game.new_datetime(minutes=60 * 24)
+
+        # players 201-250 become competent through attempts
+        for i in range(201, 250):
+            if auto_competency:
+                game.add_attempts(p[i], p[i])  # double attempt => competency
+            else:
+                # manual competency
+                game.assassin(p[i]).is_involved_in_event(
+                    pluginState={"CompetencyPlugin": {"competency": {p[i] + " identifier": 7}}}
+                )
+
+        # fast forwards 1 day
+        game.new_datetime(minutes=60 * 24)
+
+        # players 201-250 die while competent from attempts after previously being inco
+        for i, j in zip(range(1, 50), range(201, 250)):
+            game.assassin(p[i]).kills(p[j])
+
+        # now check the inco corpses
+        manager = self.get_manager(game, auto_competency=auto_competency)
+        inco_corpses = manager.inco_corpses
+
+        # neither the live, competent players,
+        # nor the first set of players who died while competent,
+        # should be inco corpses
+        for i in range(100):
+            assert ASSASSINS_DATABASE.get(p[i] + " identifier") not in inco_corpses
+
+        # the players who died while inco should be inco corpses
+        for i in range(101, 150):
+            assert ASSASSINS_DATABASE.get(p[i] + " identifier") in inco_corpses
+
+        # neither the live inco players,
+        # nor the second set of players who died while competent,
+        # should be inco corpses
+        for i in range(151, 250):
+            assert ASSASSINS_DATABASE.get(p[i] + " identifier") not in inco_corpses
+
+    def test_inco_corpses_manual_competency(self):
+        self.test_list_of_inco_corpses(auto_competency=False)

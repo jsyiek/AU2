@@ -9,6 +9,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.MetaComponents.ComponentOverride import ComponentOverride
 from AU2.html_components.MetaComponents.Searchable import Searchable
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
@@ -17,16 +18,29 @@ from AU2.plugins.CorePlugin import registered_plugin
 
 class Call(Flag):
     NONE = 0
-    EVENT_CREATE = 1
-    EVENT_UPDATE = 2
-    EVENT_DELETE = 4
-    ASSASSIN_CREATE = 8
-    ASSASSIN_UPDATE = 16
+    EVENT_CREATE = 2 << 0
+    EVENT_UPDATE = 2 << 1
+    EVENT_DELETE = 2 << 2
+    ASSASSIN_CREATE = 2 << 3
+    ASSASSIN_UPDATE = 2 << 4
+    ASSASSIN_STATUS = 2 << 5
+
 
 EnabledFor = namedtuple("EnabledFor", ("call", "hooks"), defaults=(Call.NONE, tuple()))
 
+
 @dataclass
 class UIChange:
+    """
+    Represents a change in the UI to be applied across the tool.
+
+    name (str): Name of this change to show in the UI
+    replaces (str): Identifier of component to replace
+    component (str): Replacement component
+    enabled_for (EnabledFor): The calls/hooks for which this change should be enabled
+    replacement_effects: A function to allow the new component to steal options/info from the replaced component.
+                         First arg is old component, second is new component
+    """
     name: str
     replaces: str
     component: HTMLComponent
@@ -75,9 +89,17 @@ class UIConfigPlugin(AbstractPlugin):
         def filter_options(component, l):
             component.options = [o for o in component.options if o in l or o in component.defaults]
 
+        def filter_input_dropdown(component, l):
+            component.options = [o for o in component.options if o in l or o == component.selected]
+
         def steal_options(old_comp, new_comp):
             new_comp.component.options = old_comp.options
             new_comp.component.defaults = old_comp.defaults
+            new_comp.component.title = old_comp.title
+
+        def steal_input_dropdown_options(old_comp, new_comp):
+            new_comp.component.options = old_comp.options
+            new_comp.component.selected = old_comp.selected
             new_comp.component.title = old_comp.title
 
         self.ui_changes = [
@@ -94,7 +116,7 @@ class UIConfigPlugin(AbstractPlugin):
                     accessor=lambda component: sorted([a[0] for a in component.assassins]),
                     setter=filter_assassin_list
                 ),
-                enabled_for=EnabledFor(call=Call.EVENT_CREATE | Call.EVENT_UPDATE),
+                enabled_for=EnabledFor(call=Call.EVENT_CREATE | Call.EVENT_UPDATE, hooks=tuple()),
                 replacement_effects=steal_assassins
             ),
             UIChange(
@@ -110,8 +132,24 @@ class UIConfigPlugin(AbstractPlugin):
                     accessor=lambda component: sorted(component.options),
                     setter=filter_options
                 ),
-                enabled_for=EnabledFor(hooks=("CorePlugin_hide_assassins",)),
+                enabled_for=EnabledFor(call=Call.NONE, hooks=("CorePlugin_hide_assassins",)),
                 replacement_effects=steal_options
+            ),
+            UIChange(
+                name="Searchable Assassins (Summary)",
+                replaces="CorePlugin_assassin",
+                component=Searchable(
+                    component=InputWithDropDown(
+                        identifier="CorePlugin_assassin",
+                        title="",
+                        options=[]
+                    ),
+                    title="Enter assassin names to search for",
+                    accessor=lambda component: sorted(component.options),
+                    setter=filter_input_dropdown
+                ),
+                enabled_for=EnabledFor(call=Call.ASSASSIN_STATUS, hooks=tuple()),
+                replacement_effects=steal_input_dropdown_options
             )
         ]
 
@@ -133,6 +171,9 @@ class UIConfigPlugin(AbstractPlugin):
     def get_overrides_for_call(self, call: Call):
         comps = [c.get_for_call(call) for c in self.ui_changes]
         return [c for c in comps if c]
+
+    def on_request_assassin_summary(self) -> List[HTMLComponent]:
+        return self.get_overrides_for_call(Call.ASSASSIN_STATUS)
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.EVENT_CREATE)

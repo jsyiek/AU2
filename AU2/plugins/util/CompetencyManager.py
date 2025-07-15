@@ -1,9 +1,8 @@
 import datetime
 
 from collections import defaultdict
-from typing import Optional
+from typing import Optional, List
 
-from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
@@ -22,6 +21,7 @@ class CompetencyManager:
     def __init__(self, game_start: datetime.datetime):
         # from assassin ID to deadline
         self.deadlines = defaultdict(lambda: self.game_start + self.initial_competency_period)
+        self.inco_corpses: List[Assassin] = []
         self.game_start = game_start
         self.initial_competency_period = datetime.timedelta(days=GENERIC_STATE_DATABASE.arb_int_state.get(ID_GAME_START, DEFAULT_START_COMPETENCY))
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("CompetencyPlugin", False)
@@ -34,9 +34,14 @@ class CompetencyManager:
                 self.deadlines[aID],
                 e.datetime + datetime.timedelta(days=extn)
             )
+        for (_, victim) in e.kills:
+            victim_model = ASSASSINS_DATABASE.get(victim)
+            if self.is_inco_at(victim_model, e.datetime):
+                self.inco_corpses.append(victim_model)
         if self.auto_competency:
             for (killer, victim) in e.kills:
-                if ASSASSINS_DATABASE.get(victim).is_police:
+                victim_model = ASSASSINS_DATABASE.get(victim)
+                if victim_model.is_police:
                     continue
                 self.attempts_since_kill[killer] = 0
                 # Allows overriding auto competency on a case-by-case basis

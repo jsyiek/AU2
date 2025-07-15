@@ -1,12 +1,27 @@
 import datetime
+
 from html import escape
+from typing import Optional
 
 from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.plugins.util.date_utils import get_now_dt
 
-
 HTML_REPORT_PREFIX = "<!--HTML-->"
+
+
+def soft_escape(string: str) -> str:
+    """
+    Escapes html and adds <br /> to newlines only if not prefixed by HTML_REPORT_PREFIX
+    """
+
+    # umpires may regret allowing this
+    # supposing you are a clever player who has found this and the umpire does not know...
+    # please spare the umpire any headaches
+    # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
+    if not string.startswith(HTML_REPORT_PREFIX):
+        return escape(string).replace("\n", "<br />\n")
+    return string
 
 
 def get_game_start() -> datetime.datetime:
@@ -26,18 +41,20 @@ def set_game_start(date: datetime.datetime):
     """
     GENERIC_STATE_DATABASE.arb_state["game_start"] = date.timestamp()
 
-def soft_escape(string: str) -> str:
-    """
-    Escapes html and adds <br /> to newlines only if not prefixed by HTML_REPORT_PREFIX
-    """
 
-    # umpires may regret allowing this
-    # supposing you are a clever player who has found this and the umpire does not know...
-    # please spare the umpire any headaches
-    # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
-    if not string.startswith(HTML_REPORT_PREFIX):
-        return escape(string).replace("\n", "<br />\n")
-    return string
+def get_game_end() -> Optional[datetime.datetime]:
+    """
+    Returns the end of the game, or `None` if the end of the game hasn't been set.
+    """
+    ts = GENERIC_STATE_DATABASE.arb_state.get("game_end", None)
+    return datetime.datetime.fromtimestamp(ts).astimezone(TIMEZONE) if ts else None
+
+
+def set_game_end(date: Optional[datetime.datetime]):
+    """
+    Sets the end of the game
+    """
+    GENERIC_STATE_DATABASE.arb_state["game_end"] = date.timestamp() if date else None
 
 
 def escape_format_braces(string: str) -> str:
@@ -56,5 +73,4 @@ def escape_format_braces(string: str) -> str:
         >>> escape_format_braces(":} :{")
         ":}} :{{"
     """
-    # need type check because, when escaping default values, `None` is sometimes passed to this function
     return string.replace("{", "{{").replace("}", "}}")

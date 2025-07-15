@@ -1,18 +1,26 @@
+import datetime
 import glob
 import os.path
+import random
 
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Callable
+
+from AU2 import BASE_WRITE_LOCATION
+from typing import Dict, List, Tuple, Any, Callable
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
+from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
@@ -23,12 +31,13 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
+    AttributePairTableRow
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start
-
+from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.date_utils import get_now_dt
 
 AVAILABLE_PLUGINS = {}
 
@@ -59,6 +68,8 @@ class CorePlugin(AbstractPlugin):
         self.HTML_SECRET_ID = "CorePlugin_identifier"
 
         self.html_ids = {
+            "Assassins": self.identifier + "_assassin",
+            "Events": self.identifier + "_events",
             "Pseudonym": self.identifier + "_pseudonym",
             "Real Name": self.identifier + "_real_name",
             "Pronouns": self.identifier + "_pronouns",
@@ -68,7 +79,9 @@ class CorePlugin(AbstractPlugin):
             "College": self.identifier + "_college",
             "Notes": self.identifier + "_notes",
             "Police": self.identifier + "_police",
-            "Hidden Assassins": self.identifier + "_hidden_assassins"
+            "Hidden Assassins": self.identifier + "_hidden_assassins",
+            "Nuke Database": self.identifier + "_nuke",
+            "Secret Number": self.identifier + "_secret_confirm"
         }
 
         self.params = {
@@ -119,6 +132,12 @@ class CorePlugin(AbstractPlugin):
                 ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
             ),
             Export(
+                "core_assassin_summary",
+                "Assassin -> Summary",
+                self.ask_core_plugin_summary_assassin,
+                self.answer_core_plugin_summary_assassin
+            ),
+            Export(
                 "core_event_create_event",
                 "Event -> Create",
                 self.ask_core_plugin_create_event,
@@ -130,6 +149,12 @@ class CorePlugin(AbstractPlugin):
                 self.ask_core_plugin_delete_event,
                 self.answer_core_plugin_delete_event,
                 (self.gather_events,)
+            ),
+            Export(
+                "core_event_status",
+                "Event -> Summary",
+                self.ask_core_plugin_summary_event,
+                self.answer_core_plugin_summary_event
             ),
             Export(
                 "core_event_update_event",
@@ -156,6 +181,12 @@ class CorePlugin(AbstractPlugin):
                 self.ask_config,
                 self.answer_config,
                 (self.gather_config_options,)
+            ),
+            Export(
+                identifier="core_plugin_reset_database",
+                display_name="Reset Database",
+                ask=self.ask_reset_database,
+                answer=self.answer_reset_database
             )
         ]
 
@@ -181,6 +212,12 @@ class CorePlugin(AbstractPlugin):
                 self.answer_set_game_start
             ),
             ConfigExport(
+                "core_plugin_set_game_end",
+                "CorePlugin -> Set game end",
+                self.ask_set_game_end,
+                self.answer_set_game_end
+            ),
+            ConfigExport(
                 "core_plugin_suppress_exports",
                 "CorePlugin -> Hide menu options",
                 self.ask_suppress_exports,
@@ -194,7 +231,94 @@ class CorePlugin(AbstractPlugin):
             )
         ]
 
+    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+        player_type = assassin.is_police and "Police" or "Player"
+        hidden = assassin.hidden and "HIDDEN" or ""
+        return [
+            ("ID", str(assassin._secret_id)),
+            ("Type", f"{hidden} {player_type}"),
+            ("Name", assassin.real_name),
+            *((f"Pseudonym {i} [P{assassin._secret_id}_{i}]", p)
+                for i, p in enumerate(assassin.pseudonyms) if p),
+            ("Pronouns", assassin.pronouns),
+            ("Email", assassin.email),
+            ("Address", assassin.address),
+            ("Water status", assassin.water_status),
+            ("College", assassin.college),
+            ("Notes", assassin.notes)
+        ]
+
+    def ask_core_plugin_summary_assassin(self):
+        return [
+            InputWithDropDown(
+                self.html_ids["Assassins"],
+                title="Select assassin to show status for",
+                options=ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda _: True))
+        ] + sum((p.on_request_assassin_summary() for p in PLUGINS), start=[])
+
+    def answer_core_plugin_summary_assassin(self, htmlResponse) -> List[HTMLComponent]:
+        ident = htmlResponse[self.html_ids["Assassins"]]
+        assassin = ASSASSINS_DATABASE.get(ident)
+        return self._answer_rendering(assassin, lambda p, a: p.render_assassin_summary(a))
+
+    def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
+        response = [
+            ("ID", str(event._Event__secret_id)),
+            ("Headline", event.headline),
+            ("Date/time", event.datetime),
+            ("Deaths", ", ".join(kill[1] for kill in event.kills))
+        ]
+
+        snapshot = lambda a: f"{a.real_name} ({a._secret_id})"
+        for (i, ident) in enumerate(event.assassins):
+            a = ASSASSINS_DATABASE.get(ident)
+            pseudonym = a.get_pseudonym(event.assassins[ident])
+            response.append((f"Participant {i+1}", f"{snapshot(a)} as {pseudonym}"))
+
+        for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
+            a = ASSASSINS_DATABASE.get(ident)
+            pseudonym = a.get_pseudonym(pseudonym_idx)
+            response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
+
+        for (i, (killer_id, victim_id)) in enumerate(event.kills):
+            killer = ASSASSINS_DATABASE.get(killer_id)
+            victim = ASSASSINS_DATABASE.get(victim_id)
+            response.append((f"Kill {i+1}", f"{snapshot(killer)} kills {snapshot(victim)}"))
+        return response
+
+    def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:
+        return [
+            InputWithDropDown(
+                self.html_ids["Events"],
+                title="Select events to show status for",
+                options=self.gather_events()
+            )
+        ] + sum((p.on_request_event_summary() for p in PLUGINS), start=[])
+
+    def answer_core_plugin_summary_event(self, htmlResponse) -> List[HTMLComponent]:
+        ident = htmlResponse[self.html_ids["Events"]]
+        event = EVENTS_DATABASE.get(ident)
+        return self._answer_rendering(event, lambda p, e: p.render_event_summary(e))
+
+    def _answer_rendering(self, obj: object, renderer: Callable[[AbstractPlugin, object], List[AttributePairTableRow]]) -> List[HTMLComponent]:
+        results: List[Tuple[str, str]] = renderer(self, obj)
+        for p in PLUGINS:
+            if isinstance(p, CorePlugin):
+                continue
+            results += renderer(p, obj)
+        headings = (
+            "Attribute" + " "*25,
+            "Value" + " "*80
+        )
+        return [Table(results, headings=headings)]
+
     def on_assassin_request_create(self):
+        # use this to detect whether the game has started or not, since sending the first email is the point when
+        # targets are "locked in" and adding new non-police players becomes dangerous
+        last_emailed_event = int(
+            GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
+        )
+
         html = [
             NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
@@ -204,7 +328,9 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
             LargeTextEntry(self.html_ids["Notes"], "Notes"),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)")
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=last_emailed_event >= 0,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
@@ -212,9 +338,13 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_assassin_request_update(self, assassin: Assassin):
+        # use this to detect whether the game has started or not, since sending the first email is the point when
+        # targets are "locked in" and changing player types becomes dangerous.
+        last_emailed_event = int(
+            GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
+        )
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            Label("Assassin type: " + ("Police" if assassin.is_police else "Full Player")),
             EditablePseudonymList(
                 self.html_ids["Pseudonym"], "Edit Pseudonyms",
                 (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
@@ -226,6 +356,9 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
+            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+                     checked=assassin.is_police,
+                     force_default=last_emailed_event >= 0)
         ]
         return html
 
@@ -243,6 +376,7 @@ class CorePlugin(AbstractPlugin):
         assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
+        assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
@@ -253,7 +387,12 @@ class CorePlugin(AbstractPlugin):
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", assassins),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
+                        ]
+                    )
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
@@ -276,7 +415,12 @@ class CorePlugin(AbstractPlugin):
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
                     AssassinDependentReportEntry(
                         self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", assassins, e.reports),
-                    AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                        ]
+                    )
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
@@ -707,6 +851,39 @@ class CorePlugin(AbstractPlugin):
 
         return config.answer(htmlResponse)
 
+    def ask_reset_database(self) -> List[HTMLComponent]:
+        i = random.randint(0, 1000000)
+        return [
+            Label(
+                title="Are you sure you want to COMPLETELY RESET the database?"
+            ),
+            Label(
+                title="!!!! UNSAVED DATA CANNOT BE RECOVERED !!!!"
+            ),
+            Label(
+                title="(You can type anything else and the reset will be aborted.)"
+            ),
+            HiddenTextbox(
+                identifier=self.html_ids["Secret Number"],
+                default=str(i)
+            ),
+            NamedSmallTextbox(
+                identifier=self.html_ids["Nuke Database"],
+                title=f"Type {i} to reset the database"
+            )
+        ]
+
+    def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
+        hidden_number = htmlResponse[self.html_ids["Secret Number"]]
+        entered_number = htmlResponse[self.html_ids["Nuke Database"]]
+        if hidden_number != entered_number:
+            return [Label("[CORE] Aborting. You entered the code incorrectly.")]
+        for f in os.listdir(BASE_WRITE_LOCATION):
+            if f.endswith(".json"):
+                os.remove(os.path.join(BASE_WRITE_LOCATION, f))
+        refresh_databases()
+        return [Label("[CORE] Databases successfully reset.")]
+
     def ask_set_game_start(self):
         return [
             DatetimeEntry(
@@ -716,8 +893,26 @@ class CorePlugin(AbstractPlugin):
             )
         ]
 
-    def answer_set_game_start(self, htmlResponse):
+    def answer_set_game_start(self, htmlResponse) -> List[HTMLComponent]:
         set_game_start(htmlResponse[self.identifier + "_game_start"])
         return [
             Label(f"[CORE] Set game start to {get_game_start().strftime('%Y-%m-%d %H:%M:%S')}")
+        ]
+
+    def ask_set_game_end(self) -> List[HTMLComponent]:
+        default = get_game_end()
+        return [
+            OptionalDatetimeEntry(
+                self.identifier + "_game_end",
+                title="Enter game end",
+                default=get_now_dt() if default is None else default
+            )
+        ]
+
+    def answer_set_game_end(self, htmlResponse) -> List[HTMLComponent]:
+        new_end = htmlResponse[self.identifier + "_game_end"]
+        set_game_end(new_end)
+        return [
+            Label(f"[CORE] Set game end to {new_end.strftime('%Y-%m-%d %H:%M:%S')}") if new_end
+            else Label(f"[CORE] Unset game end.")
         ]
