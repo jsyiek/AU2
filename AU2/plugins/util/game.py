@@ -5,6 +5,7 @@ from typing import Optional
 
 from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.model import Assassin
 from AU2.plugins.util.date_utils import get_now_dt
 
 HTML_REPORT_PREFIX = "<!--HTML-->"
@@ -74,3 +75,7 @@ def escape_format_braces(string: str) -> str:
         ":}} :{{"
     """
     return string.replace("{", "{{").replace("}", "}}")
+
+def snapshot(a: Assassin) -> str:
+    return f"{a.real_name} ({a._secret_id})"
+

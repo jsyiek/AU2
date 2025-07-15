@@ -36,7 +36,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end, snapshot
 from AU2.plugins.util.date_utils import get_now_dt
 
 AVAILABLE_PLUGINS = {}
@@ -269,7 +269,6 @@ class CorePlugin(AbstractPlugin):
             ("Deaths", ", ".join(kill[1] for kill in event.kills))
         ]
 
-        snapshot = lambda a: f"{a.real_name} ({a._secret_id})"
         for (i, ident) in enumerate(event.assassins):
             a = ASSASSINS_DATABASE.get(ident)
             pseudonym = a.get_pseudonym(event.assassins[ident])

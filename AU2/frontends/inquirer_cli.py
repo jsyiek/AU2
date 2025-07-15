@@ -48,7 +48,7 @@ from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOption
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import escape_format_braces
+from AU2.plugins.util.game import escape_format_braces, snapshot
 
 
 def datetime_validator(_, current):
@@ -225,8 +225,7 @@ def render(html_component, dependency_context={}):
             q = [inquirer.List(
                 name="author",
                 message="Select the AUTHOR of the report",
-                # TODO: use `snapshot` fn as in `Event -> Summary` (PR #139)
-                choices=[("*DELETE REPORT*", None), *assassins_mapping.keys()],
+                choices=[("*DELETE REPORT*", None), *((snapshot(ASSASSINS_DATABASE.get(a)), a) for a in assassins_mapping.keys())],
                 default=old_report[0]
             )]
             ident = inquirer_prompt_with_abort(q)["author"]
@@ -234,8 +233,6 @@ def render(html_component, dependency_context={}):
                 # signals that the report should be deleted
                 return None
             # ignore deleted pseudonyms
-            # TODO: only show pseudonyms within validity for event?
-            #       (would need to be able to access datetime value)
             pseudonym_options = ((p, i) for i, p in enumerate(assassin_pseudonyms[ident]) if p)
             q = [inquirer.List(
                 name="pseudonym",
@@ -264,8 +261,7 @@ def render(html_component, dependency_context={}):
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
             q = [inquirer.Editor(
                 name="report",
-                # TODO: use the same rendering of authors as in `Event -> Summary` (PR #139)
-                message=f"Report: {escape_format_braces(ident)} as {pseudonym}",
+                message=f"Report: {escape_format_braces(snapshot(ASSASSINS_DATABASE.get(ident)))} as {pseudonym}",
                 default=old_report[2]
             )]
             report_text = inquirer_prompt_with_abort(q)["report"]
@@ -274,8 +270,7 @@ def render(html_component, dependency_context={}):
         while True:
             report_options = [
                 ("*CONTINUE*", -1),
-                # TODO: use the same rendering of authors as in `Event -> Summary` (PR #139)
-                *((f"{ident} as {assassin_pseudonyms[ident][p]}", i) for i, (ident, p, _) in enumerate(reports)),
+                *((f"{snapshot(ASSASSINS_DATABASE.get(ident))} as {assassin_pseudonyms[ident][p]}", i) for i, (ident, p, _) in enumerate(reports)),
                 ("*NEW*", -2)
             ]
             q = [inquirer.List(
