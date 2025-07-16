@@ -237,15 +237,12 @@ def render(html_component, dependency_context={}):
             q = [inquirer.List(
                 name="pseudonym",
                 message="Select the PSEUDONYM to attribute the report to",
-                # TODO: Real-name option? Would need to change back-end though!
                 choices=[("(Auto)", None), *pseudonym_options],
                 default=old_report[1]
             )]
             pseudonym_id = inquirer_prompt_with_abort(q)["pseudonym"]
-            # if "auto" default to chosen pseudonym for the event
-            # TODO: change backend to allow "auto" to update when selected pseudonym for event changes
-            pseudonym_id = assassins_mapping[ident] if pseudonym_id is None else int(pseudonym_id)
-            pseudonym = assassin_pseudonyms[ident][pseudonym_id]
+            pseudonym_id = int(pseudonym_id) if pseudonym_id is not None else None
+            pseudonym = assassin_pseudonyms[ident][pseudonym_id] if pseudonym_id is not None else None
 
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
@@ -261,7 +258,8 @@ def render(html_component, dependency_context={}):
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
             q = [inquirer.Editor(
                 name="report",
-                message=f"Report: {escape_format_braces(snapshot(ASSASSINS_DATABASE.get(ident)))} as {pseudonym}",
+                message=f"Report: {escape_format_braces(snapshot(ASSASSINS_DATABASE.get(ident)))}"
+                    + (f" as {pseudonym}" if pseudonym else ""),
                 default=old_report[2]
             )]
             report_text = inquirer_prompt_with_abort(q)["report"]
@@ -270,7 +268,16 @@ def render(html_component, dependency_context={}):
         while True:
             report_options = [
                 ("*CONTINUE*", -1),
-                *((f"{snapshot(ASSASSINS_DATABASE.get(ident))} as {assassin_pseudonyms[ident][p]}", i) for i, (ident, p, _) in enumerate(reports)),
+                *(
+                    (
+                        (
+                           f"{snapshot(ASSASSINS_DATABASE.get(ident))}"
+                           + (f" as {assassin_pseudonyms[ident][p]}" if p is not None else "")
+                        ),
+                        i
+                    )
+                    for i, (ident, p, _) in enumerate(reports)
+                ),
                 ("*NEW*", -2)
             ]
             q = [inquirer.List(
