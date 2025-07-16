@@ -422,7 +422,7 @@ class CorePlugin(AbstractPlugin):
             # use of dependency here is a stop-gap, because
             #   - it means the improvements to the report entry UI can be worked on before this is merged,
             #     without creating annoying merge conflicts
-            #   - it keeps compatibility with `MafiaPlugin` (which is its own whole can of worms...)
+            #   - it keeps compatibility with the May Week plugins
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
