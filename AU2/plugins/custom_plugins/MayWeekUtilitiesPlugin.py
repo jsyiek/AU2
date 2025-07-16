@@ -472,7 +472,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             ]
         return multiplier_beneficiaries
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, *_) -> List[HTMLComponent]:
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
         teams_str = self.get_cosmetic_name("Teams").lower()
         teams_enabled = self.gsdb_get("Enable Teams?", False)
@@ -525,7 +525,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             self.eps_set(e, "Team Changes", html_response[self.html_ids["Team Changes"]])
         return [Label("[MAY WEEK] Success!")]
 
-    def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
         teams_str = self.get_cosmetic_name("Teams").lower()
         teams_enabled = self.gsdb_get("Enable Teams?", False)

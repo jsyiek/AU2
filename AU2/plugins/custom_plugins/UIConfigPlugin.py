@@ -175,10 +175,10 @@ class UIConfigPlugin(AbstractPlugin):
     def on_request_assassin_summary(self) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.ASSASSIN_STATUS)
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, *_) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.EVENT_CREATE)
 
-    def on_event_request_update(self, _: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, *_) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.EVENT_UPDATE)
 
     def on_event_request_delete(self, _: Event) -> List[HTMLComponent]:

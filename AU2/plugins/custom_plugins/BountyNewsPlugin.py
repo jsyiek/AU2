@@ -28,7 +28,7 @@ class BountyNewsPlugin(AbstractPlugin):
             "bounty_event": self.identifier + "_bounty_event"
         }
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
+    def on_event_request_create(self, *_) -> List[HTMLComponent]:
         return [
             Checkbox(
                 identifier=self.html_ids["bounty_event"],
@@ -37,7 +37,7 @@ class BountyNewsPlugin(AbstractPlugin):
             )
         ]
 
-    def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+    def on_event_request_update(self, e: Event, *_) -> List[HTMLComponent]:
         return [
             Checkbox(
                 identifier=self.html_ids["bounty_event"],
