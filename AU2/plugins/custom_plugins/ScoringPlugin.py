@@ -19,8 +19,8 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
-from AU2.plugins.custom_plugins.PageGeneratorPlugin import get_color, render_headline_and_reports, event_url
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.render_utils import get_color, render_headline_and_reports, event_url
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
@@ -122,8 +122,8 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             wanted_manager.add_event(e)
             killer_model = ASSASSINS_DATABASE.get(killer)
             victim_model = ASSASSINS_DATABASE.get(victim)
-            killer_searchable = f"{killer_model.all_pseudonyms()} ({killer_model.real_name})"
-            victim_searchable = f"{victim_model.all_pseudonyms()} ({victim_model.real_name})"
+            killer_searchable = f"{killer_model.all_pseudonyms(fn=lambda x: x)} ({killer_model.real_name})"
+            victim_searchable = f"{victim_model.all_pseudonyms(fn=lambda x: x)} ({victim_model.real_name})"
             if killer not in added_nodes:
                 net.add_node(
                     killer_searchable,
@@ -144,12 +144,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                     value=1 + score_manager.get_conkers(victim_model)
                 )
                 added_nodes.add(victim)
-            headline, _ = render_headline_and_reports(
-                e,
-                death_manager=DeathManager(),
-                competency_manager=competency_manager,
-                wanted_manager=wanted_manager
-            )
+            headline, _ = render_headline_and_reports(e, plugin_managers=(competency_manager, wanted_manager))
             plaintext_headline = lxml.html.fromstring(f"<html>{headline}</html>").text_content()
             net.add_edge(killer_searchable, victim_searchable,
                          label=e.datetime.strftime(DATETIME_FORMAT),

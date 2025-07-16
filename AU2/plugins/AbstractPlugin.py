@@ -2,6 +2,7 @@ from typing import List, Tuple, Union, Any, Callable, Dict, Optional
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
+from AU2.html_components.SimpleComponents.Label import Label
 
 
 class Export:
@@ -103,6 +104,8 @@ class HookedExport:
         self.call_first = call_order
 
 
+AttributePairTableRow = Tuple[str, str]
+
 class AbstractPlugin:
     def __init__(self, identifier: str):
         # unique identifier for the plugin
@@ -184,5 +187,23 @@ class AbstractPlugin:
         """
         Allows you to respond to hooks from other plugins.
         `data` can be anything the hooking function wants you to contribute to
+        """
+        return []
+
+    def on_request_assassin_summary(self) -> List[HTMLComponent]:
+        return []
+
+    def on_request_event_summary(self) -> List[HTMLComponent]:
+        return []
+
+    def render_assassin_summary(self, _: Assassin) -> List[AttributePairTableRow]:
+        """
+        Display any information about an ASSASSIN that is managed by this plugin
+        """
+        return []
+
+    def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
+        """
+        Display any information about an EVENT that is managed by this plugin
         """
         return []

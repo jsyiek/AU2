@@ -106,6 +106,7 @@ class MockGame:
 
     def __init__(self):
         self.date = datetime.datetime(year=2022, month=9, day=1, hour=10, minute=0, second=0).astimezone(TIMEZONE)
+        self.game_start = self.date
         self.assassins = list()
         self.all_assassins = list()
 
@@ -124,9 +125,9 @@ class MockGame:
                 if victim_name in self.assassins:
                     self.assassins.remove(victim_name)
 
-    def new_datetime(self) -> datetime.datetime:
+    def new_datetime(self, minutes: int = 1) -> datetime.datetime:
         old_date = self.date
-        self.date = self.date + datetime.timedelta(minutes=1)
+        self.date = self.date + datetime.timedelta(minutes=minutes)
         return old_date
 
     def having_assassins(self, names: List[str]) -> "MockGame":

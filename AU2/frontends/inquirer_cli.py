@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
+import itertools
 import random
 import tabulate
 from typing import List, Any, Dict, Optional, Tuple
@@ -12,6 +13,8 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
+from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
+from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
 from AU2.html_components.MetaComponents.ComponentOverride import ComponentOverride
 from AU2.html_components.MetaComponents.Searchable import Searchable
 from AU2.html_components.MetaComponents.Dependency import Dependency
@@ -22,6 +25,7 @@ from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry impor
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinDependentSelector import AssassinDependentSelector
 from AU2.html_components.DependentComponents.AssassinDependentTextEntry import AssassinDependentTextEntry
+from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
@@ -283,9 +287,10 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
         for a1 in assassins:
             for a2 in assassins:
                 if a1 != a2:
-                    potential_kills[f"{a1} kills {a2}"] = (a1, a2)
+                    key = f"{a1} kills {a2}"
+                    potential_kills[key] = (a1, a2)
                     if (a1, a2) in html_component.default:
-                        defaults.append(f"{a1} kills {a2}")
+                        defaults.append(key)
         q = [inquirer.Checkbox(
             name="q",
             message="Select kills",
@@ -295,6 +300,73 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
         # TODO: Confirm what happens if option in default isn't in choices
         a = inquirer_prompt_with_abort(q)["q"]
         a = tuple(potential_kills[k] for k in a)
+        return {html_component.identifier: a}
+
+    # dependent component
+    elif isinstance(html_component, AssassinDependentTransferEntry):
+        dependent = html_component.assassins_list_identifier
+        assert dependent in context
+        assassins_mapping = context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: [], "skip": True}
+        assassins = list(assassins_mapping.keys())
+        if len(assassins) == 0:
+            return {html_component.identifier: tuple(), "skip": True}
+
+        # correct the defaults format -- sometimes it seems to end up as tuples
+        # (also turn into a set so that `in` is faster)
+        html_component.default = {tuple(l) for l in html_component.default}
+
+        potential_transfers = {}
+        defaults = []
+        owners = [a for a in html_component.owners if a in assassins]
+        receivers = [a for a in assassins if a not in owners]
+        for a1 in itertools.chain(owners, [None]):
+            for a2 in itertools.chain(receivers, [None]):
+                if a1 != a2:
+                    key = f"{a1} --> {a2}"
+                    potential_transfers[key] = (a1, a2)
+                    if (a1, a2) in html_component.default:
+                        defaults.append(key)
+
+        q = [inquirer.Checkbox(
+            name="q",
+            message=html_component.title,
+            choices=list(potential_transfers.keys()),
+            default=defaults
+        )]
+        # TODO: Confirm what happens if option in default isn't in choices
+        a = inquirer_prompt_with_abort(q)["q"]
+        a = tuple(potential_transfers[k] for k in a)
+        return {html_component.identifier: a}
+
+    # dependent component
+    elif isinstance(html_component, KillDependentSelector):
+        dependent = html_component.kills_identifier
+        assert dependent in context
+        kills = context[dependent]
+
+        mapping = {}
+        defaults = []
+        for (a1, a2) in kills:
+            key = f"{a1} kills {a2}"
+            mapping[key] = (a1, a2)
+            if (a1, a2) in html_component.default:
+                defaults.append(key)
+
+        # if there are no kills don't render anything
+        if not mapping:
+            return {html_component.identifier: [], "skip": True}
+
+        q = [inquirer.Checkbox(
+            name="q",
+            message=html_component.title,
+            choices=list(mapping.keys()),
+            default=defaults
+        )]
+
+        a = inquirer_prompt_with_abort(q)["q"]
+        a = tuple(mapping[k] for k in a)
         return {html_component.identifier: a}
 
     # dependent component
@@ -460,6 +532,30 @@ def render(html_component, context: Optional[Dict[str, Any]] = None):
         if q:
             points = inquirer_prompt_with_abort(q)
         return {html_component.identifier: points}
+
+    # dependent component
+    elif isinstance(html_component, AssassinDependentInputWithDropDown):
+        dependent = html_component.pseudonym_list_identifier
+        assert (dependent in context)
+        assassins_mapping = context[dependent]
+        if not assassins_mapping:
+            return {html_component.identifier: {}, "skip": True}
+        assassins = [a for a in assassins_mapping]
+        q = [inquirer.Checkbox(
+            name="assassins",
+            message=escape_format_braces(html_component.title),
+            choices=assassins,
+            default=list(html_component.default.keys())
+        )]
+        selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
+        q = []
+        for a in selected_assassins:
+            q.append(inquirer.List(
+                name=a,
+                message=f"Value for {escape_format_braces(a)}",
+                choices=html_component.options,
+                default=html_component.default.get(a)))
+        return {html_component.identifier: inquirer_prompt_with_abort(q) if q else {}}
 
     elif isinstance(html_component, DatetimeEntry):
         default = context.get(html_component.identifier, html_component.default)
@@ -766,7 +862,12 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
                 move_dependent_to_front(d1)
                 d1 = d2
         final.insert(0, d1)
+        # merge nested dependencies
+        for c in final:
+            if isinstance(c, Dependency):
+                c.htmlComponents = merge_dependency(c.htmlComponents)
         move_dependent_to_front(d1)
+
     return final
 
 
