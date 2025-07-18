@@ -276,6 +276,8 @@ class CorePlugin(AbstractPlugin):
 
         for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
             a = ASSASSINS_DATABASE.get(ident)
+            if pseudonym_idx is None:
+                pseudonym_idx = event.assassins[ident]
             pseudonym = a.get_pseudonym(pseudonym_idx)
             response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
 
