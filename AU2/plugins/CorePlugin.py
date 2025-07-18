@@ -410,14 +410,6 @@ class CorePlugin(AbstractPlugin):
         ), HiddenTextbox(self.HTML_SECRET_ID, e.identifier if e else "")]
 
     def on_event_request_create(self, assassin_pseudonyms: Dict[str, int]) -> List[HTMLComponent]:
-        assassins = list(assassin_pseudonyms.keys())
-        potential_kills = []
-        for a1 in assassins:
-            for a2 in assassins:
-                if a1 != a2:
-                    potential_kills.append(
-                        (f"{a1} kills {a2}", (a1, a2))
-                    )
         html = [
             # use of dependency here is a stop-gap, because
             #   - it means the improvements to the report entry UI can be worked on before this is merged,
@@ -431,15 +423,15 @@ class CorePlugin(AbstractPlugin):
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
+                            # (AN:) I wanted to turn this into a SelectorList,
+                            # but it doesn't play nicely with caching selections when ctrl-C'ing backwards through options
+                            # because inquirer assumes pairs in the default list are meant to be (display_str, value)
+                            # rather than just the value.
+                            # TODO: move kill entry into "gather_assassin_pseudonym_pairs" (and rename this)
                             AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
                         ]
                     )
                 ]
-            ),
-            SelectorList(
-                identifier=self.event_html_ids["Kills"],
-                title="Select kills",
-                options=potential_kills
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
@@ -450,17 +442,6 @@ class CorePlugin(AbstractPlugin):
         return [Label("[CORE] Success!")]
 
     def on_event_request_update(self, e: Event, assassin_pseudonyms: Dict[str, int]):
-        assassins = list(assassin_pseudonyms.keys())
-        potential_kills = []
-        default_kills = []
-        for a1 in assassins:
-            for a2 in assassins:
-                if a1 != a2:
-                    kill_option = (f"{a1} kills {a2}", (a1, a2))
-                    potential_kills.append(kill_option)
-                    if (a1, a2) in e.kills:
-                        default_kills.append(kill_option)
-
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
             # use of dependency here is a stop-gap: see comments in `on_event_request_create`
@@ -476,12 +457,6 @@ class CorePlugin(AbstractPlugin):
                         ]
                     )
                 ]
-            ),
-            SelectorList(
-                identifier=self.event_html_ids["Kills"],
-                title="Select kills",
-                options=potential_kills,
-                defaults=default_kills
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
