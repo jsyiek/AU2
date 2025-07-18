@@ -139,8 +139,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 "core_event_create_event",
                 "Event -> Create",
-                (self.gather_assassin_pseudonym_pairs, self.ask_core_plugin_create_event),
-                self.answer_core_plugin_create_event
+                self.gather_assassin_pseudonym_pairs,
+                (self.ask_core_plugin_create_event, self.answer_core_plugin_create_event)
             ),
             Export(
                 "core_event_delete_event",
@@ -158,8 +158,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 "core_event_update_event",
                 "Event -> Update",
-                (self.gather_assassin_pseudonym_pairs, self.ask_core_plugin_update_event),
-                self.answer_core_plugin_update_event,
+                self.gather_assassin_pseudonym_pairs,
+                (self.ask_core_plugin_update_event, self.answer_core_plugin_update_event),
                 (self.gather_events,)
             ),
             Export(
@@ -177,8 +177,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 self.CONFIG_PARAMETER_EXPORT,
                 "Plugin config -> Plugin-specific parameters",
-                (self.gather_config_options, self.ask_config),
-                self.answer_config
+                self.gather_config_options,
+                (self.ask_config, self.answer_config)
             ),
             Export(
                 identifier="core_plugin_reset_database",

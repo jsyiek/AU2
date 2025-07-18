@@ -4,7 +4,7 @@ import datetime
 import itertools
 import random
 import tabulate
-from typing import List, Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import inquirer
 
@@ -987,25 +987,36 @@ def main():
         if abort:
             continue
 
-        if isinstance(exp.ask, tuple):
-            ask_functions = exp.ask
+        if isinstance(exp.answer, Sequence):
+            ask_answer_functions = (exp.ask, *exp.answer)
         else:
-            ask_functions = (exp.ask, )
-        htmlResponses = [{} for _ in ask_functions]
+            ask_answer_functions = (exp.ask, exp.answer)
+
+        # we iterate through the ask/answer functions,
+        # but allow the user to go 'backwards' to a previous ask/answer stage by ctrl-C'ing
+        # this isn't completely seemless since
+        #   -   each stage is rendered from the first component,
+        #       but within a stage ctrl-C'ing causes the previous component to be rendered
+        #   -   it doesn't support going back to the options functions,
+        #       instead the whole export is aborted in this case (TODO?)
+        htmlResponses = [{} for _ in ask_answer_functions]
         curr_index = 0
-        while 0 <= curr_index < len(ask_functions):
+        while 0 <= curr_index < len(ask_answer_functions):
             try:
+                # ask function gets output of options_functions as input
                 if curr_index == 0:
-                    components = ask_functions[curr_index](*params)
+                    components = ask_answer_functions[curr_index](*params)
+                # but answer functions get html responses as input
                 else:
-                    components = ask_functions[curr_index](htmlResponses[curr_index - 1])
+                    components = ask_answer_functions[curr_index](htmlResponses[curr_index - 1])
                 htmlResponses[curr_index] = render_components(components, htmlResponses[curr_index])
                 curr_index += 1
             except KeyboardInterrupt:
                 curr_index -= 1
 
-        if curr_index == len(ask_functions):
-            render_components(exp.answer(htmlResponses[-1]))
+        # save if got through all answer functions,
+        # otherwise just abort
+        if curr_index == len(ask_answer_functions):
             print("Saving databases...")
             ASSASSINS_DATABASE.save()
             EVENTS_DATABASE.save()
