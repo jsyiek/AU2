@@ -11,6 +11,7 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SpecialComponents.TeamsEditor import TeamsEditor
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -58,6 +59,12 @@ class TargetingPlugin(AbstractPlugin):
                 self.answer_set_seeds
             ),
             DangerousConfigExport(
+                "targeting_set_teams",
+                "Targeting Graph -> Set teams",
+                self.ask_set_teams,
+                self.answer_set_teams
+            ),
+            DangerousConfigExport(
                 "targeting_set_random_seed",
                 "Targeting Graph -> Set random seed",
                 self.ask_set_random_seed,
@@ -75,7 +82,8 @@ class TargetingPlugin(AbstractPlugin):
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
             "Random Seed": self.identifier + "_random_seed",
-            "Initial Seeding": self.identifier + "_initial_seeding"
+            "Initial Seeding": self.identifier + "_initial_seeding",
+            "Teams": self.identifier + "_teams"
         }
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
@@ -146,6 +154,19 @@ class TargetingPlugin(AbstractPlugin):
     def answer_set_seeds(self, htmlResponse):
         seeds = htmlResponse[self.html_ids["Seeds"]]
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["seeds"] = seeds
+        return [Label("[TARGETING] Success!")]
+
+    def ask_set_teams(self):
+        return [
+            TeamsEditor(self.html_ids["Teams"], "",
+                        ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_police,
+                                                           include_hidden=True),
+                        GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("teams", []))
+        ]
+
+    def answer_set_teams(self, htmlResponse):
+        teams = htmlResponse[self.html_ids["Teams"]]
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["teams"] = teams
         return [Label("[TARGETING] Success!")]
 
     def ask_set_random_seed(self):

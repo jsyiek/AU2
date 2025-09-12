@@ -4,7 +4,7 @@ import datetime
 import itertools
 import random
 import tabulate
-from typing import List, Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import inquirer
 
@@ -42,9 +42,9 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, \
-    ListUpdates
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
+from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, ListUpdates, PseudonymData
+from AU2.html_components.SpecialComponents.TeamsEditor import TeamsEditor
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
@@ -708,6 +708,43 @@ def render(html_component, dependency_context={}):
 
         return {html_component.identifier:
                     ListUpdates(edited, new_values, deleted_indices)}
+
+    elif isinstance(html_component, TeamsEditor):
+        values = html_component.values
+
+        def display_team(member_idents: Sequence[str]):
+            TRUNCATE_TO = 100
+            team = "; ".join(member_idents)
+            if len(team) > TRUNCATE_TO:
+                return team[:TRUNCATE_TO] + "..."
+            else:
+                return team
+
+        while True:
+            q = [inquirer.List(
+                name=html_component.identifier,
+                message=escape_format_braces(html_component.title),
+                choices=[("*CONTINUE*", -1)] + [(display_team(v), i) for i, v in enumerate(values)] + [
+                    ("*NEW*", -2)],
+            )]
+            c = inquirer_prompt_with_abort(q)[html_component.identifier]  # index of choice
+
+            if c == -1: # case where *CONTINUE* selected
+                break
+
+            q = [
+                inquirer.Checkbox(name="team_members",
+                              message="Select team members",
+                              choices=html_component.assassins,
+                              default=values[c] if c >= 0 else [])
+            ]
+            team_members = inquirer_prompt_with_abort(q)["team_members"]
+            if c >= 0:
+                values[c] = team_members
+            else:
+                values.append(team_members)
+
+        return {html_component.identifier: values}
 
     elif isinstance(html_component, SelectorList):
         q = [
