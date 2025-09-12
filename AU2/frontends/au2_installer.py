@@ -89,7 +89,15 @@ try:
             exit()
 
         print("Setting up AU2 source...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "-e", REPO_DIR])
+        proc = subprocess.run([sys.executable, "-m", "pip", "install", "-e", REPO_DIR])
+
+        if proc.returncode != 0:
+            print("Install failed. Cleaning...")
+            shutil.rmtree(VENV_LOCATION)  # clean up failed install
+            print("Finished.")
+            time.sleep(120)
+            exit()
+
         print("Source has been set up.")
 
         with open(loc, "w+") as F:
