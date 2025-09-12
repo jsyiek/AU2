@@ -79,7 +79,11 @@ try:
             print(f"Can't find a Python binary (looked for {PY_EXECUTABLE}). Setting up a new virtual environment.")
             if os.path.exists(VENV_LOCATION):
                 shutil.rmtree(VENV_LOCATION)
-            subprocess.run([sys.executable, "-m", "venv", VENV_LOCATION])
+            proc = subprocess.run([sys.executable, "-m", "venv", VENV_LOCATION])
+            if proc.returncode != 0:
+                print("Failed to set up virtual environment.")
+                time.sleep(120)
+                exit()
             print("Set up new virtual environment.")
         else:
             print("Found virtual environment.")
