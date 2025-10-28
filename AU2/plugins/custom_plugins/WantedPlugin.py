@@ -1,6 +1,6 @@
 import os
 from html import escape
-from typing import List
+from typing import Dict,  List
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -12,7 +12,7 @@ from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import 
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow
-from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
@@ -82,16 +82,32 @@ class WantedPlugin(AbstractPlugin):
             "Wanted": self.identifier + "_wanted"
         }
 
+    def _aggregate_licitness_info(self, event_secret_id: int = 10000000) -> Dict[str, List[HTMLComponent]]:
+        """Aggregates licitness info from all plugins, for use in on_event_request_create and on_event_request_update"""
+        licitness_info: Dict[str, List[HTMLComponent]] = {}
+        for p in PLUGINS:
+            new_info = p.render_licitness_info(event_secret_id)
+            for player in new_info:
+                licitness_info.setdefault(player, []).extend(new_info[player])
+        return licitness_info
+
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
-                    AssassinDependentCrimeEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.event_html_ids["Wanted"],
-                        title="WANTED: Choose players to set a new Wanted duration",
-                        default={},
+                    Dependency(
+                        dependentOn="CorePlugin_kills",
+                        htmlComponents=[
+                            AssassinDependentCrimeEntry(
+                                pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                                identifier=self.event_html_ids["Wanted"],
+                                title="WANTED: Choose players to set a new Wanted duration",
+                                default={},
+                                kill_entry_identifier="CorePlugin_kills",
+                                licitness_info=self._aggregate_licitness_info()
+                            )
+                        ]
                     )]
             )
         ]
@@ -105,11 +121,18 @@ class WantedPlugin(AbstractPlugin):
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
-                    AssassinDependentCrimeEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.event_html_ids["Wanted"],
-                        title="WANTED: Choose players to set a new Wanted duration",
-                        default=e.pluginState.get(self.identifier, {}),
+                    Dependency(
+                        dependentOn="CorePlugin_kills",
+                        htmlComponents=[
+                            AssassinDependentCrimeEntry(
+                                pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                                identifier=self.event_html_ids["Wanted"],
+                                title="WANTED: Choose players to set a new Wanted duration",
+                                default=e.pluginState.get(self.identifier, {}),
+                                kill_entry_identifier="CorePlugin_kills",
+                                licitness_info=self._aggregate_licitness_info(e.get_numerical_id())
+                            )
+                        ]
                     )]
             )
         ]

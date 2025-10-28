@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union, Any, Callable
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
@@ -202,3 +202,10 @@ class AbstractPlugin:
         Display any information about an EVENT that is managed by this plugin
         """
         return []
+
+    def render_licitness_info(self, event_secret_id: int) -> Dict[str, List[HTMLComponent]]:
+        """
+        Returns a mapping of player ids to components giving information relevant to their licitness as a victim
+        (e.g. wantedness, competence, who has them as a target, who they have as a target).
+        """
+        return {}

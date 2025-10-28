@@ -11,6 +11,7 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -192,6 +193,21 @@ class TargetingPlugin(AbstractPlugin):
                 num_attackers += 1
 
         return response
+
+    def render_licitness_info(self, event_secret_id: int) -> Dict[str, List[HTMLComponent]]:
+        graph = self.compute_targets([], max_event=event_secret_id)
+        reverse_graph = {}
+        for (attacker, targets) in graph.items():
+            for t in targets:
+                reverse_graph.setdefault(t, []).append(attacker)
+
+        return {
+            player: [
+                Table([(targ,) for targ in graph[player]], headings=(f"Targets of {player}",)),
+                Table([(attacker,) for attacker in reverse_graph[player]], headings=(f"Players with {player} as a target",))
+            ]
+            for player in graph
+        }
 
     @property
     def seed(self):

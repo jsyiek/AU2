@@ -48,12 +48,13 @@ def registered_plugin(plugin_class):
     return plugin_class
 
 
+PLUGINS = __PluginMap({})  # initialise first without any plugins to allow PLUGINS to be shared by other plugins
+
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):
     name = os.path.splitext(os.path.basename(file))[0]
     module = __import__(f"AU2.plugins.custom_plugins.{name}")
 
-
-PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
+PLUGINS.update(AVAILABLE_PLUGINS)  # actually enable plugins
 
 
 @registered_plugin
@@ -311,6 +312,14 @@ class CorePlugin(AbstractPlugin):
             "Value" + " "*80
         )
         return [Table(results, headings=headings)]
+
+    def render_licitness_info(self, event_secret_id: int) -> Dict[str, List[HTMLComponent]]:
+        """Notifies umpire when victims are police"""
+        return {
+            player: [Label(f"Note: {player} is police.")]
+            for player in ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_police, include_hidden=True)
+        }
+
 
     def on_assassin_request_create(self):
         # use this to detect whether the game has started or not, since sending the first email is the point when

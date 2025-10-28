@@ -344,9 +344,18 @@ def render(html_component, dependency_context={}):
 
     # dependent component
     elif isinstance(html_component, AssassinDependentCrimeEntry):
+        # render info pertaining to licitness of victims if available
+        if html_component.kill_entry_identifier in dependency_context:
+            kills = dependency_context[html_component.kill_entry_identifier]
+            victims = {v for (_, v) in kills}
+            for v in victims:
+                for comp in html_component.licitness_info.get(v, []):
+                    render(comp)
+
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
         q = [inquirer.Checkbox(
@@ -565,6 +574,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, Table):
         print(tabulate.tabulate(html_component.rows, headers=html_component.headings,
                                 maxcolwidths=[len(h) for h in html_component.headings]))
+        print()
         return {}
 
     elif isinstance(html_component, Checkbox):

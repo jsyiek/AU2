@@ -13,8 +13,7 @@ class __PluginMap:
     Most conveniently accessed as an iteration.
     """
 
-    def __init__(self, plugins):
-
+    def update(self, plugins):
         # I refuse to allow users to disable the CorePlugin... because then the entire app would break
         GENERIC_STATE_DATABASE.plugin_map["CorePlugin"] = True
 
@@ -22,6 +21,9 @@ class __PluginMap:
             GENERIC_STATE_DATABASE.plugin_map.setdefault(p.identifier, False)
 
         self.plugins: dict[str, AbstractPlugin] = plugins
+
+    def __init__(self, plugins):
+        self.update(plugins)
 
     def __iter__(self):
         """
