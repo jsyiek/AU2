@@ -353,21 +353,7 @@ class CompetencyPlugin(AbstractPlugin):
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         questions = []
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Full Auto":
-            questions.append(
-                Dependency(
-                    dependentOn="CorePlugin_assassin_pseudonym",
-                    htmlComponents=[
-                        AssassinDependentIntegerEntry(
-                            pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                            identifier=self.html_ids["Competency"],
-                            title="Extend competency?",
-                            default={},
-                            global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
-                        )
-                    ]
-                )
-            )
+
         track_attempts = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual"
         GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts  # for backwards-compatibility
         if track_attempts:
@@ -381,6 +367,21 @@ class CompetencyPlugin(AbstractPlugin):
                             title="Add attempts/assists",
                             default={},
                             global_default=1
+                        )
+                    ]
+                )
+            )
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Full Auto":
+            questions.append(
+                Dependency(
+                    dependentOn="CorePlugin_assassin_pseudonym",
+                    htmlComponents=[
+                        AssassinDependentIntegerEntry(
+                            pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                            identifier=self.html_ids["Competency"],
+                            title="Manually extend competency?" if track_attempts else "Extend competency?",
+                            default={},
+                            global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
                         )
                     ]
                 )
@@ -404,22 +405,8 @@ class CompetencyPlugin(AbstractPlugin):
         return [Label("[COMPETENCY] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
-        # Allow competency editing on event update even if full auto competency enabled.
-        # TODO Make a selector that pre-filters to non-police players
-        questions = [
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentIntegerEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Competency"],
-                        title="Extend competency?",
-                        default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["COMPETENCY"], {}),
-                        global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
-                    )
-                ]
-            )
-        ]
+        questions = []
+
         track_attempts = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual"
         GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts  # for backwards-compatibility
         if track_attempts:
@@ -447,6 +434,22 @@ class CompetencyPlugin(AbstractPlugin):
                     ]
                 )
             )
+
+        # Allow competency editing on event update even if full auto competency enabled.
+        # TODO Make a selector that pre-filters to non-police players
+        questions.append(Dependency(
+            dependentOn="CorePlugin_assassin_pseudonym",
+            htmlComponents=[
+                AssassinDependentIntegerEntry(
+                    pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                    identifier=self.html_ids["Competency"],
+                    title="Manually extend competency?" if track_attempts else "Extend competency?",
+                    default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["COMPETENCY"], {}),
+                    global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"],
+                                                                            DEFAULT_EXTENSION)
+                )
+            ]
+        ))
         return questions
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
