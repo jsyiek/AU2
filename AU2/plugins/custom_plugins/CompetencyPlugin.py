@@ -213,21 +213,14 @@ class CompetencyPlugin(AbstractPlugin):
                 display_name="Competency -> Change Auto Competency",
                 ask=self.ask_auto_competency,
                 answer=self.answer_auto_competency
-            ),
-            DangerousConfigExport(
-                identifier="CompetencyPlugin_attempt_tracking",
-                display_name="Competency -> Toggle Attempt Tracking",
-                ask=lambda *args: [],
-                answer=self.answer_toggle_attempt_tracking
             )
         ]
 
     def gigabolt_ask(self):
         questions = []
-        if not GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"]):
-            questions.append(Label("[WARNING] Attempt tracking not enabled. Active players may be selected"))
 
         questions.append(Label("All inactive assassins have been pre-selected"))
+        questions.append(Label("[WARNING] This selection will only be accurate if attempts have been correctly tracked."))
         questions.append(Label("Please sanity-check this list - you don't want to eliminate active players"))
 
         death_manager = DeathManager()
@@ -306,11 +299,6 @@ class CompetencyPlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_int_state[self.plugin_state["DEFAULT"]] = new_val
         return [Label(f"[COMPETENCY] Updated game start to {new_game_start} and extension to {new_val}")]
 
-    def answer_toggle_attempt_tracking(self, _):
-        new_state = not GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False)
-        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = new_state
-        return [Label(f"[COMPETENCY] Toggled attempt tracking to {new_state}")]
-
     def ask_auto_competency(self):
         return [
             InputWithDropDown(
@@ -325,10 +313,9 @@ class CompetencyPlugin(AbstractPlugin):
         mode = htmlResponse[self.html_ids["Auto Competency"]]
         GENERIC_STATE_DATABASE.arb_state[self.plugin_state["AUTO COMPETENCY"]] = mode
         response = [Label(f"[COMPETENCY] Auto Competency Mode set to {mode}")]
-        if mode != "Manual" and not GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
-            response.append(
-                Label(f"[COMPETENCY] Warning: Attempt Tracking not enabled. Attempt competency must be added manually")
-            )
+        track_attempts = mode != "Manual"
+        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts
+        response.append(Label(f"[COMPETENCY] Attempt tracking has been {'enabled' if track_attempts else 'disabled'}"))
         return response
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
@@ -379,7 +366,7 @@ class CompetencyPlugin(AbstractPlugin):
                     ]
                 )
             )
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True):
             questions.append(
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
@@ -429,7 +416,7 @@ class CompetencyPlugin(AbstractPlugin):
                 ]
             )
         ]
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], False):
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True):
             # need this to convert the list of attempts as stored in the db to the structure understood by
             # AssassinDependentIntegerEntry
             def list_to_multiset(l: List[Any]) -> Dict[Any, int]:
