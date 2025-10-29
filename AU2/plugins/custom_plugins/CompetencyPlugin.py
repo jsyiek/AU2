@@ -317,7 +317,7 @@ class CompetencyPlugin(AbstractPlugin):
                 identifier=self.html_ids["Auto Competency"],
                 title="Select Auto Competency Mode",
                 options=self.AUTO_COMPETENCY_OPTIONS,
-                selected=GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual")
+                selected=GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto")
             )
         ]
 
@@ -364,7 +364,7 @@ class CompetencyPlugin(AbstractPlugin):
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         questions = []
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Manual") != "Full Auto":
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Full Auto":
             questions.append(
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
