@@ -313,9 +313,11 @@ class CompetencyPlugin(AbstractPlugin):
         mode = htmlResponse[self.html_ids["Auto Competency"]]
         GENERIC_STATE_DATABASE.arb_state[self.plugin_state["AUTO COMPETENCY"]] = mode
         response = [Label(f"[COMPETENCY] Auto Competency Mode set to {mode}")]
+        # for backwards-compatibility... remove once there is no risk of version conflicts
         track_attempts = mode != "Manual"
         GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts
         response.append(Label(f"[COMPETENCY] Attempt tracking has been {'enabled' if track_attempts else 'disabled'}"))
+
         return response
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
@@ -366,7 +368,9 @@ class CompetencyPlugin(AbstractPlugin):
                     ]
                 )
             )
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True):
+        track_attempts = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual"
+        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts  # for backwards-compatibility
+        if track_attempts:
             questions.append(
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
@@ -416,7 +420,9 @@ class CompetencyPlugin(AbstractPlugin):
                 ]
             )
         ]
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True):
+        track_attempts = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual"
+        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts  # for backwards-compatibility
+        if track_attempts:
             # need this to convert the list of attempts as stored in the db to the structure understood by
             # AssassinDependentIntegerEntry
             def list_to_multiset(l: List[Any]) -> Dict[Any, int]:
