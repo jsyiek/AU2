@@ -242,7 +242,7 @@ def render(html_component, dependency_context={}):
                 default=old_report[1]
             )]
             pseudonym_id = inquirer_prompt_with_abort(q)["pseudonym"]
-            pseudonym_id = int(pseudonym_id) if pseudonym_id is not None else None
+            pseudonym_id = int(pseudonym_id) if pseudonym_id is not None else assassins_mapping[ident]
             pseudonym = assassin_pseudonyms[ident][pseudonym_id] if pseudonym_id is not None else None
 
             print("FORMATTING ADVICE")
