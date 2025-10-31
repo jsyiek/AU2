@@ -207,14 +207,15 @@ def render(html_component, dependency_context={}):
 
     # dependent component
     elif isinstance(html_component, AssassinDependentReportEntry):
+        reports = list(html_component.default)
+
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
-        if not assassins_mapping:
+        if not assassins_mapping and not reports:
             return {html_component.identifier: [], "skip": True}
 
         assassin_pseudonyms = {aId : pseudonyms for (aId, pseudonyms) in html_component.assassins if aId in assassins_mapping}
-        reports = list(html_component.default)
         Report = Tuple[str, Optional[int], str]
 
         def _render_report_editor(old_report: Report) -> Optional[Report]:
