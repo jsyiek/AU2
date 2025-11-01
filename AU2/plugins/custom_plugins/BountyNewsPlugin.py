@@ -63,7 +63,6 @@ class BountyNewsPlugin(AbstractPlugin):
             page_allocator=lambda e: BOUNTY_CHAPTER if e.pluginState.get(self.identifier, {}).get("bounty", False) else None
         )
         bounty_content = "".join(bounty_chapters.get(BOUNTY_CHAPTER, ())) or "<p>Ah, no bounties yet.</p>"
-
         with open(WEBPAGE_WRITE_LOCATION / "bounty-news.html", "w+", encoding="utf-8") as F:
             F.write(
                 BOUNTIES_PAGE_TEMPLATE.format(

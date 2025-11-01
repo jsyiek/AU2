@@ -66,16 +66,11 @@ class PageGeneratorPlugin(AbstractPlugin):
         ):
             components.append(Checkbox(self.html_ids["Duel Page?"],
                                        "Events detected after end of game. Put these on separate duel page?",
-                                       GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state["Duel Page?"], False)))
+                                       False))
         return components
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
-        duel_page = False
-        if self.html_ids["Duel Page?"] in htmlResponse:
-            duel_page = htmlResponse[self.html_ids["Duel Page?"]]
-            GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state["Duel Page?"]] = duel_page
-
-        end = get_game_end() if duel_page else None
+        end = get_game_end() if htmlResponse.get(self.html_ids["Duel Page?"], False) else None
 
         DUEL_CHAPTER = Chapter("duel", "The Duel")
 
