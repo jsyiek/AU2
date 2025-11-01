@@ -1,4 +1,3 @@
-import os
 from typing import List
 
 from AU2 import ROOT_DIR
@@ -10,7 +9,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import render_all_events
+from AU2.plugins.util.render_utils import Chapter, render_all_events
 
 
 BOUNTIES_PAGE_TEMPLATE: str
@@ -57,17 +56,13 @@ class BountyNewsPlugin(AbstractPlugin):
         return [Label("[BOUNTY NEWS] Success")]
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
-        _, bounty_weeks = render_all_events(
-            exclude=lambda e: (
-                not e.pluginState.get(self.identifier, {}).get("bounty", False)
-                or e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)
-            )
+        BOUNTY_CHAPTER = Chapter("bounty-news", "Bounties")
+        _, bounty_chapters = render_all_events(
+            # note: this will include hidden events,
+            # to allow bounties to be set to appear only on the bounties page and not main news
+            page_allocator=lambda e: BOUNTY_CHAPTER if e.pluginState.get(self.identifier, {}).get("bounty", False) else None
         )
-        # put all bounty events on one page
-        bounty_content = "".join("".join(day_news) for _, day_news in sorted(bounty_weeks.items()))
-        if bounty_content == "":
-            bounty_content = "<p>Ah, no bounties yet.</p>"
-
+        bounty_content = "".join(bounty_chapters.get(BOUNTY_CHAPTER, tuple())) or "<p>Ah, no bounties yet.</p>"
         with open(WEBPAGE_WRITE_LOCATION / "bounty-news.html", "w+", encoding="utf-8") as F:
             F.write(
                 BOUNTIES_PAGE_TEMPLATE.format(
