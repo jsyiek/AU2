@@ -3,6 +3,7 @@ import os
 from typing import List
 
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
@@ -25,7 +26,8 @@ class PageGeneratorPlugin(AbstractPlugin):
         }
 
         self.plugin_state = {
-            "HIDDEN": "hidden_event"
+            "HIDDEN": "hidden_event",
+            "Duel Page?": "duel_page"
         }
 
         self.exports = []
@@ -64,11 +66,16 @@ class PageGeneratorPlugin(AbstractPlugin):
         ):
             components.append(Checkbox(self.html_ids["Duel Page?"],
                                        "Events detected after end of game. Put these on separate duel page?",
-                                       False))
+                                       GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state["Duel Page?"], False)))
         return components
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
-        end = get_game_end() if htmlResponse.get(self.html_ids["Duel Page?"], False) else None
+        duel_page = False
+        if self.html_ids["Duel Page?"] in htmlResponse:
+            duel_page = htmlResponse[self.html_ids["Duel Page?"]]
+            GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state["Duel Page?"]] = duel_page
+
+        end = get_game_end() if duel_page else None
 
         DUEL_CHAPTER = Chapter("duel", "The Duel")
 
