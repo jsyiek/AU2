@@ -185,6 +185,12 @@ class AbstractPlugin:
         """
         return []
 
+    def on_data_hook(self, hook: str, data):
+        """
+        Allows plugins to request data from each other.
+        `data` can be anything the hooking function wants you to contribute to
+        """
+
     def on_request_assassin_summary(self) -> List[HTMLComponent]:
         return []
 
@@ -202,10 +208,3 @@ class AbstractPlugin:
         Display any information about an EVENT that is managed by this plugin
         """
         return []
-
-    def render_licitness_info(self, event_secret_id: int) -> Dict[str, List[HTMLComponent]]:
-        """
-        Returns a mapping of player ids to components giving information relevant to their licitness as a victim
-        (e.g. wantedness, competence, who has them as a target, who they have as a target).
-        """
-        return {}

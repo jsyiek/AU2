@@ -313,14 +313,6 @@ class CorePlugin(AbstractPlugin):
         )
         return [Table(results, headings=headings)]
 
-    def render_licitness_info(self, event_secret_id: int) -> Dict[str, List[HTMLComponent]]:
-        """Notifies umpire when victims are police"""
-        return {
-            player: [Label(f"Note: {player} is police.")]
-            for player in ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_police, include_hidden=True)
-        }
-
-
     def on_assassin_request_create(self):
         # use this to detect whether the game has started or not, since sending the first email is the point when
         # targets are "locked in" and adding new non-police players becomes dangerous

@@ -134,6 +134,11 @@ class TargetingPlugin(AbstractPlugin):
             return response
         return []
 
+    def on_data_hook(self, hook: str, data):
+        if hook == "WantedPlugin_targeting_graph":
+            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
+            data["targeting_graph"] = self.compute_targets([], max_event)
+
     def ask_set_seeds(self):
         return [
             SelectorList(
@@ -193,21 +198,6 @@ class TargetingPlugin(AbstractPlugin):
                 num_attackers += 1
 
         return response
-
-    def render_licitness_info(self, event_secret_id: int) -> Dict[str, List[HTMLComponent]]:
-        graph = self.compute_targets([], max_event=event_secret_id)
-        reverse_graph = {}
-        for (attacker, targets) in graph.items():
-            for t in targets:
-                reverse_graph.setdefault(t, []).append(attacker)
-
-        return {
-            player: [
-                Table([(targ,) for targ in graph[player]], headings=(f"Targets of {player}",)),
-                Table([(attacker,) for attacker in reverse_graph[player]], headings=(f"Players with {player} as a target",))
-            ]
-            for player in graph
-        }
 
     @property
     def seed(self):

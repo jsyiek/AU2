@@ -347,10 +347,13 @@ def render(html_component, dependency_context={}):
         # render info pertaining to licitness of victims if available
         if html_component.kill_entry_identifier in dependency_context:
             kills = dependency_context[html_component.kill_entry_identifier]
-            victims = {v for (_, v) in kills}
-            for v in victims:
-                for comp in html_component.licitness_info.get(v, []):
-                    render(comp)
+            for (killer, victim) in kills:
+                if victim in html_component.targeting_graph.get(killer, []):
+                    print(f"{killer} had {victim} as a target.")
+                elif killer in html_component.targeting_graph.get(victim, []):
+                    print(f"{killer} was a target of {victim}.")
+                else:
+                    print(f"{killer} did not have {victim} as a target nor targetor; this may be an illicit kill.")
 
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)

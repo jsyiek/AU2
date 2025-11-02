@@ -82,16 +82,10 @@ class WantedPlugin(AbstractPlugin):
             "Wanted": self.identifier + "_wanted"
         }
 
-    def _aggregate_licitness_info(self, event_secret_id: int = 10000000) -> Dict[str, List[HTMLComponent]]:
-        """Aggregates licitness info from all plugins, for use in on_event_request_create and on_event_request_update"""
-        licitness_info: Dict[str, List[HTMLComponent]] = {}
-        for p in PLUGINS:
-            new_info = p.render_licitness_info(event_secret_id)
-            for player in new_info:
-                licitness_info.setdefault(player, []).extend(new_info[player])
-        return licitness_info
-
     def on_event_request_create(self) -> List[HTMLComponent]:
+        data = {}
+        PLUGINS.data_hook("WantedPlugin_targeting_graph", data)
+        targeting_graph = data.get("targeting_graph", {})
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
@@ -105,7 +99,7 @@ class WantedPlugin(AbstractPlugin):
                                 title="WANTED: Choose players to set a new Wanted duration",
                                 default={},
                                 kill_entry_identifier="CorePlugin_kills",
-                                licitness_info=self._aggregate_licitness_info()
+                                targeting_graph=targeting_graph
                             )
                         ]
                     )]
@@ -117,6 +111,9 @@ class WantedPlugin(AbstractPlugin):
         return [Label("[WANTED] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+        data = {"secret_id": e.get_numerical_id()}
+        PLUGINS.data_hook("WantedPlugin_targeting_graph", data)
+        targeting_graph = data.get("targeting_graph", {})
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
@@ -130,7 +127,7 @@ class WantedPlugin(AbstractPlugin):
                                 title="WANTED: Choose players to set a new Wanted duration",
                                 default=e.pluginState.get(self.identifier, {}),
                                 kill_entry_identifier="CorePlugin_kills",
-                                licitness_info=self._aggregate_licitness_info(e.get_numerical_id())
+                                targeting_graph=targeting_graph
                             )
                         ]
                     )]
