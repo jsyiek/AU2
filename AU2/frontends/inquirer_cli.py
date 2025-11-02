@@ -345,7 +345,7 @@ def render(html_component, dependency_context={}):
     # dependent component
     elif isinstance(html_component, AssassinDependentCrimeEntry):
         # render info pertaining to licitness of victims if available
-        if html_component.kill_entry_identifier in dependency_context:
+        if html_component.kill_entry_identifier in dependency_context and html_component.targeting_graph:
             kills = dependency_context[html_component.kill_entry_identifier]
             for (killer, victim) in kills:
                 if victim in html_component.targeting_graph.get(killer, []):
