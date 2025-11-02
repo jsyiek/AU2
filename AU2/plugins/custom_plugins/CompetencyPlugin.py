@@ -11,6 +11,7 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -169,6 +170,7 @@ class CompetencyPlugin(AbstractPlugin):
             "Competency": self.identifier + "_competency",
             "Datetime": self.identifier + "_datetime",
             "Auto Competency": self.identifier + "_auto_competency",
+            "Attempt Tracking": self.identifier + "_attempt_tracking",
             "Attempts": self.identifier + "_attempts",
             "Gigabolt": self.identifier + "_gigabolt",
             "Headline": self.identifier + "_gigabolt_headline",
@@ -213,6 +215,12 @@ class CompetencyPlugin(AbstractPlugin):
                 display_name="Competency -> Change Auto Competency",
                 ask=self.ask_auto_competency,
                 answer=self.answer_auto_competency
+            ),
+            ConfigExport(
+                identifier="CompetencyPlugin_attempt_tracking",
+                display_name="Competency -> Toggle Attempt Tracking",
+                ask=self.ask_toggle_attempt_tracking,
+                answer=self.answer_toggle_attempt_tracking
             )
         ]
 
@@ -313,11 +321,35 @@ class CompetencyPlugin(AbstractPlugin):
         mode = htmlResponse[self.html_ids["Auto Competency"]]
         GENERIC_STATE_DATABASE.arb_state[self.plugin_state["AUTO COMPETENCY"]] = mode
         response = [Label(f"[COMPETENCY] Auto Competency Mode set to {mode}")]
-        # for backwards-compatibility... remove once there is no risk of version conflicts
-        track_attempts = mode != "Manual"
-        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts
-        response.append(Label(f"[COMPETENCY] Attempt tracking has been {'enabled' if track_attempts else 'disabled'}"))
+        if mode != "Manual" and not GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["ATTEMPT TRACKING"], True):
+            response.append(
+                Label("[COMPETENCY] Warning: Attempt Tracking not enabled. Attempt competency must be added manually.")
+            )
+        return response
 
+    def ask_toggle_attempt_tracking(self) -> List[HTMLComponent]:
+        return [
+            Checkbox(
+                identifier=self.html_ids["Attempt Tracking"],
+                title="Track attempts/assists?",
+                checked=GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True)
+            )
+        ]
+
+    def answer_toggle_attempt_tracking(self, htmlResponse) -> List[HTMLComponent]:
+        track_attempts = htmlResponse[self.html_ids["Attempt Tracking"]]
+        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts
+        manual = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto")  == "Manual"
+
+        response = [Label(f"[COMPETENCY] Attempt tracking has been {'en' if track_attempts else 'dis'}abled.")]
+        if not track_attempts and not manual:
+            response.append(
+                Label("[COMPETENCY] Note: Any previously recorded attempts/assists will still contribute to auto-competency.")
+            )
+        elif track_attempts and manual:
+            response.append(
+                Label("[COMPETENCY] Warning: Manual competency is enabled. Attempt competency must be added manually.")
+            )
         return response
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
@@ -353,10 +385,7 @@ class CompetencyPlugin(AbstractPlugin):
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         questions = []
-
-        track_attempts = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual"
-        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts  # for backwards-compatibility
-        if track_attempts:
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True):
             questions.append(
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
@@ -371,7 +400,8 @@ class CompetencyPlugin(AbstractPlugin):
                     ]
                 )
             )
-        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Full Auto":
+        mode = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto")
+        if mode != "Full Auto":
             questions.append(
                 Dependency(
                     dependentOn="CorePlugin_assassin_pseudonym",
@@ -379,7 +409,7 @@ class CompetencyPlugin(AbstractPlugin):
                         AssassinDependentIntegerEntry(
                             pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                             identifier=self.html_ids["Competency"],
-                            title="Manually extend competency?" if track_attempts else "Extend competency?",
+                            title="Manually extend competency?" if mode != "Manual" else "Extend competency?",
                             default={},
                             global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
                         )
@@ -406,9 +436,7 @@ class CompetencyPlugin(AbstractPlugin):
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
         questions = []
-
-        track_attempts = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual"
-        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["ATTEMPT TRACKING"]] = track_attempts  # for backwards-compatibility
+        track_attempts = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True)
         if track_attempts:
             # need this to convert the list of attempts as stored in the db to the structure understood by
             # AssassinDependentIntegerEntry
@@ -435,6 +463,7 @@ class CompetencyPlugin(AbstractPlugin):
                 )
             )
 
+        mode = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto")
         # Allow competency editing on event update even if full auto competency enabled.
         # TODO Make a selector that pre-filters to non-police players
         questions.append(Dependency(
@@ -443,7 +472,7 @@ class CompetencyPlugin(AbstractPlugin):
                 AssassinDependentIntegerEntry(
                     pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                     identifier=self.html_ids["Competency"],
-                    title="Manually extend competency?" if track_attempts else "Extend competency?",
+                    title="Manually extend competency?" if mode != "Manual" else "Extend competency?",
                     default=e.pluginState.get(self.identifier, {}).get(self.plugin_state["COMPETENCY"], {}),
                     global_default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"],
                                                                             DEFAULT_EXTENSION)
