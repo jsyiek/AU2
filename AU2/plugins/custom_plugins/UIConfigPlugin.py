@@ -20,6 +20,7 @@ class Call(Flag):
     NONE = 0
     EVENT_CREATE = 2 << 0
     EVENT_UPDATE = 2 << 1
+    RESERVED_ONE = 2 << 2
     ASSASSIN_CREATE = 2 << 3
     ASSASSIN_UPDATE = 2 << 4
     ASSASSIN_STATUS = 2 << 5

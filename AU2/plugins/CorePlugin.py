@@ -80,7 +80,7 @@ class CorePlugin(AbstractPlugin):
             "Hidden Assassins": self.identifier + "_hidden_assassins",
             "Nuke Database": self.identifier + "_nuke",
             "Secret Number": self.identifier + "_secret_confirm",
-            "Delete Event": self.identifier + "_delete_event"
+            "Delete Event": self.identifier + "_delete_event",
         }
 
         self.params = {
@@ -645,7 +645,7 @@ class CorePlugin(AbstractPlugin):
             NamedSmallTextbox(
                 identifier=self.html_ids["Delete Event"],
                 title=f"Type {i} to confirm event deletion"
-            )
+            ),
         ]
 
     def answer_core_plugin_delete_event(self, html_response_args: Dict):
@@ -654,7 +654,7 @@ class CorePlugin(AbstractPlugin):
             del EVENTS_DATABASE.events[ident]
             return [Label("[CORE] Delete acknowledged.")]
         else:
-            return [Label("[CORE] Delete aborted.")]
+            return [Label("[CORE] ERROR: Aborting. You entered the code incorrectly.")]
 
     def ask_core_plugin_update_config(self):
         plugins = [p for p in GENERIC_STATE_DATABASE.plugin_map]
