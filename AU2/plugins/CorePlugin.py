@@ -1,12 +1,10 @@
-import datetime
 import glob
 import os.path
 import random
 
-from typing import Dict, List, Tuple, Any, Callable
+from typing import Any, Callable, Dict, List, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
-from typing import Dict, List, Tuple, Any, Callable
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -81,7 +79,8 @@ class CorePlugin(AbstractPlugin):
             "Police": self.identifier + "_police",
             "Hidden Assassins": self.identifier + "_hidden_assassins",
             "Nuke Database": self.identifier + "_nuke",
-            "Secret Number": self.identifier + "_secret_confirm"
+            "Secret Number": self.identifier + "_secret_confirm",
+            "Delete Event": self.identifier + "_delete_event"
         }
 
         self.params = {
@@ -435,12 +434,6 @@ class CorePlugin(AbstractPlugin):
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_delete(self, e: Event) -> List[HTMLComponent]:
-        return [HiddenTextbox(self.HTML_SECRET_ID, e.identifier)]
-
-    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return [Label("[CORE] Delete acknowledged.")]
-
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["hide_assassins"]:
             assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda x: True)
@@ -641,19 +634,27 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_delete_event(self, event_id: str):
         event = EVENTS_DATABASE.get(event_id)
-        components = []
-        for p in PLUGINS:
-            components += p.on_event_request_delete(event)
-        return components
+        i = random.randint(0, 1000000)
+        return [
+            HiddenTextbox(self.HTML_SECRET_ID, event_id),
+            HiddenTextbox(
+                identifier=self.html_ids["Secret Number"],
+                default=str(i)
+            ),
+            Label(f"You are about to delete the event [{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline}"),
+            NamedSmallTextbox(
+                identifier=self.html_ids["Delete Event"],
+                title=f"Type {i} to confirm event deletion"
+            )
+        ]
 
     def answer_core_plugin_delete_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
-        event = EVENTS_DATABASE.get(ident)
-        components = []
-        for p in PLUGINS:
-            components += p.on_event_delete(event, html_response_args)
-        del EVENTS_DATABASE.events[ident]
-        return components
+        if html_response_args[self.html_ids["Delete Event"]] == html_response_args[self.html_ids["Secret Number"]]:
+            del EVENTS_DATABASE.events[ident]
+            return [Label("[CORE] Delete acknowledged.")]
+        else:
+            return [Label("[CORE] Delete aborted.")]
 
     def ask_core_plugin_update_config(self):
         plugins = [p for p in GENERIC_STATE_DATABASE.plugin_map]

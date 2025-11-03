@@ -98,9 +98,6 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         return [Label("[NEWS PAGE GENERATOR] Success!")]
 
-    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return []
-
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return []
 

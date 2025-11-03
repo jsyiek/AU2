@@ -20,7 +20,6 @@ class Call(Flag):
     NONE = 0
     EVENT_CREATE = 2 << 0
     EVENT_UPDATE = 2 << 1
-    EVENT_DELETE = 2 << 2
     ASSASSIN_CREATE = 2 << 3
     ASSASSIN_UPDATE = 2 << 4
     ASSASSIN_STATUS = 2 << 5
@@ -180,9 +179,6 @@ class UIConfigPlugin(AbstractPlugin):
 
     def on_event_request_update(self, _: Event) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.EVENT_UPDATE)
-
-    def on_event_request_delete(self, _: Event) -> List[HTMLComponent]:
-        return self.get_overrides_for_call(Call.EVENT_DELETE)
 
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.ASSASSIN_CREATE)
