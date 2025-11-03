@@ -1,6 +1,5 @@
 import glob
 import os.path
-import random
 
 from typing import Any, Callable, Dict, List, Tuple
 
@@ -635,7 +634,6 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_delete_event(self, event_id: str):
         event = EVENTS_DATABASE.get(event_id)
-        i = random.randint(0, 1000000)
         return [
             HiddenTextbox(self.HTML_SECRET_ID, event_id),
             Label(f"You are about to delete the event [{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline}"),
