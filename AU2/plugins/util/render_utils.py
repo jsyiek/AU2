@@ -340,7 +340,7 @@ def render_all_events(exclude: Callable[[Event], bool],
     events_for_chapter = {0: {}}
     headlines_for_day = {}
     competency_manager = CompetencyManager(start_datetime)
-    death_manager = DeathManager(perma_death=True)
+    death_manager = DeathManager()
     wanted_manager = WantedManager()
     plugin_managers = (competency_manager, death_manager, wanted_manager, *(plugin_managers or tuple()))
 

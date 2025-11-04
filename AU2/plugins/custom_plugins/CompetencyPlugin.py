@@ -122,7 +122,7 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
     start_datetime: datetime.datetime = get_game_start()
 
     competency_manager = CompetencyManager(start_datetime)
-    death_manager = DeathManager(perma_death=True)
+    death_manager = DeathManager()
 
     # populates the death manager
     active_players = get_active_players(death_manager)
@@ -520,7 +520,7 @@ class CompetencyPlugin(AbstractPlugin):
         start_datetime: datetime.datetime = get_game_start()
 
         competency_manager = CompetencyManager(start_datetime)
-        death_manager = DeathManager(perma_death=True)
+        death_manager = DeathManager()
         limit = htmlResponse[self.html_ids["Datetime"]]
         for e in events:
             if e.datetime > limit:
