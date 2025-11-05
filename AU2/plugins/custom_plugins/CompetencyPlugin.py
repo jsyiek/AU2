@@ -222,6 +222,9 @@ class CompetencyPlugin(AbstractPlugin):
             )
         ]
 
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        return []
+
     def gigabolt_ask(self):
         questions = []
         if not GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"]):

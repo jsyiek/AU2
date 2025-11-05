@@ -64,7 +64,6 @@ GAME_TYPE_PLUGIN_MAP = {
         "MafiaPlugin": False,
         "MayWeekUtilitiesPlugin": False,
         "PageGeneratorPlugin": True,
-        "PlayerImporterPlugin": True,
         "PolicePlugin": True,
         "RandomGamePlugin": False,
         "ScoringPlugin": True,
@@ -78,7 +77,6 @@ GAME_TYPE_PLUGIN_MAP = {
         "MafiaPlugin": False,
         "MayWeekUtilitiesPlugin": True,
         "PageGeneratorPlugin": True,  # needed to be able to hide events
-        "PlayerImporterPlugin": True,
         "PolicePlugin": False,
         "RandomGamePlugin": False,
         "ScoringPlugin": False,
@@ -501,6 +499,16 @@ class CorePlugin(AbstractPlugin):
             return_components = [Label("[Core] Set assassins' visibilities")]
             return return_components
         return []
+
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        return [
+            *self.ask_set_game_start(),
+        ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        return [
+            *self.answer_set_game_start(htmlResponse),
+        ]
 
     def get_all_exports(self, include_suppressed: bool = False) -> List[Export]:
         """
@@ -926,11 +934,13 @@ class CorePlugin(AbstractPlugin):
 
     def ask_set_game_start(self):
         return [
+            Label("Game start is used for paginating events into week 1, week 2, etc., "
+                  "and (if applicable) for calculating incompetence deadlines."),
             DatetimeEntry(
                 self.identifier + "_game_start",
                 title="Enter game start",
                 default=get_game_start()
-            )
+            ),
         ]
 
     def answer_set_game_start(self, htmlResponse) -> List[HTMLComponent]:
@@ -961,6 +971,8 @@ class CorePlugin(AbstractPlugin):
         return list(GAME_TYPE_PLUGIN_MAP)
 
     def ask_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        # TODO: require that players have been added
+
         # determine which plugins should be enabled, starting from currently enabled plugins and adding/removing plugins
         # as specified in GAME_TYPE_PLUGIN_MAP for the selected game type
         plugins = {p.identifier for p in PLUGINS}
@@ -989,10 +1001,10 @@ class CorePlugin(AbstractPlugin):
         if error is not None:
             return [Label(error)]
 
-        # update plugins
+        plugins = list(htmlResponse[self.config_html_ids["Plugins"]])
+        # update plugins (warning: this call modifies htmlResponse to add CorePlugin to the list of plugins)
         components = self.answer_core_plugin_update_config(htmlResponse)
         # effect other config changes
-        plugins = htmlResponse[self.config_html_ids["Plugins"]]
         for plugin in plugins:
             components += PLUGINS[plugin].on_setup_game(htmlResponse)
         return components
