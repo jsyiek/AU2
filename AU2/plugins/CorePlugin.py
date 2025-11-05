@@ -147,6 +147,7 @@ class CorePlugin(AbstractPlugin):
             "Suppressed Exports": self.identifier + "_suppressed_exports",
             "Pinned Exports": self.identifier + "_pinned_exports",
             "Plugins": self.identifier + "_plugins",
+            "Setup Error": self.identifier + "_setup_error",
         }
 
         self.exports = [
@@ -971,7 +972,15 @@ class CorePlugin(AbstractPlugin):
         return list(GAME_TYPE_PLUGIN_MAP)
 
     def ask_setup_game(self, game_type: str) -> List[HTMLComponent]:
-        # TODO: require that players have been added
+        # require players to be added first.
+        # TODO: figure out a way to incorporate adding players into the setup export?
+        if not ASSASSINS_DATABASE.assassins:
+            return [
+                HiddenTextbox(
+                    self.config_html_ids["Setup Error"],
+                    "[CORE] Error: must add players first."
+                )
+            ]
 
         # determine which plugins should be enabled, starting from currently enabled plugins and adding/removing plugins
         # as specified in GAME_TYPE_PLUGIN_MAP for the selected game type
@@ -983,7 +992,10 @@ class CorePlugin(AbstractPlugin):
                 else:
                     # case where missing plugin -- throw error
                     return [
-                        HiddenTextbox(self.identifier + "_error", f"[CORE] Error: required plugin {plugin} unavailable.")
+                        HiddenTextbox(
+                            self.config_html_ids["Setup Error"],
+                            f"[CORE] Error: required plugin {plugin} unavailable."
+                        ),
                     ]
             else:
                 plugins.discard(plugin)
@@ -997,7 +1009,7 @@ class CorePlugin(AbstractPlugin):
         return components
 
     def answer_setup_game(self, htmlResponse) -> List[HTMLComponent]:
-        error = htmlResponse.get(self.identifier + "_error", None)
+        error = htmlResponse.get(self.config_html_ids["Setup Error"], None)
         if error is not None:
             return [Label(error)]
 
