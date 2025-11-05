@@ -28,7 +28,7 @@ POLICE_TABLE_TEMPLATE = """
     Here is a list of members of our loyal police, charged with protecting Cambridge from murderers of innocents and people that annoy the all powerful Umpire:
 </p>
 <table xmlns="" class="playerlist">
-  <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th><th>Died at:</th></tr>
+  <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th><th>Deaths</th></tr>
   {ROWS}
 </table>
 """
@@ -111,9 +111,6 @@ class PolicePlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]['id']] = data
 
     def gather_dead_non_police(self) -> List[str]:
-        # if police plugin is enabled we assume perma-death is enabled (i.e. it is not May Week)
-        # even though `is_police` may be used in certain mayweek games,
-        # this plugin itself doesn't make sense to use without permadeath
         death_manager = DeathManager()
         for e in EVENTS_DATABASE.events.values():
             death_manager.add_event(e)
