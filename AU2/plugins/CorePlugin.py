@@ -1,12 +1,10 @@
-import datetime
 import glob
 import os.path
 import random
 
-from typing import Dict, List, Tuple, Any, Callable
+from typing import Any, Callable, Dict, List, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
-from typing import Dict, List, Tuple, Any, Callable
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -24,6 +22,7 @@ from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalD
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.Label import Label
@@ -54,6 +53,40 @@ for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):
 
 
 PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
+
+# maps game types to default plugin settings for Setup Game
+# plugins not explicitly mentioned are left as is,
+# note that the bounty plugins will be dealt with separately
+GAME_TYPE_PLUGIN_MAP = {
+    "Standard Game": {
+        "CompetencyPlugin": True,
+        "LocalBackupPlugin": True,
+        "MafiaPlugin": False,
+        "MayWeekUtilitiesPlugin": False,
+        "PageGeneratorPlugin": True,
+        "PlayerImporterPlugin": True,
+        "PolicePlugin": True,
+        "RandomGamePlugin": False,
+        "ScoringPlugin": True,
+        "TargetingPlugin": True,
+        "UIConfigPlugin": True,
+        "WantedPlugin": True,
+    },
+    "May Week": {
+        "CompetencyPlugin":False,
+        "LocalBackupPlugin": True,
+        "MafiaPlugin": False,
+        "MayWeekUtilitiesPlugin": True,
+        "PageGeneratorPlugin": True,  # needed to be able to hide events
+        "PlayerImporterPlugin": True,
+        "PolicePlugin": False,
+        "RandomGamePlugin": False,
+        "ScoringPlugin": False,
+        "TargetingPlugin": False,
+        "UIConfigPlugin": True,
+        "WantedPlugin": True,
+    }
+}
 
 
 @registered_plugin
@@ -114,7 +147,8 @@ class CorePlugin(AbstractPlugin):
 
         self.config_html_ids = {
             "Suppressed Exports": self.identifier + "_suppressed_exports",
-            "Pinned Exports": self.identifier + "_pinned_exports"
+            "Pinned Exports": self.identifier + "_pinned_exports",
+            "Plugins": self.identifier + "_plugins",
         }
 
         self.exports = [
@@ -187,6 +221,13 @@ class CorePlugin(AbstractPlugin):
                 display_name="Reset Database",
                 ask=self.ask_reset_database,
                 answer=self.answer_reset_database
+            ),
+            Export(
+                identifier="core_plugin_setup_game",
+                display_name="Setup Game",
+                ask=self.ask_setup_game,
+                answer=self.answer_setup_game,
+                options_functions=(self.gather_game_types,)
             )
         ]
 
@@ -660,11 +701,20 @@ class CorePlugin(AbstractPlugin):
         plugins.remove("CorePlugin")
         return [
             SelectorList(
-                self.identifier + "_config",
+                self.config_html_ids["Plugins"],
                 title="Enable or disable plugins",
                 options=sorted(plugins),
                 defaults=[p for p in plugins if GENERIC_STATE_DATABASE.plugin_map[p]]
             )
+        ]
+
+    def answer_core_plugin_update_config(self, htmlResponse):
+        enabled_plugins = htmlResponse[self.config_html_ids["Plugins"]]
+        enabled_plugins.append("CorePlugin")
+        for p in GENERIC_STATE_DATABASE.plugin_map:
+            GENERIC_STATE_DATABASE.plugin_map[p] = (p in enabled_plugins)
+        return [
+            Label("[CORE] Plugin change success!")
         ]
 
     def ask_generate_pages(self):
@@ -766,15 +816,6 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             components += p.on_page_generate(html_response_args)
         return components
-
-    def answer_core_plugin_update_config(self, htmlResponse):
-        enabled_plugins = htmlResponse[self.identifier + "_config"]
-        enabled_plugins.append("CorePlugin")
-        for p in GENERIC_STATE_DATABASE.plugin_map:
-            GENERIC_STATE_DATABASE.plugin_map[p] = (p in enabled_plugins)
-        return [
-            Label("[CORE] Plugin change success!")
-        ]
 
     def ask_custom_hook(self, hook: str) -> List[HTMLComponent]:
         """
@@ -915,3 +956,43 @@ class CorePlugin(AbstractPlugin):
             Label(f"[CORE] Set game end to {new_end.strftime('%Y-%m-%d %H:%M:%S')}") if new_end
             else Label(f"[CORE] Unset game end.")
         ]
+
+    def gather_game_types(self) -> List[str]:
+        return list(GAME_TYPE_PLUGIN_MAP)
+
+    def ask_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        # determine which plugins should be enabled, starting from currently enabled plugins and adding/removing plugins
+        # as specified in GAME_TYPE_PLUGIN_MAP for the selected game type
+        plugins = {p.identifier for p in PLUGINS}
+        for plugin, value in GAME_TYPE_PLUGIN_MAP[game_type].items():
+            if value:
+                if plugin in AVAILABLE_PLUGINS:
+                    plugins.add(plugin)
+                else:
+                    # case where missing plugin -- throw error
+                    return [
+                        HiddenTextbox(self.identifier + "_error", f"[CORE] Error: required plugin {plugin} unavailable.")
+                    ]
+            else:
+                plugins.discard(plugin)
+        components = []
+        for plugin in plugins:
+            components += PLUGINS[plugin].on_request_setup_game(game_type)
+        components.append(HiddenJSON(
+            identifier=self.config_html_ids["Plugins"],
+            default=list(plugins)
+        ))
+        return components
+
+    def answer_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        error = htmlResponse.get(self.identifier + "_error", None)
+        if error is not None:
+            return [Label(error)]
+
+        # update plugins
+        components = self.answer_core_plugin_update_config(htmlResponse)
+        # effect other config changes
+        plugins = htmlResponse[self.config_html_ids["Plugins"]]
+        for plugin in plugins:
+            components += PLUGINS[plugin].on_setup_game(htmlResponse)
+        return components

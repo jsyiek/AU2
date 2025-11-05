@@ -2,7 +2,6 @@ from typing import List, Tuple, Union, Any, Callable
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.SimpleComponents.Label import Label
 
 
 class Export:
@@ -200,5 +199,17 @@ class AbstractPlugin:
     def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
         """
         Display any information about an EVENT that is managed by this plugin
+        """
+        return []
+
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        """
+        Walk through config options
+        """
+        return []
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        """
+        Effect config options
         """
         return []

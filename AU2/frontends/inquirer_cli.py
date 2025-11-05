@@ -32,6 +32,7 @@ from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import Defaul
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
@@ -580,7 +581,7 @@ def render(html_component, dependency_context={}):
         a = inquirer_prompt_with_abort(q)
         return {html_component.identifier: a["q"] == "Yes"}
 
-    elif isinstance(html_component, HiddenTextbox):
+    elif isinstance(html_component, HiddenTextbox) or isinstance(html_component, HiddenJSON):
         return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, NamedSmallTextbox):
