@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union, Any, Callable
 
 from AU2.database.model import Event, Assassin
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 
 
@@ -107,7 +108,6 @@ class AbstractPlugin:
     def __init__(self, identifier: str):
         # unique identifier for the plugin
         self.identifier = identifier
-        self.enabled = True
         self.exports: List[Export] = []
 
         # for config parameters
@@ -124,11 +124,15 @@ class AbstractPlugin:
         """
         return
 
-    def enable(self):
-        self.enabled = True
+    @property
+    def enabled(self) -> bool:
+        return GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, True)
 
-    def disable(self):
-        self.enabled = False
+    @enabled.setter
+    def enabled(self, val: bool):
+        if not isinstance(val, bool):
+            raise TypeError(f"{self.__class__.__name__} must be a boolean, not '{type(val)}'")
+        GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []

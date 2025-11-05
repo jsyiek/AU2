@@ -64,6 +64,7 @@ GAME_TYPE_PLUGIN_MAP = {
         "MafiaPlugin": False,
         "MayWeekUtilitiesPlugin": False,
         "PageGeneratorPlugin": True,
+        "PlayerImporterPlugin": True,
         "PolicePlugin": True,
         "RandomGamePlugin": False,
         "ScoringPlugin": True,
@@ -289,6 +290,10 @@ class CorePlugin(AbstractPlugin):
             ("College", assassin.college),
             ("Notes", assassin.notes)
         ]
+
+    # CorePlugin can't be disabled
+    def enabled(self) -> bool:
+        return True
 
     def ask_core_plugin_summary_assassin(self):
         return [
@@ -708,22 +713,22 @@ class CorePlugin(AbstractPlugin):
         return components
 
     def ask_core_plugin_update_config(self):
-        plugins = [p for p in GENERIC_STATE_DATABASE.plugin_map]
+        plugins = [p for p in AVAILABLE_PLUGINS]
         plugins.remove("CorePlugin")
         return [
             SelectorList(
                 self.config_html_ids["Plugins"],
                 title="Enable or disable plugins",
                 options=sorted(plugins),
-                defaults=[p for p in plugins if GENERIC_STATE_DATABASE.plugin_map[p]]
+                defaults=[p for p in plugins if PLUGINS[p].enabled]
             )
         ]
 
     def answer_core_plugin_update_config(self, htmlResponse):
         enabled_plugins = htmlResponse[self.config_html_ids["Plugins"]]
         enabled_plugins.append("CorePlugin")
-        for p in GENERIC_STATE_DATABASE.plugin_map:
-            GENERIC_STATE_DATABASE.plugin_map[p] = (p in enabled_plugins)
+        for ident, p in AVAILABLE_PLUGINS.items():
+            p.enabled = (ident in enabled_plugins)
         return [
             Label("[CORE] Plugin change success!")
         ]
@@ -974,51 +979,51 @@ class CorePlugin(AbstractPlugin):
         return list(GAME_TYPE_PLUGIN_MAP)
 
     def ask_setup_game(self, game_type: str) -> List[HTMLComponent]:
-        # require players to be added first.
-        # TODO: figure out a way to incorporate adding players into the setup export?
-        if not ASSASSINS_DATABASE.assassins:
+        # check for missing plugins, and throw error if any required plugins are missing
+        missing = [
+            plugin for plugin, to_enable in GAME_TYPE_PLUGIN_MAP[game_type].items()
+            if to_enable and plugin not in AVAILABLE_PLUGINS
+        ]
+        if len(missing) > 0:
             return [
+                HiddenTextbox(
+                    self.config_html_ids["Setup Error"],
+                    f"[CORE] Error: Missing required plugin{'s' if len(missing) > 1 else ''} {', '.join(missing)}"
+                )
+            ]
+
+        components = []
+        # enable/disable plugins as specified in GAME_TYPE_PLUGIN_MAP for the selected game type
+        for plugin, to_enable in GAME_TYPE_PLUGIN_MAP[game_type].items():
+            # still need to check existence of plugin in case a plugin that needs to be *disabled* is missing
+            if plugin in AVAILABLE_PLUGINS:
+                PLUGINS[plugin].enabled = to_enable
+                components.append(Label(f"[CORE] {'En' if to_enable else 'Dis'}abled {plugin}"))
+
+        # require players to be added first.
+        # this is done *after* enabling plugins, so that Setup Game can at least help to set up the correct plugins
+        if not ASSASSINS_DATABASE.assassins:
+            components.append(
                 HiddenTextbox(
                     self.config_html_ids["Setup Error"],
                     "[CORE] Error: must add players first."
                 )
-            ]
+            )
+            return components
 
-        # determine which plugins should be enabled, starting from currently enabled plugins and adding/removing plugins
-        # as specified in GAME_TYPE_PLUGIN_MAP for the selected game type
-        plugins = {p.identifier for p in PLUGINS}
-        for plugin, value in GAME_TYPE_PLUGIN_MAP[game_type].items():
-            if value:
-                if plugin in AVAILABLE_PLUGINS:
-                    plugins.add(plugin)
-                else:
-                    # case where missing plugin -- throw error
-                    return [
-                        HiddenTextbox(
-                            self.config_html_ids["Setup Error"],
-                            f"[CORE] Error: required plugin {plugin} unavailable."
-                        ),
-                    ]
-            else:
-                plugins.discard(plugin)
-        components = []
-        for plugin in plugins:
-            components += PLUGINS[plugin].on_request_setup_game(game_type)
-        components.append(HiddenJSON(
-            identifier=self.config_html_ids["Plugins"],
-            default=list(plugins)
-        ))
+        # request components for setup from plugins
+        for plugin in PLUGINS:
+            components += plugin.on_request_setup_game(game_type)
+
         return components
 
     def answer_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        # check for errors
         error = htmlResponse.get(self.config_html_ids["Setup Error"], None)
         if error is not None:
             return [Label(error)]
-
-        plugins = list(htmlResponse[self.config_html_ids["Plugins"]])
-        # update plugins (warning: this call modifies htmlResponse to add CorePlugin to the list of plugins)
-        components = self.answer_core_plugin_update_config(htmlResponse)
-        # effect other config changes
-        for plugin in plugins:
-            components += PLUGINS[plugin].on_setup_game(htmlResponse)
+        # effect config changes
+        components = []
+        for plugin in PLUGINS:
+            components += plugin.on_setup_game(htmlResponse)
         return components
