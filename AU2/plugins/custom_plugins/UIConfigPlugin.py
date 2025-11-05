@@ -153,6 +153,16 @@ class UIConfigPlugin(AbstractPlugin):
             )
         ]
 
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        return [
+            *self.ask_toggle_parameters(),
+        ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        return [
+            *self.answer_toggle_parameters(htmlResponse),
+        ]
+
     def ask_toggle_parameters(self):
         return [
             SelectorList(
