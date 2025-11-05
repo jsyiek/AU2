@@ -71,19 +71,21 @@ GAME_TYPE_PLUGIN_MAP = {
         "UIConfigPlugin": True,
         "WantedPlugin": True,
     },
-    "May Week": {
-        "CompetencyPlugin":False,
-        "LocalBackupPlugin": True,
-        "MafiaPlugin": False,
-        "MayWeekUtilitiesPlugin": True,
-        "PageGeneratorPlugin": True,  # needed to be able to hide events
-        "PolicePlugin": False,
-        "RandomGamePlugin": False,
-        "ScoringPlugin": False,
-        "TargetingPlugin": False,
-        "UIConfigPlugin": True,
-        "WantedPlugin": True,
-    }
+    # Can't implement Setup Game for MayWeekUtilitiesPlugin at the moment because config options depend on whether
+    # teams are enabled or not, and doing a partial implementation would mislead users.
+    # "May Week": {
+    #     "CompetencyPlugin":False,
+    #     "LocalBackupPlugin": True,
+    #     "MafiaPlugin": False,
+    #     "MayWeekUtilitiesPlugin": True,
+    #     "PageGeneratorPlugin": True,  # needed to be able to hide events
+    #     "PolicePlugin": False,
+    #     "RandomGamePlugin": False,
+    #     "ScoringPlugin": False,
+    #     "TargetingPlugin": False,
+    #     "UIConfigPlugin": True,
+    #     "WantedPlugin": True,
+    # }
 }
 
 
