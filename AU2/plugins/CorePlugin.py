@@ -1,18 +1,16 @@
-import datetime
 import glob
 import os.path
 import random
 
-from typing import Dict, List, Tuple, Any, Callable
+from typing import Any, Callable, Dict, List, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
-from typing import Dict, List, Tuple, Any, Callable
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
-from AU2.html_components import HTMLComponent
+from AU2.html_components import HTMLComponent, HTMLResponse
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
@@ -179,9 +177,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 self.CONFIG_PARAMETER_EXPORT,
                 "Plugin config -> Plugin-specific parameters",
-                self.ask_config,
-                self.answer_config,
-                (self.gather_config_options,)
+                lambda: [self.gather_config_options()],
+                (self.ask_config, self.answer_config),
             ),
             Export(
                 identifier="core_plugin_reset_database",
@@ -815,10 +812,11 @@ class CorePlugin(AbstractPlugin):
                                  title="",
                                  config_options=config_options)
 
-    def ask_config(self, config_option: ConfigExport):
+    def ask_config(self, html_response: HTMLResponse) -> List[HTMLComponent]:
         """
         Opens the menu for a chosen config option
         """
+        config_option = html_response["config_option"]
         if isinstance(config_option, ConfigExport):
             return [
                 HiddenTextbox(
