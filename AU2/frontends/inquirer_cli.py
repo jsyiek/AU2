@@ -353,7 +353,7 @@ def render(html_component, dependency_context={}):
                 elif killer in html_component.targeting_graph.get(victim, []):
                     print(f"{killer} was a target of {victim}.")
                 else:
-                    print(f"{killer} did not have {victim} as a target nor targetor; this may be an illicit kill.")
+                    print(f"{killer} did not have {victim} as a target nor targeter; this may be an illicit kill.")
 
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
