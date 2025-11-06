@@ -20,39 +20,23 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.PoliceRankManager import DEFAULT_RANKS, PoliceRankManager, DEFAULT_POLICE_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT
-from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
+from AU2.plugins.util.render_utils import event_url
 
 POLICE_TABLE_TEMPLATE = """
 <p xmlns="">
     Here is a list of members of our loyal police, charged with protecting Cambridge from murderers of innocents and people that annoy the all powerful Umpire:
 </p>
 <table xmlns="" class="playerlist">
-  <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th></tr>
+  <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th><th>Deaths</th></tr>
   {ROWS}
 </table>
 """
 
 POLICE_TABLE_ROW_TEMPLATE = """
-<tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td></tr>
+<tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td><td>{DEATHS}</td></tr>
 """
 
-DEAD_POLICE_TABLE_TEMPLATE = """
-<p xmlns="">
-    Those who underestimated the dangers of constabulary work:
-</p>
-<table xmlns="" class="playerlist">
-  <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th></tr>
-  {ROWS}
-</table>
-"""
-
-DEAD_POLICE_TABLE_ROW_TEMPLATE = """
-<tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td></tr>
-"""
-
-# Corrupt Police moved to Wanted Page, because it's too annoying to code otherwise.
-
-NO_DEAD_POLICE = """<p xmlns="">No police have been killed... yet.</p>"""
 NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the moment</p>"""
 
 
@@ -136,10 +120,7 @@ class PolicePlugin(AbstractPlugin):
         ]
 
     def gather_dead_non_police(self) -> List[str]:
-        # if police plugin is enabled we assume perma-death is enabled (i.e. it is not May Week)
-        # even though `is_police` may be used in certain mayweek games,
-        # this plugin itself doesn't make sense to use without permadeath
-        death_manager = DeathManager(perma_death=True)
+        death_manager = DeathManager()
         for e in EVENTS_DATABASE.events.values():
             death_manager.add_event(e)
         return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_police))
@@ -300,7 +281,7 @@ class PolicePlugin(AbstractPlugin):
         events.sort(key=lambda event: event.datetime)
 
         police_rank_manager = PoliceRankManager(auto_ranking=self.gsdb_get("Auto Rank"), police_kill_ranking=self.gsdb_get("Police Kills Rankup"))
-        death_manager = DeathManager(perma_death=True)
+        death_manager = DeathManager()
         for e in events:
             police_rank_manager.add_event(e)
             death_manager.add_event(e)
@@ -309,47 +290,28 @@ class PolicePlugin(AbstractPlugin):
 
         # note: police who are hidden using `Assassin -> Hide` will not be included
         police: List[Assassin] = ASSASSINS_DATABASE.get_filtered(include=lambda a: a.is_police)
-        dead_police: List[Assassin] = [i for i in police if i.identifier in death_manager.get_dead()]
-        alive_police: List[Assassin] = [i for i in police if i not in dead_police]
 
         tables = []
         if police:
-            if alive_police:
-                alive_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
-                rows = []
-                for a in alive_police:
-                    rows.append(
-                        POLICE_TABLE_ROW_TEMPLATE.format(
-                            RANK=police_rank_manager.get_rank_name(a.identifier),
-                            PSEUDONYM=a.all_pseudonyms(),
-                            NAME=a.real_name,
-                            EMAIL=a.email,
-                            COLLEGE=a.college,
-                            NOTES=a.notes
-                        )
+            police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
+            rows = []
+            for a in police:
+                deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
+                          for e in death_manager.get_death_events(a)]
+                rows.append(
+                    POLICE_TABLE_ROW_TEMPLATE.format(
+                        RANK=police_rank_manager.get_rank_name(a.identifier),
+                        PSEUDONYM=a.all_pseudonyms(),
+                        NAME=a.real_name,
+                        EMAIL=a.email,
+                        COLLEGE=a.college,
+                        NOTES=a.notes,
+                        DEATHS='<br />'.join(deaths) if deaths else "&mdash;",
                     )
-                tables.append(
-                    POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
                 )
-            if dead_police:
-                dead_police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
-                rows = []
-                for a in dead_police:
-                    rows.append(
-                        DEAD_POLICE_TABLE_ROW_TEMPLATE.format(
-                            RANK=police_rank_manager.get_rank_name(a.identifier),
-                            PSEUDONYM=a.all_pseudonyms(),
-                            NAME=a.real_name,
-                            EMAIL=a.email,
-                            COLLEGE=a.college,
-                            NOTES=a.notes
-                        )
-                    )
-                tables.append(
-                    DEAD_POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
-                )
-            else:
-                tables.append(NO_DEAD_POLICE)
+            tables.append(
+                POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
+            )
         else:
             tables.append(NO_POLICE)
 

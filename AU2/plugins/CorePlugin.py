@@ -47,12 +47,13 @@ def registered_plugin(plugin_class):
     return plugin_class
 
 
+PLUGINS = __PluginMap({})  # initialise first without any plugins to allow PLUGINS to be shared by other plugins
+
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):
     name = os.path.splitext(os.path.basename(file))[0]
     module = __import__(f"AU2.plugins.custom_plugins.{name}")
 
-
-PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
+PLUGINS.update(AVAILABLE_PLUGINS)  # actually enable plugins
 
 # maps game types to default plugin settings for Setup Game
 # plugins not explicitly mentioned are left as is,

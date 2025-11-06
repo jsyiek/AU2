@@ -345,9 +345,21 @@ def render(html_component, dependency_context={}):
 
     # dependent component
     elif isinstance(html_component, AssassinDependentCrimeEntry):
+        # render info pertaining to licitness of victims if available
+        if html_component.kill_entry_identifier in dependency_context and html_component.targeting_graph:
+            kills = dependency_context[html_component.kill_entry_identifier]
+            for (killer, victim) in kills:
+                if victim in html_component.targeting_graph.get(killer, []):
+                    print(f"{killer} had {victim} as a target.")
+                elif killer in html_component.targeting_graph.get(victim, []):
+                    print(f"{killer} was a target of {victim}.")
+                else:
+                    print(f"{killer} did not have {victim} as a target nor targeter; this may be an illicit kill.")
+
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
         q = [inquirer.Checkbox(
@@ -566,6 +578,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, Table):
         print(tabulate.tabulate(html_component.rows, headers=html_component.headings,
                                 maxcolwidths=[len(h) for h in html_component.headings]))
+        print()
         return {}
 
     elif isinstance(html_component, Checkbox):
