@@ -379,8 +379,8 @@ class CorePlugin(AbstractPlugin):
         assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_create_or_update(self, e: Optional[Event], _):
-        html = [
+    def on_event_request_create_or_update(self, e: Optional[Event], _) -> List[HTMLComponent]:
+        return [
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
@@ -390,14 +390,13 @@ class CorePlugin(AbstractPlugin):
             ),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline if e else ""),
         ]
-        return html
 
-    def on_event_create_or_update(self, event: Event, htmlResponse: Dict) -> List[HTMLComponent]:
-        event.assassins = htmlResponse[self.event_html_ids["Assassin Pseudonym"]]
-        event.datetime = htmlResponse[self.event_html_ids["Datetime"]]
-        event.headline = htmlResponse[self.event_html_ids["Headline"]]
-        event.reports = htmlResponse[self.event_html_ids["Reports"]]
-        event.kills = htmlResponse[self.event_html_ids["Kills"]]
+    def on_event_create_or_update(self, event: Event, html_response: HTMLResponse) -> List[HTMLComponent]:
+        event.assassins = html_response[self.event_html_ids["Assassin Pseudonym"]]
+        event.datetime = html_response[self.event_html_ids["Datetime"]]
+        event.headline = html_response[self.event_html_ids["Headline"]]
+        event.reports = html_response[self.event_html_ids["Reports"]]
+        event.kills = html_response[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_delete(self, e: Event) -> List[HTMLComponent]:
