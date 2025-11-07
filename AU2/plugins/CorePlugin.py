@@ -379,36 +379,20 @@ class CorePlugin(AbstractPlugin):
         assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_create(self):
+    def on_event_request_create_or_update(self, e: Optional[Event], _):
         html = [
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"],
-                                                 self.event_html_ids["Reports"], "Reports"),
+                                                 self.event_html_ids["Reports"], "Reports", e.reports if e else []),
                 ]
             ),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
+            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline if e else ""),
         ]
         return html
 
-    def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return [Label("[CORE] Success!")]
-
-    def on_event_request_update(self, e: Event):
-        html = [
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"],
-                                                 self.event_html_ids["Reports"], "Reports", e.reports),
-                ]
-            ),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
-        ]
-        return html
-
-    def on_event_update(self, event: Event, htmlResponse: Dict) -> List[HTMLComponent]:
+    def on_event_create_or_update(self, event: Event, htmlResponse: Dict) -> List[HTMLComponent]:
         event.assassins = htmlResponse[self.event_html_ids["Assassin Pseudonym"]]
         event.datetime = htmlResponse[self.event_html_ids["Datetime"]]
         event.headline = htmlResponse[self.event_html_ids["Headline"]]
@@ -634,6 +618,7 @@ class CorePlugin(AbstractPlugin):
             ),
         ]
         for p in PLUGINS:
+            components += p.on_event_request_create_or_update(event, html_response)
             components += p.on_event_request_update(event) if event else p.on_event_request_create()
         return components
 
@@ -644,6 +629,7 @@ class CorePlugin(AbstractPlugin):
         event = Event(**params)
         return_components = []
         for p in PLUGINS:
+            return_components += p.on_event_create_or_update(event, html_response_args)
             return_components += p.on_event_create(event, html_response_args)
         EVENTS_DATABASE.add(event)
         return return_components

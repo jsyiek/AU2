@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Sequence, Tuple, Union
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent, HTMLResponse
@@ -124,6 +124,12 @@ class AbstractPlugin:
         self.enabled = False
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
+        return []
+
+    def on_event_request_create_or_update(self, _: Optional[Event], html_response: HTMLResponse) -> List[HTMLComponent]:
+        return []
+
+    def on_event_create_or_update(self, _: Event, html_response: HTMLResponse) -> List[HTMLComponent]:
         return []
 
     def on_event_request_create(self) -> List[HTMLComponent]:
