@@ -639,6 +639,7 @@ class CorePlugin(AbstractPlugin):
         event.pluginState["sanity_checks"] = []
         components = []
         for p in PLUGINS:
+            components += p.on_event_create_or_update(event, html_response_args)
             components += p.on_event_update(event, html_response_args)
         return components
 
