@@ -1,18 +1,19 @@
 import itertools
 import random
-from typing import Tuple, Dict, List, Set
+import time
+from typing import Dict, List, Set, Tuple
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, DangerousConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -36,6 +37,9 @@ Notes: {NOTES}"""
 
 class FailedToCreateChainException(Exception):
     pass
+
+
+TOGGLE_INFO_DISPLAY_NAME = "Targeting Graph -> Toggle display"
 
 
 @registered_plugin
@@ -70,6 +74,12 @@ class TargetingPlugin(AbstractPlugin):
                 "Targeting Graph -> Seed only for updates",
                 self.ask_set_initial_seeding,
                 self.answer_set_initial_seeding
+            ),
+            ConfigExport(
+                "targeting_shpw_targeting_info",
+                TOGGLE_INFO_DISPLAY_NAME,
+                self.ask_toggle_targeting_info,
+                self.answer_toggle_targeting_info
             )
         ]
 
@@ -134,10 +144,40 @@ class TargetingPlugin(AbstractPlugin):
             return response
         return []
 
+    @property
+    def show_targeting_info(self) -> int:
+        return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("show_targeting_info", 1)
+
+    @show_targeting_info.setter
+    def show_targeting_info(self, val: int):
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["show_targeting_info"] = val
+
+    def ask_toggle_targeting_info(self) -> List[HTMLComponent]:
+        return [
+            InputWithDropDown(self.identifier,
+                              "Setting for displaying targeting information to help determine licitness of kills",
+                              [("Force On", 2), ("On", 1), ("Off", 0)],
+                              self.show_targeting_info)
+        ]
+
+    def answer_toggle_targeting_info(self, html_response) -> List[HTMLComponent]:
+        self.show_targeting_info = html_response[self.identifier]
+        return [Label("[TARGETING] Success!")]
+
     def on_data_hook(self, hook: str, data):
         if hook == "WantedPlugin_targeting_graph":
-            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
-            data["targeting_graph"] = self.compute_targets([], max_event)
+            if self.show_targeting_info:
+                max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
+                start = time.perf_counter()
+                data["targeting_graph"] = self.compute_targets([], max_event)
+                calc_time = time.perf_counter() - start
+                # automatically turn off showing targeting info if calculating the targeting graph takes too long
+                # this can be overridden
+                if self.show_targeting_info == 1 and calc_time > 1:
+                    self.show_targeting_info = 0
+                    # fine for now because will end up reworking how WantedPlugin obtains licitness info anyway...
+                    print("[TARGETING] Automatically disabled displaying info due to long compute time. "
+                          f"Use `{TOGGLE_INFO_DISPLAY_NAME}` in plugin config to re-enable.")
 
     def ask_set_seeds(self):
         return [
