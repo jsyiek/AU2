@@ -24,6 +24,7 @@ class Call(Flag):
     ASSASSIN_CREATE = 2 << 3
     ASSASSIN_UPDATE = 2 << 4
     ASSASSIN_STATUS = 2 << 5
+    EVENT_DEPENDENCIES = 2 << 6
 
 
 EnabledFor = namedtuple("EnabledFor", ("call", "hooks"), defaults=(Call.NONE, tuple()))
@@ -116,7 +117,7 @@ class UIConfigPlugin(AbstractPlugin):
                     accessor=lambda component: sorted([a[0] for a in component.assassins]),
                     setter=filter_assassin_list
                 ),
-                enabled_for=EnabledFor(call=Call.EVENT_CREATE | Call.EVENT_UPDATE, hooks=tuple()),
+                enabled_for=EnabledFor(call=Call.EVENT_DEPENDENCIES, hooks=tuple()),
                 replacement_effects=steal_assassins
             ),
             UIChange(
@@ -174,6 +175,9 @@ class UIConfigPlugin(AbstractPlugin):
 
     def on_request_assassin_summary(self) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.ASSASSIN_STATUS)
+
+    def on_event_dependencies(self) -> List[HTMLComponent]:
+        return self.get_overrides_for_call(Call.EVENT_DEPENDENCIES)
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.EVENT_CREATE)

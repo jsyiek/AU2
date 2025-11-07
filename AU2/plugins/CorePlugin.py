@@ -572,7 +572,7 @@ class CorePlugin(AbstractPlugin):
         # include hidden assassins if they are already in the event,
         # so that the umpire doesn't accidentally remove them from the event
         assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs(include_hidden=lambda a: e and a.identifier in e.assassins)
-        return [
+        components = [
             HiddenTextbox(self.HTML_SECRET_ID, e_id),
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
@@ -590,6 +590,9 @@ class CorePlugin(AbstractPlugin):
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime if e else get_now_dt()),
         ]
+        for p in PLUGINS:
+            components += p.on_event_dependencies()
+        return components
 
     def ask_core_plugin_create_or_update_event(self, html_response: HTMLResponse) -> List[HTMLComponent]:
         e_id = html_response[self.HTML_SECRET_ID]
