@@ -806,7 +806,6 @@ def move_dependent_to_front(dependency: Dependency) -> None:
     dependency.htmlComponents.sort(key=lambda h: h.identifier != dependency.dependentOn)
     assert (dependency.htmlComponents[0].identifier == dependency.dependentOn)
 
-
 def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]:
     final = []
     deps: List[Dependency] = []
@@ -823,13 +822,13 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
                 d1.htmlComponents += d2.htmlComponents
             else:
                 final.insert(0, d1)
-                move_dependent_to_front(d1)
                 d1 = d2
         final.insert(0, d1)
-        # merge nested dependencies
+        # merge nested dependencies and ensure the component depended on is the first in each dependency
         for c in final:
             if isinstance(c, Dependency):
                 c.htmlComponents = merge_dependency(c.htmlComponents)
+                move_dependent_to_front(c)
         move_dependent_to_front(d1)
 
     return final
