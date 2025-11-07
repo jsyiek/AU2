@@ -126,7 +126,7 @@ class AbstractPlugin:
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []
 
-    def on_event_dependencies(self) -> List[HTMLComponent]:
+    def on_event_dependencies(self, _: Optional[Event]) -> List[HTMLComponent]:
         return []
 
     def on_event_request_create_or_update(self, _: Optional[Event], html_response: HTMLResponse) -> List[HTMLComponent]:

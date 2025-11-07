@@ -379,13 +379,51 @@ class CorePlugin(AbstractPlugin):
         assassin.is_police = htmlResponse[self.html_ids["Police"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_create_or_update(self, e: Optional[Event], _) -> List[HTMLComponent]:
+    def on_event_dependencies(self, e: Optional[Event]) -> List[HTMLComponent]:
+        # include hidden assassins if they are already in the event,
+        # so that the umpire doesn't accidentally remove them from the event
+        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs(
+            include_hidden=lambda a: e and a.identifier in e.assassins)
         return [
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
+                    AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection",
+                                          assassins, e.assassins if e else {}),
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"],
+                                                       self.event_html_ids["Kills"], "Kills", e.kills if e else [])
+                        ]
+                    )
+                ]
+            ),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event",
+                          e.datetime if e else get_now_dt()),
+        ]
+
+    def on_event_request_create_or_update(self, e: Optional[Event], html_response: HTMLResponse) -> List[HTMLComponent]:
+        # for compatibility provide the `Dependency`s that AssassinDependent and KillDependent components rely on,
+        # but replace the actual components depended on with HiddenJSON components giving the response to the components
+        # from the previous stage, ask_core_plugin_event_dependencies
+        return [
+            HiddenDatetime(self.event_html_ids["Datetime"],
+                           html_response[self.event_html_ids["Datetime"]]),
+            Dependency(
+                dependentOn=self.event_html_ids["Assassin Pseudonym"],
+                htmlComponents=[
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"],
+                               html_response[self.event_html_ids["Assassin Pseudonym"]]),
                     AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"],
                                                  self.event_html_ids["Reports"], "Reports", e.reports if e else []),
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            HiddenJSON(self.event_html_ids["Kills"],
+                                       html_response[self.event_html_ids["Kills"]]),
+                        ]
+                    )
                 ]
             ),
             LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline if e else ""),
@@ -569,29 +607,11 @@ class CorePlugin(AbstractPlugin):
         Produces components the response to which later Event -> Create/Update components depend on in the backend
         """
         e = EVENTS_DATABASE.get(e_id) if e_id else None
-        # include hidden assassins if they are already in the event,
-        # so that the umpire doesn't accidentally remove them from the event
-        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs(include_hidden=lambda a: e and a.identifier in e.assassins)
         components = [
             HiddenTextbox(self.HTML_SECRET_ID, e_id),
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection",
-                                          assassins, e.assassins if e else {}),
-                    Dependency(
-                        dependentOn=self.event_html_ids["Kills"],
-                        htmlComponents=[
-                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"],
-                                                       self.event_html_ids["Kills"], "Kills", e.kills if e else [])
-                        ]
-                    )
-                ]
-            ),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime if e else get_now_dt()),
         ]
         for p in PLUGINS:
-            components += p.on_event_dependencies()
+            components += p.on_event_dependencies(e)
         return components
 
     def ask_core_plugin_create_or_update_event(self, html_response: HTMLResponse) -> List[HTMLComponent]:
@@ -602,22 +622,6 @@ class CorePlugin(AbstractPlugin):
         # from the previous stage, ask_core_plugin_event_dependencies
         components = [
             HiddenTextbox(self.HTML_SECRET_ID, e_id),
-            HiddenDatetime(self.event_html_ids["Datetime"],
-                           html_response[self.event_html_ids["Datetime"]]),
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"],
-                               html_response[self.event_html_ids["Assassin Pseudonym"]]),
-                    Dependency(
-                        dependentOn=self.event_html_ids["Kills"],
-                        htmlComponents=[
-                            HiddenJSON(self.event_html_ids["Kills"],
-                                       html_response[self.event_html_ids["Kills"]]),
-                        ]
-                    )
-                ]
-            ),
         ]
         for p in PLUGINS:
             components += p.on_event_request_create_or_update(event, html_response)
