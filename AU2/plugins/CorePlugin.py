@@ -1,12 +1,9 @@
-import datetime
 import glob
 import os.path
-import random
 
-from typing import Dict, List, Tuple, Any, Callable
+from typing import Any, Callable, Dict, List, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
-from typing import Dict, List, Tuple, Any, Callable
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -18,6 +15,7 @@ from AU2.html_components.SpecialComponents.EditablePseudonymList import Editable
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.DerivativeComponents.DigitsChallenge import DigitsChallenge, verify_DigitsChallenge
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
@@ -82,7 +80,8 @@ class CorePlugin(AbstractPlugin):
             "Police": self.identifier + "_police",
             "Hidden Assassins": self.identifier + "_hidden_assassins",
             "Nuke Database": self.identifier + "_nuke",
-            "Secret Number": self.identifier + "_secret_confirm"
+            "Secret Number": self.identifier + "_secret_confirm",
+            "Delete Event": self.identifier + "_delete_event",
         }
 
         self.params = {
@@ -436,12 +435,6 @@ class CorePlugin(AbstractPlugin):
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_delete(self, e: Event) -> List[HTMLComponent]:
-        return [HiddenTextbox(self.HTML_SECRET_ID, e.identifier)]
-
-    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return [Label("[CORE] Delete acknowledged.")]
-
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["hide_assassins"]:
             assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda x: True)
@@ -642,19 +635,22 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_delete_event(self, event_id: str):
         event = EVENTS_DATABASE.get(event_id)
-        components = []
-        for p in PLUGINS:
-            components += p.on_event_request_delete(event)
-        return components
+        return [
+            HiddenTextbox(self.HTML_SECRET_ID, event_id),
+            Label(f"You are about to delete the event [{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline}"),
+            *DigitsChallenge(
+                identifier_prefix=self.identifier,
+                title="Type {digits} to confirm event deletion"
+            ),
+        ]
 
     def answer_core_plugin_delete_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
-        event = EVENTS_DATABASE.get(ident)
-        components = []
-        for p in PLUGINS:
-            components += p.on_event_delete(event, html_response_args)
-        del EVENTS_DATABASE.events[ident]
-        return components
+        if verify_DigitsChallenge(self.identifier, html_response_args):
+            del EVENTS_DATABASE.events[ident]
+            return [Label("[CORE] Delete acknowledged.")]
+        else:
+            return [Label("[CORE] ERROR: Aborting. You entered the code incorrectly.")]
 
     def ask_core_plugin_update_config(self):
         plugins = [p for p in GENERIC_STATE_DATABASE.plugin_map]
@@ -852,7 +848,6 @@ class CorePlugin(AbstractPlugin):
         return config.answer(htmlResponse)
 
     def ask_reset_database(self) -> List[HTMLComponent]:
-        i = random.randint(0, 1000000)
         return [
             Label(
                 title="Are you sure you want to COMPLETELY RESET the database?"
@@ -863,20 +858,14 @@ class CorePlugin(AbstractPlugin):
             Label(
                 title="(You can type anything else and the reset will be aborted.)"
             ),
-            HiddenTextbox(
-                identifier=self.html_ids["Secret Number"],
-                default=str(i)
+            *DigitsChallenge(
+                identifier_prefix=self.identifier,
+                title="Type {digits} to reset the database"
             ),
-            NamedSmallTextbox(
-                identifier=self.html_ids["Nuke Database"],
-                title=f"Type {i} to reset the database"
-            )
         ]
 
     def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
-        hidden_number = htmlResponse[self.html_ids["Secret Number"]]
-        entered_number = htmlResponse[self.html_ids["Nuke Database"]]
-        if hidden_number != entered_number:
+        if not verify_DigitsChallenge(self.identifier, htmlResponse):
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
