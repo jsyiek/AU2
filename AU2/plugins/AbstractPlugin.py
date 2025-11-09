@@ -1,8 +1,8 @@
 from typing import Any, Callable, Dict, List, Tuple, Union
 
 from AU2.database.model import Event, Assassin
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
-from AU2.html_components.SimpleComponents.Label import Label
 
 
 class Export:
@@ -108,7 +108,6 @@ class AbstractPlugin:
     def __init__(self, identifier: str):
         # unique identifier for the plugin
         self.identifier = identifier
-        self.enabled = True
         self.exports: List[Export] = []
 
         # for config parameters
@@ -125,11 +124,15 @@ class AbstractPlugin:
         """
         return
 
-    def enable(self):
-        self.enabled = True
+    @property
+    def enabled(self) -> bool:
+        return GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, True)
 
-    def disable(self):
-        self.enabled = False
+    @enabled.setter
+    def enabled(self, val: bool):
+        if not isinstance(val, bool):
+            raise TypeError(f"{self.__class__.__name__}.enabled must be a boolean, not '{type(val)}'")
+        GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []
@@ -144,12 +147,6 @@ class AbstractPlugin:
         return []
 
     def on_event_update(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return []
-
-    def on_event_request_delete(self, _: Event) -> List[HTMLComponent]:
-        return []
-
-    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return []
 
     def on_assassin_request_create(self) -> List[HTMLComponent]:
@@ -206,5 +203,21 @@ class AbstractPlugin:
     def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
         """
         Display any information about an EVENT that is managed by this plugin
+        """
+        return []
+
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        """
+        Walk through config options. Generally this method should call the `ask` functions of important
+        `ConfigExport`s of this plugin and return the results concatenated together.
+        Make sure that all the components have unique identifiers.
+        """
+        return []
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        """
+        Effect config options. Generally this method should call the `answer` functions of the same `ConfigExport`s
+        called by `on_request_setup_game` above, passing `htmlResponse` to each, then returning the results concatenated
+        together.
         """
         return []

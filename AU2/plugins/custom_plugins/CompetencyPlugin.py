@@ -224,6 +224,18 @@ class CompetencyPlugin(AbstractPlugin):
             )
         ]
 
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        # don't ask about auto-competency or attempt tracking because we'll just default these to on
+        # and changing these would only be helpful to someone who has a good idea of what they're doing
+        return [
+            *self.set_default_competency_deadline_ask(),
+        ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        return [
+            *self.set_default_competency_deadline_answer(htmlResponse),
+        ]
+
     def gigabolt_ask(self):
         questions = []
 
@@ -289,12 +301,12 @@ class CompetencyPlugin(AbstractPlugin):
         return [
             Label("Competency periods begin automatically from game start."),
             IntegerEntry(
-                title="Enter competency granted at game start",
+                title="Enter competency granted at game start (in days)",
                 identifier=self.html_ids["Game Start Competency"],
                 default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["GAME START"], DEFAULT_START_COMPETENCY)
             ),
             IntegerEntry(
-                title="Enter default competency extension",
+                title="Enter default competency extension (in days)",
                 identifier=self.html_ids["Default"],
                 default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
             )
