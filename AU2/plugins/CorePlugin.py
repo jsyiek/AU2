@@ -15,7 +15,7 @@ from AU2.html_components.SpecialComponents.EditablePseudonymList import Editable
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
-from AU2.html_components.DerivativeComponents.DigitsChallenge import DigitsChallenge, read_DigitsChallenge
+from AU2.html_components.DerivativeComponents.DigitsChallenge import DigitsChallenge, verify_DigitsChallenge
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
@@ -645,7 +645,7 @@ class CorePlugin(AbstractPlugin):
 
     def answer_core_plugin_delete_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
-        if read_DigitsChallenge(self.identifier, html_response_args):
+        if verify_DigitsChallenge(self.identifier, html_response_args):
             del EVENTS_DATABASE.events[ident]
             return [Label("[CORE] Delete acknowledged.")]
         else:
@@ -864,7 +864,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
-        if not read_DigitsChallenge(self.identifier, htmlResponse):
+        if not verify_DigitsChallenge(self.identifier, htmlResponse):
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):

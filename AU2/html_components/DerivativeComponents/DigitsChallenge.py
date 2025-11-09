@@ -33,7 +33,7 @@ def DigitsChallenge(identifier_prefix: str, title: str) -> List[HTMLComponent]:
     ]
 
 
-def read_DigitsChallenge(identifier_prefix: str, html_response: dict) -> bool:
+def verify_DigitsChallenge(identifier_prefix: str, html_response: dict) -> bool:
     """
     Reads the response from a pair of components produced by DigitsChallenge.
 
@@ -44,5 +44,7 @@ def read_DigitsChallenge(identifier_prefix: str, html_response: dict) -> bool:
     Returns
         bool: whether or not the user completed the challenge successfully
     """
-    return html_response[identifier_prefix + "_DigitsChallenge_HiddenTextbox"] == html_response[identifier_prefix + "_DigitsChallenge_NamedSmallTextbox"]
+    target = html_response[identifier_prefix + "_DigitsChallenge_HiddenTextbox"]
+    user_response = html_response[identifier_prefix + "_DigitsChallenge_NamedSmallTextbox"]
+    return target == user_response
 
