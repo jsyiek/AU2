@@ -289,7 +289,7 @@ class ScoringPlugin(AbstractPlugin):
         for rank, p in enumerate(full_players):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
-            # note: the link may be broken for may week games...
+            # note: the link may be broken for may week games... (see https://github.com/jsyiek/AU2/issues/161)
             deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
