@@ -859,7 +859,7 @@ class SRCFPlugin(AbstractPlugin):
         Disables SRCF plugin and prints an error message.
         """
         print("Login cancelled. Disabling SRCFPlugin.")
-        GENERIC_STATE_DATABASE.plugin_map["SRCFPlugin"] = False
+        self.enabled = False
         return []
 
     def _successful_login(self):

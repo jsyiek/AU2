@@ -39,15 +39,6 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         self.exports = []
 
-    def enable(self):
-        self.enabled = True
-
-    def disable(self):
-        self.enabled = False
-
-    def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
-        return []
-
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=False),
