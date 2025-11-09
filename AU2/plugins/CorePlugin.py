@@ -727,10 +727,18 @@ class CorePlugin(AbstractPlugin):
     def answer_core_plugin_update_config(self, htmlResponse):
         enabled_plugins = htmlResponse[self.config_html_ids["Plugins"]]
         enabled_plugins.append("CorePlugin")
+        newly_enabled = []
+        newly_disabled = []
         for ident, p in AVAILABLE_PLUGINS.items():
-            p.enabled = (ident in enabled_plugins)
+            to_enable = (ident in enabled_plugins)
+            if to_enable and not p.enabled:
+                newly_enabled.append(ident)
+            if not to_enable and p.enabled:
+                newly_disabled.append(ident)
+            p.enabled = to_enable
         return [
-            Label("[CORE] Plugin change success!")
+            Label(f"[CORE] Successfully {text}abled these plugins: {', '.join(l)}")
+            for l, text in ((newly_enabled, "en"), (newly_disabled, "dis")) if l
         ]
 
     def ask_generate_pages(self):

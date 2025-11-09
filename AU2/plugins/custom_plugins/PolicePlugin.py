@@ -163,7 +163,7 @@ class PolicePlugin(AbstractPlugin):
     def answer_set_special_ranks(self, htmlResponse):
         self.gsdb_set("Umpires", htmlResponse[self.html_ids["Umpires"]])
         self.gsdb_set("Chief of Police", htmlResponse[self.html_ids["CoP"]])
-        return [Label("[POLICE] Set Umpire(s) and Chief(s) of Police")]
+        return [Label("[POLICE] Successfully set Umpire(s) and Chief(s) of Police")]
 
     def ask_set_ranks(self):
         question = []
@@ -253,7 +253,7 @@ class PolicePlugin(AbstractPlugin):
         # TODO Make a selector with police filtering
         if not self.gsdb_get("Manual Rank"):
             return []
-        return [
+        return [return [Label("[POLICE] Successfully set Umpire(s) and Chief(s) of Police")]
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[

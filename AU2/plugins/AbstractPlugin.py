@@ -131,7 +131,7 @@ class AbstractPlugin:
     @enabled.setter
     def enabled(self, val: bool):
         if not isinstance(val, bool):
-            raise TypeError(f"{self.__class__.__name__} must be a boolean, not '{type(val)}'")
+            raise TypeError(f"{self.__class__.__name__}.enabled must be a boolean, not '{type(val)}'")
         GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
@@ -214,12 +214,16 @@ class AbstractPlugin:
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         """
-        Walk through config options
+        Walk through config options. Generally this method should call the `ask` functions of important
+        `ConfigExport`s of this plugin and return the results concatenated together.
+        Make sure that all the components have unique identifiers.
         """
         return []
 
     def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
         """
-        Effect config options
+        Effect config options. Generally this method should call the `answer` functions of the same `ConfigExport`s
+        called by `on_request_setup_game` above, passing `htmlResponse` to each, then returning the results concatenated
+        together.
         """
         return []
