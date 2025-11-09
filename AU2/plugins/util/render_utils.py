@@ -20,7 +20,7 @@ with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "news.htm
     NEWS_TEMPLATE = F.read()
 
 HEAD_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "head.html"), "r", encoding="utf-8", errors="ignore") as F:
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "head.html", "r", encoding="utf-8", errors="ignore") as F:
     HEAD_TEMPLATE = F.read()
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
