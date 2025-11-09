@@ -100,7 +100,10 @@ def backup_sort_key(backup_name: str) -> (float, str):
 
     if m := BACKUP_TIME_PATTERN.search(backup_name):
         backup_time = datetime.datetime.strptime(m[0], BACKUP_TIME_FORMAT).time()
-    return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    try:
+        return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    except ValueError:
+        return 0, backup_name
 
 
 class Email:
