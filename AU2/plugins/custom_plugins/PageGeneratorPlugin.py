@@ -27,7 +27,7 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         self.plugin_state = {
             "HIDDEN": "hidden_event",
-            "Duel Page?": "duel_page"
+            "Duel Page?": "duel_page",
         }
 
         self.exports = []

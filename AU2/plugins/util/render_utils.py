@@ -16,7 +16,7 @@ from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_
 from AU2.plugins.util.game import get_game_start, soft_escape
 
 NEWS_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r", encoding="utf-8", errors="ignore") as F:
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "news.html", "r", encoding="utf-8", errors="ignore") as F:
     NEWS_TEMPLATE = F.read()
 
 HEAD_TEMPLATE: str
