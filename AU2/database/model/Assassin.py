@@ -210,3 +210,148 @@ class Assassin(PersistentFile):
             fn: A function to call on each pseudonym. Defaults to `soft_escape`.
         """
         return " AKA ".join(fn(p) for p in self.pseudonyms if p)
+
+
+import datetime as dt
+
+from dataclasses_json import dataclass_json, config
+from typing import List, Dict, Any, Optional, Iterator, Union, Callable
+
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.model.PersistentFile import PersistentFile
+from dataclasses import dataclass, field, replace
+
+from AU2.plugins.util.date_utils import get_now_dt, dt_to_timestamp, timestamp_to_dt
+from AU2.plugins.util.game import soft_escape
+
+
+@dataclass_json
+@dataclass
+class Assassin(PersistentFile):
+    """ Class for keeping track of an assassin """
+    pseudonyms: List[str]
+    real_name: str
+    pronouns: str
+    email: str
+    address: str
+    water_status: str
+    college: str
+    notes: str
+    is_police: bool
+    # we should not delete assassins because that will break any references to that assassin.
+    # most significantly, it would mess up the targeting graph.
+    # but it is useful to hide certain assassins in interfaces (e.g. an assassin who has been cloned into police)
+    hidden: bool = False
+    # almost everything that is stateful is probably best placed in an event
+    # but for a few plugins, it might make sense to place the information directly onto the assassin
+    # make sure you know what you're doing (modifications here can't be undone with a later event state change)
+    plugin_state: Dict[str, Any] = field(default_factory=dict)
+    identifier: str = ""   # human-readable unique identifier
+    _secret_id: str = ""  # unique identifier
+
+    # store a timestamp along with each pseudonym,
+    # so that anachronous pseudonyms aren't rendered when rendering [DX]
+    # the mapping is stored as a Dict for compatibility with old save files
+    # any non-timestamped pseudonym should be assumed to have existed "forever".
+    pseudonym_datetimes: Dict[int, dt.datetime] = field(
+        default_factory=dict,
+        metadata=config(
+            encoder=lambda d: {k: dt_to_timestamp(ts) for k, ts in d.items()},
+            decoder=lambda d: {int(k): timestamp_to_dt(ts) for k, ts in d.items()}
+        )
+    )
+
+    # New fields to support competency deadline extension tracking for 'updates only' emails
+    # This field stores the current competency deadline for the assassin.
+    # If None, the assassin currently has no competency deadline set.
+    competency_deadline: Optional[dt.datetime] = field(default=None)
+    # This field stores the competency deadline that was last communicated to the assassin
+    # via an 'updates only' email. It's used to detect if the deadline has been extended
+    # since the last notification.
+    last_emailed_competency_deadline: Optional[dt.datetime] = field(default=None)
+
+    def __post_init__(self):
+        if len(self.pseudonyms) == 0:
+            raise ValueError(f"Tried to initialize {self}, but no pseudonyms were provided!")
+        if not self._secret_id:
+            self._secret_id = GENERIC_STATE_DATABASE.get_unique_str()
+
+        if self.TEST_MODE:
+            self.identifier = f"{self.real_name} identifier"
+            return
+
+        # Don't move this out of __post_init__
+        if not self.identifier:
+            dotdotdot = "..." if len(self.pseudonyms[0]) > 15 else ""
+            self.identifier = f"{self.real_name} ({self.pseudonyms[0][:15]}{dotdotdot}){' [police]' if self.is_police else ''} ID: {self._secret_id}"
+
+    def clone(self, **changes):
+        """
+        Creates a clone of this assassin with a new identifier and specified changes.
+        This is used for resurrecting an assassin as police.
+
+        Args:
+            **changes: use keyword arguments to specify attributes of clone where they should differ from the original.
+                Setting a new identifier or _secret_id has no effect; the cloned assassin will still have these set
+                automatically.
+
+        Returns:
+            A clone of this Assassin, with a different identifier and _secret_id
+        """
+        # allow __post_init__ to generate the new identifier and _secret_id
+        changes["identifier"] = ""
+        changes["_secret_id"] = ""
+        return replace(self, **changes)
+
+    def get_pseudonym(self, i: int) -> str:
+        """
+        Fetches the pseudonym of this assassin corresponding to a given index,
+        with the first non-deleted pseudonym given as a fallback value if the index does not point to an extant
+        pseudonym (pseudonyms set to "" are considered to have been deleted).
+
+        Args:
+            i: the index of the pseudonym to get.
+
+        Returns:
+             the i-th pseudonym of this assassin, if it exists, otherwise the first pseudonym of this assassin that has
+                not been deleted.
+        """
+        # We "delete" pseudonyms by setting them to "",
+        # in order to preserve the correspondence between index and pseudonym.
+        # In the case that a deleted pseudonym is requested,
+        # fall back to the first pseudonym that hasn't been deleted.
+        # (This *should* always be the initial pseudonym,
+        # since `delete_pseudonym` throws an error if you try to delete the initial pseudonym).
+        if i >= len(self.pseudonyms) or not self.pseudonyms[i]:
+            return next((p for p in self.pseudonyms if p))
+
+        return self.pseudonyms[i]
+
+    def get_pseudonym_validity(self, i: int) -> Union[dt.datetime, None]:
+        """
+        Fetches the start of validity for a given pseudonym, referenced by index.
+        The start of validity is notionally the point in time in the game when the assassin was granted the pseudonym,
+        which may differ from when the pseudonym was physically entered into AutoUmpire.
+        The start of validity may be `None`, which represents that the pseudonym is always valid.
+
+        Args:
+            i: the index of the pseudonym to get the validity of.
+
+        Returns:
+            `None` if the relevant pseudonym is always valid, otherwise a `datetime.datetime` object representing when
+            this assassin was granted the pseudonym.
+        """
+        return self.pseudonym_datetimes[i] if i in self.pseudonym_datetimes else None
+
+    def add_pseudonym(self, val: str, valid_from: Union[dt.datetime, None] = get_now_dt()) -> int:
+        """
+        Adds a new pseudonym to this assassin.
+
+        Args:
+            val: text of new pseudonym
+            valid_from: start of validity of new pseudonym.
+                Defaults to the current datetime.
+                May be explicitly set to `None` to indicate that the pseudonym is always valid.
+
+        Return: index of the newly-added pseudonym.
+        """
