@@ -25,7 +25,8 @@ class CompetencyManager:
         self.game_start = game_start
         self.initial_competency_period = datetime.timedelta(days=GENERIC_STATE_DATABASE.arb_int_state.get(ID_GAME_START, DEFAULT_START_COMPETENCY))
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("CompetencyPlugin", False)
-        self.auto_competency = GENERIC_STATE_DATABASE.arb_state.get("auto_competency", "Manual") != "Manual"
+        # setdefault so that reversion to an older version of AU2 won't implicitly set this back to Manual
+        self.auto_competency = GENERIC_STATE_DATABASE.arb_state.setdefault("auto_competency", "Auto") != "Manual"
         self.attempts_since_kill = defaultdict(int)
 
     def add_event(self, e: Event):

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union, Any, Callable
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
@@ -146,12 +146,6 @@ class AbstractPlugin:
     def on_event_update(self, _: Event, htmlResponse) -> List[HTMLComponent]:
         return []
 
-    def on_event_request_delete(self, _: Event) -> List[HTMLComponent]:
-        return []
-
-    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return []
-
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return []
 
@@ -184,6 +178,12 @@ class AbstractPlugin:
         `data` can be anything the hooking function wants you to contribute to
         """
         return []
+
+    def on_data_hook(self, hook: str, data):
+        """
+        Allows plugins to request data from each other.
+        `data` can be anything the hooking function wants you to contribute to
+        """
 
     def on_request_assassin_summary(self) -> List[HTMLComponent]:
         return []

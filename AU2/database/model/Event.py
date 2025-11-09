@@ -43,6 +43,9 @@ class Event(PersistentFile):
     identifier: str = ""
     __secret_id: str = ""
 
+    def get_numerical_id(self) -> int:
+        return int(self.__secret_id)
+
     def __post_init__(self):
         if not self.__secret_id:
             self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()

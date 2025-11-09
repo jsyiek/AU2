@@ -11,6 +11,7 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -132,6 +133,11 @@ class TargetingPlugin(AbstractPlugin):
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
             return response
         return []
+
+    def on_data_hook(self, hook: str, data):
+        if hook == "WantedPlugin_targeting_graph":
+            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
+            data["targeting_graph"] = self.compute_targets([], max_event)
 
     def ask_set_seeds(self):
         return [
