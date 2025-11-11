@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import datetime as dt
 from dataclasses_json import dataclass_json, config
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
@@ -31,7 +31,7 @@ class Event(PersistentFile):
     headline: str
 
     # from assassin ID and their pseudonym ID to their report
-    reports: List[Tuple[str, int, str]]
+    reports: List[Tuple[str, Optional[int], str]]
 
     # Map from killer to victim
     kills: List[Tuple[str, str]]

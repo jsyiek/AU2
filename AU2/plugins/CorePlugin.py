@@ -34,7 +34,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end, snapshot
 from AU2.plugins.util.date_utils import get_now_dt
 
 AVAILABLE_PLUGINS = {}
@@ -317,7 +317,6 @@ class CorePlugin(AbstractPlugin):
             ("Deaths", ", ".join(kill[1] for kill in event.kills))
         ]
 
-        snapshot = lambda a: f"{a.real_name} ({a._secret_id})"
         for (i, ident) in enumerate(event.assassins):
             a = ASSASSINS_DATABASE.get(ident)
             pseudonym = a.get_pseudonym(event.assassins[ident])
@@ -325,6 +324,8 @@ class CorePlugin(AbstractPlugin):
 
         for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
             a = ASSASSINS_DATABASE.get(ident)
+            if pseudonym_idx is None:
+                pseudonym_idx = event.assassins[ident]
             pseudonym = a.get_pseudonym(pseudonym_idx)
             response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
 
@@ -434,7 +435,7 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
+                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", assassins),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
@@ -461,7 +462,8 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
+                    AssassinDependentReportEntry(
+                        self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", assassins, e.reports),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
