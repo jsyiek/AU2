@@ -6,8 +6,26 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import PersistentFile, Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
+from AU2.html_components.HTMLComponent import HTMLComponent
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.plugins.util import random_data
 from AU2.plugins.util.date_utils import get_now_dt
+
+
+def evaluate_components(components: List[HTMLComponent]) -> dict:
+    """
+    Produces the default htmlResponse from the given components
+    WIP: currently only supports SelectorList and HiddenJSON
+    """
+    out = {}
+    for c in components:
+        if isinstance(c, SelectorList):
+            val = [t[1] if isinstance(t, tuple) else t for t in c.defaults]
+            out[c.identifier] = val
+        elif isinstance(c, HiddenJSON):
+            out[c.identifier] = c.default
+    return out
 
 
 def dummy_event():
@@ -266,7 +284,7 @@ class ProxyAssassin:
         """
         return self.with_accomplices(*others)
 
-    def kills(self, *victims: str) -> MockGame:
+    def kills(self, *victims: str, headline: str = "") -> ProxyEvent:
         """
         Submits an event to the Events database where this assassin (with accomplice help) kills (an)other(s)
 
@@ -276,15 +294,15 @@ class ProxyAssassin:
         Returns:
             MockGame: the original mock game from where this assassin was created
         """
-        self.mockGame = self.is_involved_in_event(assassins=victims,
-                                                  kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in
-                                                         victims],
-                                                  pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}}).then()
+        event = self.is_involved_in_event(assassins=victims,
+                                          headline=headline,
+                                          kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in victims],
+                                          pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}})
 
         for v in victims:
-            self.mockGame.has_died(v)
+            event.mockGame.has_died(v)
 
-        return self.mockGame
+        return event
 
     def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None) -> ProxyEvent:
         """

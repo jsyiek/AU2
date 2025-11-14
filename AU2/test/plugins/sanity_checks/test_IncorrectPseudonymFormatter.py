@@ -1,21 +1,5 @@
-from typing import List
-
-from AU2.html_components.HTMLComponent import HTMLComponent
-from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
-from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
-from AU2.test.test_utils import MockGame, some_players, plugin_test
-
-
-def evaluate_components(components: List[HTMLComponent]) -> dict:
-    out = {}
-    for c in components:
-        if isinstance(c, SelectorList):
-            val = [t[1] if isinstance(t, tuple) else t for t in c.defaults]
-            out[c.identifier] = val
-        elif isinstance(c, HiddenJSON):
-            out[c.identifier] = c.default
-    return out
+from AU2.plugins.CorePlugin import CorePlugin
+from AU2.test.test_utils import evaluate_components, MockGame, plugin_test, some_players
 
 
 class TestIncorrectPseudonymFormatter:
@@ -26,7 +10,7 @@ class TestIncorrectPseudonymFormatter:
         p0 = game.assassin_model(p[0])._secret_id
         event = game.assassin(p[0]).is_involved_in_event(headline=f"[{p0}] does something.")\
             .with_report(p[0], 0, f"I am [{p0}]! I did something!")
-        core_plugin: CorePlugin = PLUGINS["CorePlugin"]
+        core_plugin = CorePlugin()
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
         # now test fixing of headline and reports

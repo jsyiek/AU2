@@ -32,9 +32,9 @@ class TestTargetingPlugin:
         targets = plugin.compute_targets([])
         assert valid_targets(num_players, targets)
 
-        game.assassin(p[0]).kills(p[1]) \
-            .assassin(p[2]).kills(p[3]) \
-            .assassin(p[4]).kills(p[5]) \
+        game.assassin(p[0]).kills(p[1]).then() \
+            .assassin(p[2]).kills(p[3]).then() \
+            .assassin(p[4]).kills(p[5]).then() \
             .assassin(p[6]).kills(p[7])
 
         targets = plugin.compute_targets([])
@@ -87,7 +87,7 @@ class TestTargetingPlugin:
         game = MockGame().having_assassins(p)
 
         game.assassin(p[0]).and_these(p[1], p[20], p[45], p[135]).are_police() \
-            .assassin(p[20]).with_accomplices(p[2], p[3]).kills(p[180]) \
+            .assassin(p[20]).with_accomplices(p[2], p[3]).kills(p[180]).then() \
             .assassin(p[25]).kills(p[20])
 
         plugin = TargetingPlugin()
