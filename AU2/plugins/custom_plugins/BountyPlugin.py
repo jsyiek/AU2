@@ -11,7 +11,7 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.html_components.SearchableDerivatives.SearchableInputDropdown import SearchableInputDropdown
+from AU2.html_components.DerivativeComponents.SearchableInputDropdown import SearchableInputDropdown
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
