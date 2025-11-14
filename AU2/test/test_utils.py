@@ -183,13 +183,35 @@ class MockGame:
         return self.assassin(names[0]).with_accomplices(*names[1:]).is_involved_in_event(assassins=tuple(others),
                                                             pluginState={"CompetencyPlugin":
                                                                       {"attempts": [p + " identifier" for p in names]}
-                                                                        })
+                                                                        }).then()
+
+
+class ProxyEvent:
+    """
+    Proxy object for an event
+    """
+
+    def __init__(self, mockGame: MockGame, event: str):
+        self.mockGame = mockGame
+        self.event = event
+
+    def model(self) -> Event:
+        return EVENTS_DATABASE.get(self.event)
+
+    def with_report(self, player: str, pseudonym_idx: int, body: str) -> "ProxyEvent":
+        ident = self.mockGame.assassin_model(player).identifier
+        self.model().reports.append((ident, pseudonym_idx, body))
+        return self
+
+    def then(self) -> MockGame:
+        return self.mockGame
+
 
 class ProxyAssassin:
     """
     Proxy object of one or more assassins to facilitate readable tests
     """
-    def __init__(self, mockGame: "MockGame", *assassins: str):
+    def __init__(self, mockGame: MockGame, *assassins: str):
         self.mockGame = mockGame
         self.assassins = assassins
 
@@ -257,14 +279,14 @@ class ProxyAssassin:
         self.mockGame = self.is_involved_in_event(assassins=victims,
                                                   kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in
                                                          victims],
-                                                  pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}})
+                                                  pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}}).then()
 
         for v in victims:
             self.mockGame.has_died(v)
 
         return self.mockGame
 
-    def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None):
+    def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None) -> ProxyEvent:
         """
         Submits a generic event to the database
 
@@ -293,4 +315,4 @@ class ProxyAssassin:
         )
         EVENTS_DATABASE.add(e)
 
-        return self.mockGame
+        return ProxyEvent(self.mockGame, e.identifier)

@@ -785,7 +785,7 @@ class CorePlugin(AbstractPlugin):
             components += p.on_page_request_generate()
         return components
 
-    def answer_generate_pages(self, html_response_args: Dict):
+    def answer_generate_pages(self, html_response_args: Dict, testing_sanity_checks: bool = False):
 
         components = []
 
@@ -802,8 +802,9 @@ class CorePlugin(AbstractPlugin):
                 )
                 SANITY_CHECKS[sanity_check_id].mark(e)
 
-        for p in PLUGINS:
-            components += p.on_page_generate(html_response_args)
+        if not testing_sanity_checks:  # want to avoid actually producing pages when unit testing
+            for p in PLUGINS:
+                components += p.on_page_generate(html_response_args)
         return components
 
     def ask_custom_hook(self, hook: str) -> List[HTMLComponent]:
