@@ -17,7 +17,7 @@ class TestIncorrectPseudonymFormatter:
         core_plugin.answer_generate_pages(html_response, True)
         e = event.model()
         assert e.headline == f"[P{p0}] does something."
-        assert any(r[2] == f"I am [P{p0}]! I did something!" for r in e.reports)
+        assert event.check_report(f"I am [P{p0}]! I did something!")
 
     @plugin_test
     def test_underscores(self):
@@ -26,11 +26,11 @@ class TestIncorrectPseudonymFormatter:
         p0 = game.assassin_model(p[0])._secret_id
         event = game.assassin(p[0]).is_involved_in_event(headline=f"text_with_underscores [{p0}]_ text") \
             .with_report(p[0], 0, f" text_ _[P{p0}] text_with_underscores")
-        core_plugin: CorePlugin = PLUGINS["CorePlugin"]
+        core_plugin = CorePlugin()
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
         # now test fixing of headline and reports
         core_plugin.answer_generate_pages(html_response, True)
         e = event.model()
         assert e.headline == f"text_with_underscores [P{p0}]_ text"
-        assert any(r[2] == f" text_ _[P{p0}] text_with_underscores" for r in e.reports)
+        assert event.check_report(f" text_ _[P{p0}] text_with_underscores")

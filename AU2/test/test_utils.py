@@ -224,6 +224,9 @@ class ProxyEvent:
     def then(self) -> MockGame:
         return self.mockGame
 
+    def check_report(self, body: str) -> bool:
+        return any(r[2] == body for r in self.model().reports)
+
 
 class ProxyAssassin:
     """
@@ -290,9 +293,10 @@ class ProxyAssassin:
 
         Parameters:
             victims (str...): Victims
+            headline (str): headline for the event
 
         Returns:
-            MockGame: the original mock game from where this assassin was created
+            ProxyEvent: a representation of the event created
         """
         event = self.is_involved_in_event(assassins=victims,
                                           headline=headline,
@@ -317,7 +321,7 @@ class ProxyAssassin:
             pluginState: dict: Plugin State
 
         Returns:
-            MockGame: the original mock game from where this assassin was created
+            ProxyEvent: a representation of the event created
         """
         participants = self.assassins
         if assassins is not None:
