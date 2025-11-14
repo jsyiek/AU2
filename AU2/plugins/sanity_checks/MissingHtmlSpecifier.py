@@ -17,7 +17,8 @@ class MissingHtmlSpecifier(SanityCheck):
         "<br>",
         "<b>",
         "<html>",
-        "<em>"
+        "<em>",
+        "<i>",
     ]
 
     def suggest_event_fixes(self, e: Event) -> List[Suggestion]:

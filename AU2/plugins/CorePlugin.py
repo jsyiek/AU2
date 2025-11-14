@@ -766,7 +766,7 @@ class CorePlugin(AbstractPlugin):
                 components.append(
                     SelectorList(
                         identifier=c_id,
-                        title=f"[SANITY CHECK] {e.text_display()}",
+                        title=f"[SANITY CHECK] {e.text_display()[:50]}",
                         options=explanations,
                         defaults=explanations
                     )
