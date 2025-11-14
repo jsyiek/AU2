@@ -21,6 +21,7 @@ from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
@@ -687,7 +688,7 @@ class CorePlugin(AbstractPlugin):
     def gather_events(self) -> List[Tuple[str, str]]:
         # headline is truncated because `inquirer` doesn't deal with overlong options well
         return [
-                (f"[{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline[0:25].rstrip()}", identifier)
+                (event.text_display()[:50], identifier)
                 for identifier, event in sorted(EVENTS_DATABASE.events.items(), key=lambda x: x[1].datetime, reverse=True)
         ]
 
@@ -742,9 +743,10 @@ class CorePlugin(AbstractPlugin):
     def ask_generate_pages(self):
         components = []
         event_count = 0
+        suggestion_data: Dict[str, Dict[str, Dict[str, dict]]] = {}
+        event_component_map: Dict[str, str] = {}
         for e in EVENTS_DATABASE.events.values():
             must_check = False
-            sanity_check_count = 0
             explanations = []
             for sanity_check_identifier, sanity_check in SANITY_CHECKS.items():
                 if sanity_check.has_marked(e):
@@ -752,53 +754,32 @@ class CorePlugin(AbstractPlugin):
                 changes = sanity_check.suggest_event_fixes(e)
                 if not changes:
                     continue
-                if not must_check:
-                    must_check = True
-                    components.append(
-                        HiddenTextbox(
-                            identifier=f"SanityCheck_{event_count}",
-                            default=e.identifier
-                        )
-                    )
-
-                components.append(
-                    HiddenTextbox(
-                        identifier=f"SanityCheck_{event_count}_{sanity_check_count}",
-                        default=sanity_check_identifier
-                    )
-                )
 
                 for i, suggestion in enumerate(changes):
-                    components.append(
-                        HiddenTextbox(
-                            identifier=f"SanityCheck_{event_count}_{sanity_check_count}_{i}_identifier",
-                            default=suggestion.identifier
-                        )
-                    )
-                    components.append(
-                        HiddenTextbox(
-                            identifier=f"SanityCheck_{event_count}_{sanity_check_count}_{i}_explanation",
-                            default=suggestion.explanation
-                        )
-                    )
-                    explanations.append(suggestion.explanation)
-
-                sanity_check_count += 1
+                    s_id = f"{sanity_check_identifier}_{i}"
+                    suggestion_data.setdefault(e.identifier, {}).setdefault(sanity_check_identifier, {})[s_id] = \
+                        suggestion.data
+                    explanations.append((suggestion.explanation, s_id))
 
             if explanations:
+                c_id = f"SanityCheck_{event_count}_explanations"
                 components.append(
                     SelectorList(
-                        identifier=f"SanityCheck_{event_count}_explanations",
-                        title=f"[SANITY CHECK] {e.identifier}",
+                        identifier=c_id,
+                        title=f"[SANITY CHECK] {e.text_display()}",
                         options=explanations,
                         defaults=explanations
                     )
                 )
+                event_component_map[e.identifier] = c_id
             if must_check:
                 event_count += 1
 
         if components:
             components.insert(0, Label("[SANITY CHECK] Potential errors detected. Select changes to make."))
+
+        components.append(HiddenJSON("SanityCheck_suggestion_data", suggestion_data))
+        components.append(HiddenJSON("SanityCheck_event_component_map", event_component_map))
 
         for p in PLUGINS:
             components += p.on_page_request_generate()
@@ -808,32 +789,18 @@ class CorePlugin(AbstractPlugin):
 
         components = []
 
-        events_count = 0
-        while f"SanityCheck_{events_count}" in html_response_args:
-            event_id = html_response_args[f"SanityCheck_{events_count}"]
-            for sanity_check in SANITY_CHECKS.values():
-                sanity_check.mark(EVENTS_DATABASE.events[event_id])
-            sanity_check_count = 0
-            selected_changes = html_response_args[f"SanityCheck_{events_count}_explanations"]
-            while f"SanityCheck_{events_count}_{sanity_check_count}" in html_response_args:
-                sanity_check_str = f"SanityCheck_{events_count}_{sanity_check_count}"
-                sanity_check_id = html_response_args[sanity_check_str]
-                suggestion_count = 0
-                requested_ids = []
-                while f"{sanity_check_str}_{suggestion_count}_identifier" in html_response_args:
-                    base = f"{sanity_check_str}_{suggestion_count}"
-                    suggestion_id = html_response_args[f"{base}_identifier"]
-                    explanation = html_response_args[f"{base}_explanation"]
-                    if explanation in selected_changes:
-                        requested_ids.append(suggestion_id)
-                    suggestion_count += 1
-                if requested_ids:
-                    components += SANITY_CHECKS[sanity_check_id].fix_event(
-                        EVENTS_DATABASE.events[event_id],
-                        requested_ids
-                    )
-                sanity_check_count += 1
-            events_count += 1
+        event_component_map = html_response_args["SanityCheck_event_component_map"]
+        suggestion_data = html_response_args["SanityCheck_suggestion_data"]
+
+        for event_id, component_id in event_component_map.items():
+            e = EVENTS_DATABASE.get(event_id)
+            selected = set(html_response_args[component_id])
+            for sanity_check_id, sanity_check_suggestion_data in suggestion_data.get(event_id, {}).items():
+                components += SANITY_CHECKS[sanity_check_id].fix_event(
+                    e,
+                    [data for ident, data in sanity_check_suggestion_data.items() if ident in selected]
+                )
+                SANITY_CHECKS[sanity_check_id].mark(e)
 
         for p in PLUGINS:
             components += p.on_page_generate(html_response_args)
