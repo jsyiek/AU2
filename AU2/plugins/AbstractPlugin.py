@@ -212,6 +212,7 @@ class AbstractPlugin:
             4: dead
             3: inco
             2: hardcoded pseudonym-based colours
+            1.5: teams (only when MayWeekUtilitiesPlugin enabled)
             1: police (only when PolicePlugin enabled)
 
         Yields:

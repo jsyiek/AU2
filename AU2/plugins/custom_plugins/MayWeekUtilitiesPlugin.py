@@ -1,7 +1,7 @@
 from collections import defaultdict
 import dataclasses
 import functools
-from typing import DefaultDict, Dict, List, Optional, Sequence, Set
+from typing import DefaultDict, Dict, List, Optional, Set, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -21,20 +21,13 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ColorFnGenerator, ConfigExport, Export, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.colors import HEX_COLS
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import Chapter, generate_news_pages, get_color, Manager
+from AU2.plugins.util.render_utils import Chapter, generate_news_pages
 
-
-HEX_COLS = [
-    '#00A6A3', '#26CCC8', '#008B8A', '#B69C1F',
-    '#D1B135', '#5B836E', '#7A9E83', '#00822b',
-    '#00A563', '#FFA44D', '#CC6C1E', '#37b717',
-    '#27B91E', '#1F9E1A', '#3DC74E', '#00c6c3',
-    '#b7a020', '#637777', '#f28110'
-]
 
 CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
 TEAM_ENTRY_TEMPLATE = "<td {CREW_COLOR}>{TEAM}</td>"
@@ -261,6 +254,19 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def eps_set(self, e: Event, plugin_state_id, data):
         e.pluginState.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]] = data
 
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        team_manager = self.TeamManager()
+        yield_next = None
+        while True:
+            e = yield yield_next
+            team_manager.add_event(e)
+
+            def color_fn(assassin: Assassin, _: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for teams"""
+                team = team_manager.member_to_team[assassin.identifier]
+                if team is not None:
+                    return 1.5, HEX_COLS[team % len(HEX_COLS)]
+            yield_next = color_fn
 
     def ask_enable_teams(self):
         return [Checkbox(
@@ -728,32 +734,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         # may week news page
 
-        # colour players by crew and don't do police, or inco colouring
-        def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Sequence[Manager]) -> str:
-            # render dead colour -- but only if died *in this event*
-            if any(victim_id == assassin_model.identifier for (_, victim_id) in e.kills):
-                return get_color(pseudonym, dead=True)
-
-            # but otherwise use team colours,
-            # getting the team from TeamManager
-            team = None
-            for manager in managers:
-                if isinstance(manager, self.TeamManager):
-                    team = manager.member_to_team[assassin_model.identifier]
-                    break
-            if team is not None:
-                return team_to_hex_col[team]
-
-            # fallback for individual
-            return get_color(pseudonym)
-
         MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News")
 
         generate_news_pages(
             headlines_path="mw-head.html",
             page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
-            color_fn=mw_color_fn,
-            plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
         )
 
         return [Label("[MAY WEEK] Success!")]

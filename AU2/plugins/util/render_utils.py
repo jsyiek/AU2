@@ -2,7 +2,7 @@ import datetime
 import itertools
 import os
 import re
-from typing import Callable, Dict, List, NamedTuple, Optional, Protocol, Sequence, Tuple
+from typing import Callable, Dict, Generator, List, NamedTuple, Optional, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -10,9 +10,6 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.CorePlugin import PLUGINS
-from AU2.plugins.util.CompetencyManager import CompetencyManager
-from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.colors import HEX_COLS
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
@@ -66,41 +63,6 @@ def event_url(e: Event, page: Optional[str] = None) -> str:
     page = page or default_page_allocator(e).page
     return f"{page}.html#{e._Event__secret_id}"
 
-
-class Manager(Protocol):
-    """
-    Interface for managers to process game state for correct player colouring.
-    Implemented by CompetencyManager, DeathManager, WantedManager, and also TeamManager from MayWeekUtilitiesPlugin
-    """
-    def add_event(self, e: Event):
-        """Interface for having a manager process an event."""
-
-
-def default_color_fn(pseudonym: str,
-                     assassin_model: Assassin,
-                     e: Event,
-                     plugin_managers: Sequence[Manager]) -> str:
-    """
-    Default rules for colouring pseudonyms.
-
-    Determines competency, wantedness, and vitality at the event `e` from managers in `plugin_manager` that have been
-    updated chronologically up to the event `e`.
-
-    Colour is then assigned by `get_color` using this information.
-    """
-    is_police = assassin_model.is_police
-
-    # retrieve info from managers
-    is_wanted, dead, incompetent = False, False, False
-    for manager in plugin_managers:
-        if isinstance(manager, DeathManager):
-            dead = manager.is_dead(assassin_model)
-        elif isinstance(manager, CompetencyManager):
-            incompetent = manager.is_inco_at(assassin_model, e.datetime)
-        elif isinstance(manager, WantedManager):
-            is_wanted = manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
-
-    return get_color(pseudonym, dead, incompetent, is_police, is_wanted)
 
 
 def get_color(pseudonym: str,
@@ -157,6 +119,31 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
 
 
 AggregateColorFn = Callable[[Assassin, str], str]
+
+
+def aggregate_color_fn_generator() -> Generator[AggregateColorFn, Event, None]:
+    color_fn_generators = [p.colour_fn_generator() for p in PLUGINS]
+    [next(g) for g in color_fn_generators]  # need to start the generators first to be able to send events to them...
+    yield_next = None
+    try:
+        while True:
+            e = yield yield_next
+            color_fns = [g.send(e) for g in color_fn_generators]
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> str:
+                """
+                "Aggregated" colour function processing the priorities of each of the colour functions and returning a
+                single colour hexcode.
+                """
+                ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
+                # note that because the colour functions return the priority as the 0th element,
+                # lexicographic ordering of their outputs gives the correct priority order
+                return max((t for f in color_fns if (t := f(assassin, pseudonym))),
+                           default=(0, HEX_COLS[ind % len(HEX_COLS)]))[1]
+
+            yield_next = color_fn
+    except GeneratorExit:
+        [g.close() for g in color_fn_generators]
 
 
 def render_headline_and_reports(e: Event, color_fn: AggregateColorFn) -> (str, Dict[Tuple[str, int], str]):
@@ -261,8 +248,10 @@ def render_event(e: Event,
     )
     return event_html, headline_html
 
+
 # required signature when replacing default_page_allocator
 PageAllocator = Callable[[Event], Optional[Chapter]]
+
 
 def render_all_events(page_allocator: PageAllocator = default_page_allocator) -> (List[str], Dict[Chapter, List[str]]):
     """
@@ -286,37 +275,28 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator) ->
     events_for_chapter = {}
     headlines_for_day = {}
 
-    color_fn_generators = [p.colour_fn_generator() for p in PLUGINS]
-    [next(g) for g in color_fn_generators]  # need to start the generators first to be able to send events to them...
+    color_fn_generator = aggregate_color_fn_generator()
+    next(color_fn_generator)
 
     for e in events:
-        # get colour functions for this event
+        # get colour function for this event
         # do this even if won't render this event because plugins may still need to process hidden events
-        color_fns = [g.send(e) for g in color_fn_generators]
+        color_fn = color_fn_generator.send(e)
 
         chapter = page_allocator(e)
         if not chapter:
             continue
 
-        def color_fn(assassin: Assassin, pseudonym: str) -> str:
-            """
-            "Aggregated" colour function processing the priorities of each of the colour functions and returning a
-            single colour hexcode.
-            """
-            ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
-            # note that because the colour functions return the priority as the 0th element,
-            # lexicographic ordering of their outputs gives the correct priority order
-            return max((t for f in color_fns if (t := f(assassin, pseudonym))),
-                       default=(0, HEX_COLS[ind % len(HEX_COLS)]))[1]
-
         event_text, headline_text = render_event(
             e,
             chapter.page,
-            color_fn=color_fn
+            color_fn
         )
 
         events_for_chapter.setdefault(chapter, {}).setdefault(e.datetime.date(), []).append(event_text)
         headlines_for_day.setdefault(e.datetime.date(), []).append(headline_text)
+
+    color_fn_generator.close()
 
     chapters = {}
     for (w, d_dict) in events_for_chapter.items():
