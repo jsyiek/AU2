@@ -46,6 +46,11 @@ MAYWEEK_NEWS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_tem
 with open(MAYWEEK_NEWS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
     MAYWEEK_NEWS_TEMPLATE = F.read()
 
+
+def get_team_color(team_i: int) -> str:
+    return HEX_COLS[team_i % len(HEX_COLS)]
+
+
 @dataclasses.dataclass
 class ScoringParameter:
     name: str
@@ -54,6 +59,7 @@ class ScoringParameter:
 
     def identifier(self) -> str:
         return f"may_week_scoring_{self.name}"
+
 
 @registered_plugin
 class MayWeekUtilitiesPlugin(AbstractPlugin):
@@ -265,7 +271,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 """Special colouring for teams"""
                 team = team_manager.member_to_team[assassin.identifier]
                 if team is not None:
-                    return 1.5, HEX_COLS[team % len(HEX_COLS)]
+                    return 1.5, get_team_color(team)
             yield_next = color_fn
 
     def ask_enable_teams(self):
@@ -678,13 +684,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         multiplier_owners = set(self.get_multiplier_owners())
         teams_enabled = self.gsdb_get("Enable Teams?", False)
         member_to_team = team_manager.member_to_team
-        team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
-
-        team_to_hex_col = {}
-        for (i, team) in enumerate(team_to_members):
-            team_to_hex_col[team] = HEX_COLS[i % len(HEX_COLS)]
 
         # discard hidden players from scores -- in case a dummy casual player is added to represent a civilian
         for hidden_id in ASSASSINS_DATABASE.get_identifiers(include = lambda _: False,
@@ -695,7 +696,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         for (score, a_id) in sorted(((v, k) for (k, v) in scores.items()), reverse=True):
             # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
             team_id = member_to_team[a_id]
-            crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team_id]) if team_id is not None else "")
+            crew_color = (CREW_COLOR_TEMPLATE.format(HEX=get_team_color(team_id)) if team_id is not None else "")
             team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id], CREW_COLOR=crew_color) if team_id is not None else "")
             assassin = ASSASSINS_DATABASE.get(a_id)
             pseudonym_rows.append(
