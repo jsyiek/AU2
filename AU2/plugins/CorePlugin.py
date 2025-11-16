@@ -169,6 +169,13 @@ class CorePlugin(AbstractPlugin):
                 ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
             ),
             Export(
+                "core_assassin_update_pseudonyms",
+                "Assassin -> Pseudonyms",
+                self.ask_core_plugin_update_pseudonyms,
+                self.answer_core_plugin_update_pseudonyms,
+                ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
+            ),
+            Export(
                 "core_assassin_summary",
                 "Assassin -> Summary",
                 self.ask_core_plugin_summary_assassin,
@@ -393,10 +400,7 @@ class CorePlugin(AbstractPlugin):
         )
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            EditablePseudonymList(
-                self.html_ids["Pseudonym"], "Edit Pseudonyms",
-                (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
-            ),
+            *self.ask_core_plugin_update_pseudonyms(assassin.identifier),
             DefaultNamedSmallTextbox(self.html_ids["Real Name"], "Real Name", assassin.real_name),
             DefaultNamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns", assassin.pronouns),
             DefaultNamedSmallTextbox(self.html_ids["Email"], "Email", assassin.email, type_="email"),
@@ -411,12 +415,7 @@ class CorePlugin(AbstractPlugin):
         return html
 
     def on_assassin_update(self, assassin: Assassin, htmlResponse: Dict) -> List[HTMLComponent]:
-        # process updates to the assassin's pseudonyms
-        pseudonym_updates = htmlResponse[self.html_ids["Pseudonym"]]
-        [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
-        [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
-        [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
-        # set other attributes
+        self.answer_core_plugin_update_pseudonyms(htmlResponse)
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
         assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
         assassin.email = htmlResponse[self.html_ids["Email"]]
@@ -650,6 +649,28 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
+
+    def ask_core_plugin_update_pseudonyms(self, arg: str):
+        assassin = ASSASSINS_DATABASE.get(arg)
+        return [
+            HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
+            EditablePseudonymList(
+                self.html_ids["Pseudonym"], "Edit Pseudonyms",
+                (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
+            ),
+        ]
+
+    def answer_core_plugin_update_pseudonyms(self, html_response: Dict):
+        ident = html_response[self.HTML_SECRET_ID]
+        assassin = ASSASSINS_DATABASE.get(ident)
+        # process updates to the assassin's pseudonyms
+        pseudonym_updates = html_response[self.html_ids["Pseudonym"]]
+        [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
+        [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
+        [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
+        return [
+            Label(f"[CORE] Successfully updated {ident}'s pseudonyms.")
+        ]
 
     def ask_core_plugin_create_event(self):
         components = []
