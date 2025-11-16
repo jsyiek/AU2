@@ -8,10 +8,12 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Event, Assassin
+from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.CorePlugin import PLUGINS
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.colors import HEX_COLS
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
 
@@ -37,50 +39,6 @@ REPORT_TEMPLATE = """<div class="report">{PSEUDONYM} reports: <br/>
 """
 
 PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
-
-# TODO: make this configurable?
-HARDCODED_COLORS = {
-    "The Dragon Queen": "#19268A",
-    "Water Ghost": "#606060",
-    "Valheru": "#03FCEC",
-    "Vendetta": "#B920DB"
-}
-
-HEX_COLS = [
-    '#00A6A3', '#26CCC8', '#008B8A', '#B69C1F',
-    '#D1B135', '#5B836E', '#7A9E83', '#00822b',
-    '#00A563', '#FFA44D', '#CC6C1E', '#37b717',
-    '#27B91E', '#1F9E1A', '#3DC74E', '#00c6c3',
-    '#b7a020', '#637777', '#f28110'
-]
-
-DEAD_COLS = [
-    "#A9756C", "#A688BF", "#A34595", "#8C5D56",
-    "#8E7A9E", "#873A80", "#B0978F", "#9C8FA8",
-]
-
-
-INCO_COLS = [
-    "#FF33CC", "#FF6699", "#FF3399",
-    "#E63FAE", "#D94F9F", "#FF80BF",
-]
-
-POLICE_COLS = [
-    "#4D54E3", "#7433FF", "#3B6BD4",
-    "#0066CC", "#3366B2", "#4159E0",
-]
-
-DEAD_POLICE_COLS = [
-    "#000066"
-]
-
-CORRUPT_POLICE_COLS = [
-    "#9999CC"
-]
-
-WANTED_COLS = [
-    "#ff0033", "#cc3333", "#ff3300"
-]
 
 HEAD_HEADLINE_TEMPLATE = """
     <div xmlns="" class="event">
@@ -198,30 +156,23 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     return string
 
 
-# required signature when replacing default_color_fn
-ColorFn = Callable[[str, Assassin, Event, Sequence[Manager]], str]
+AggregateColorFn = Callable[[Assassin, str], str]
 
 
-def render_headline_and_reports(e: Event,
-                                plugin_managers: Sequence[Manager] = tuple(),
-                                color_fn: ColorFn = default_color_fn) -> (str, Dict[Tuple[str, int], str]):
+def render_headline_and_reports(e: Event, color_fn: AggregateColorFn) -> (str, Dict[Tuple[str, int], str]):
     """
     Produces the HTML renderings of an events headline and its reports
 
     Args:
         e (Event): the event to render the headline and reports of
-        plugin_managers (Sequence[Manager]): A sequence of managers that have been updated up to the event
-            `e`. When called by PageGeneratorPlugin this will contain a CompetencyManager, DeathManager, and
-            WantedManager, but other plugins may use it differently.
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
+        color_fn (AggregateColorFn): A function taking an assassin model and a pseudonym and returning the colour to
+            apply to the pseudonym
 
     Returns:
         (str, Dict[Tuple[str, int], str]): A tuple of:
             - the event `e`'s headline rendered as HTML
-            - a dict mapping tuples (assasin identifier, pseudonym index) to rendered HTML report bodies
+            - a dict mapping tuples (assassin identifier, pseudonym index) to rendered HTML report bodies
     """
-    plugin_managers = plugin_managers or tuple()
 
     headline = e.headline
 
@@ -250,12 +201,7 @@ def render_headline_and_reports(e: Event,
             pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
             pseudonym = assassin_model.get_pseudonym(pseudonym_index)
 
-            color = color_fn(
-                pseudonym,
-                assassin_model,
-                e,
-                plugin_managers
-            )
+            color = color_fn(assassin_model, pseudonym)
 
             candidate_pseudonyms.append((assassin_model, pseudonym, color))
 
@@ -269,8 +215,7 @@ def render_headline_and_reports(e: Event,
 
 def render_event(e: Event,
                  chapter: str,
-                 plugin_managers: Sequence[Manager] = tuple(),
-                 color_fn: ColorFn = default_color_fn) -> (str, str):
+                 color_fn: AggregateColorFn) -> (str, str):
     """
     Renders the full HTML for the event, including headline and reports
     Also gives the HTML rendering of the headline for the headlines page.
@@ -278,22 +223,14 @@ def render_event(e: Event,
     Args:
         e (Event): the event to render as html
         chapter (str): the page that the Event is being rendered for. Needed for the correct href in the headline.
-        plugin_managers (Sequence[Manager]): A sequence of managers that have been updated up to the event
-            `e`. When called by PageGeneratorPlugin this will contain a CompetencyManager, DeathManager, and
-            WantedManager, but other plugins may use it differently.
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
+        color_fn (AggregateColorFn): A function taking an assassin model and a pseudonym and returning the colour to
+            apply to the pseudonym
 
     Returns:
         (str, str): A tuple of (event_html, headline_html), i.e. html renderings of, respectively, the whole event
         (headline and reports, for news pages), and the headline only (for the headlines page).
     """
-    plugin_managers = plugin_managers or tuple()
-    headline, reports = render_headline_and_reports(
-        e,
-        plugin_managers=plugin_managers,
-        color_fn=color_fn
-    )
+    headline, reports = render_headline_and_reports(e, color_fn)
     report_list = []
     for ((assassin, pseudonym_index), r) in reports.items():
         # Umpires must tell AU to NOT escape HTML
@@ -301,12 +238,7 @@ def render_event(e: Event,
         # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
         assassin_model = ASSASSINS_DATABASE.get(assassin)
         pseudonym = assassin_model.get_pseudonym(pseudonym_index)
-        color = color_fn(
-            pseudonym,
-            assassin_model,
-            e,
-            plugin_managers
-        )
+        color = color_fn(assassin_model, pseudonym)
 
         painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
 
@@ -332,9 +264,7 @@ def render_event(e: Event,
 # required signature when replacing default_page_allocator
 PageAllocator = Callable[[Event], Optional[Chapter]]
 
-def render_all_events(page_allocator: PageAllocator = default_page_allocator,
-                      color_fn: ColorFn = default_color_fn,
-                      plugin_managers: Sequence[Manager] = tuple()) -> (List[str], Dict[Chapter, List[str]]):
+def render_all_events(page_allocator: PageAllocator = default_page_allocator) -> (List[str], Dict[Chapter, List[str]]):
     """
     Produces renderings of all events, sorted into pages according to `page_allocator`.
 
@@ -342,14 +272,6 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
         page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the name and title
             of the page the event is to be rendered on, or `None` if the event should be skipped.
             E.g. an event in week 2 would be mapped to Chapter("week02", "Week 2 News").
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
-        plugin_managers (Sequence[Manager]): Sequence of additional, newly-initialised Managers that will be
-            passed into `color_fn` along with a CompetencyManager, DeathManager, and WantedManager.
-
-            Defaults to an empty tuple in which case only the managers just named will be used.
-
-            Events are added to these managers in chronological order.
 
     Returns:
         A tuple of: a list of strings where each element is the HTML rendering of one day's headlines, and a dict
@@ -357,32 +279,40 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
     """
     events = list(EVENTS_DATABASE.events.values())
     events.sort(key=lambda event: event.datetime)
-    start_datetime = get_game_start()
 
     # maps chapter (news week) to day-of-week to list of reports
     # this is 1-indexed (week 1 is first week of game)
     # days are 0-indexed (fun, huh?)
     events_for_chapter = {}
     headlines_for_day = {}
-    competency_manager = CompetencyManager(start_datetime)
-    death_manager = DeathManager()
-    wanted_manager = WantedManager()
-    plugin_managers = (competency_manager, death_manager, wanted_manager, *(plugin_managers or tuple()))
+
+    color_fn_generators = [p.colour_fn_generator() for p in PLUGINS]
+    [next(g) for g in color_fn_generators]  # need to start the generators first to be able to send events to them...
 
     for e in events:
-        # don't skip adding hidden events to managers, in case a player dies in a hidden event, etc.
-        for manager in plugin_managers:
-            manager.add_event(e)
+        # get colour functions for this event
+        # do this even if won't render this event because plugins may still need to process hidden events
+        color_fns = [g.send(e) for g in color_fn_generators]
 
         chapter = page_allocator(e)
         if not chapter:
             continue
 
+        def color_fn(assassin: Assassin, pseudonym: str) -> str:
+            """
+            "Aggregated" colour function processing the priorities of each of the colour functions and returning a
+            single colour hexcode.
+            """
+            ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
+            # note that because the colour functions return the priority as the 0th element,
+            # lexicographic ordering of their outputs gives the correct priority order
+            return max((t for f in color_fns if (t := f(assassin, pseudonym))),
+                       default=(0, HEX_COLS[ind % len(HEX_COLS)]))[1]
+
         event_text, headline_text = render_event(
             e,
             chapter.page,
-            color_fn=color_fn,
-            plugin_managers=plugin_managers,
+            color_fn=color_fn
         )
 
         events_for_chapter.setdefault(chapter, {}).setdefault(e.datetime.date(), []).append(event_text)
@@ -412,10 +342,7 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
     return head_days, chapters
 
 
-def generate_news_pages(headlines_path: str,
-                        page_allocator: PageAllocator = default_page_allocator,
-                        color_fn: ColorFn = default_color_fn,
-                        plugin_managers: Sequence[Manager] = tuple()):
+def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = default_page_allocator):
     """
     Generates news pages sorted according to `page_allocator`.
 
@@ -424,20 +351,8 @@ def generate_news_pages(headlines_path: str,
         page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the name and title
             of the page the event is to be rendered on, or `None` if the event should be skipped.
             E.g. an event in week 2 would be mapped to Chapter("week02", "Week 2 News").
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
-        plugin_managers (Sequence[Manager]): Sequence of additional, newly-initialised Managers that will be
-            passed into `color_fn` along with a CompetencyManager, DeathManager, and WantedManager.
-
-            Defaults to an empty tuple in which case only the managers just named will be used.
-
-            Events are added to these managers in chronological order.
     """
-    headline_days, chapters = render_all_events(
-        page_allocator=page_allocator,
-        color_fn=color_fn,
-        plugin_managers=plugin_managers
-    )
+    headline_days, chapters = render_all_events(page_allocator)
 
     for (page, title), days in chapters.items():
         path = os.path.join(WEBPAGE_WRITE_LOCATION, f"{page}.html")

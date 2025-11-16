@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict
+from typing import Dict, List, Optional, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -14,12 +14,13 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ColorFnGenerator, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.PoliceRankManager import DEFAULT_RANKS, PoliceRankManager, DEFAULT_POLICE_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT
+from AU2.plugins.util.colors import DEAD_POLICE_COLS, POLICE_COLS
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
 from AU2.plugins.util.render_utils import event_url
 
@@ -109,6 +110,24 @@ class PolicePlugin(AbstractPlugin):
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]['id']] = data
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        yield_next = None
+        while True:
+            e = yield yield_next
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for police"""
+                if assassin.is_police:
+                    ind = sum(ord(c) for c in pseudonym)
+                    if any(victim == assassin.identifier for _, victim in e.kills):
+                        # case where police died in event
+                        return 5, DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
+                    else:
+                        # live police
+                        return 1, POLICE_COLS[ind % len(POLICE_COLS)]
+
+            yield_next = color_fn
 
     def gather_dead_non_police(self) -> List[str]:
         death_manager = DeathManager()

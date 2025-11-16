@@ -1,7 +1,7 @@
 import glob
 import os.path
 
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -30,12 +30,13 @@ from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTex
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
-    AttributePairTableRow
+    AttributePairTableRow, ColorFnGenerator
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.colors import DEAD_COLS, HARDCODED_COLORS
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 
 AVAILABLE_PLUGINS = {}
 
@@ -230,6 +231,21 @@ class CorePlugin(AbstractPlugin):
                 self.answer_reorder_exports
             )
         ]
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        yield_next = None
+        while True:
+            e = yield yield_next
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for dead players and hardcoded colours"""
+                if any(victim == assassin.identifier for _, victim in e.kills):
+                    ind = sum(ord(c) for c in pseudonym)
+                    return 4, DEAD_COLS[ind % len(DEAD_COLS)]
+                elif pseudonym in HARDCODED_COLORS:
+                    return 2, HARDCODED_COLORS[pseudonym]
+
+            yield_next = color_fn
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
         player_type = assassin.is_police and "Police" or "Player"

@@ -2,7 +2,7 @@ import dataclasses
 import datetime
 import enum
 import os
-from typing import List, Any, Dict, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -22,13 +22,14 @@ from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, DangerousConfigExport, \
-    AttributePairTableRow
+    AttributePairTableRow, ColorFnGenerator
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, DEFAULT_START_COMPETENCY, \
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.colors import INCO_COLS
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 
@@ -223,6 +224,21 @@ class CompetencyPlugin(AbstractPlugin):
                 answer=self.answer_toggle_attempt_tracking
             )
         ]
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        competency_manager = CompetencyManager(get_game_start())
+        yield_next = None
+        while True:
+            e = yield yield_next
+            competency_manager.add_event(e)
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for incos"""
+                if competency_manager.is_inco_at(assassin, e.datetime):
+                    ind = sum(ord(c) for c in pseudonym)
+                    return 3, INCO_COLS[ind % len(INCO_COLS)]
+
+            yield_next = color_fn
 
     def gigabolt_ask(self):
         questions = []

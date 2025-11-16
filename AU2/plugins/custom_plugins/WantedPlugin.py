@@ -1,22 +1,23 @@
 import os
 from html import escape
-from typing import Dict,  List
+from typing import List, Optional, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator
 from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
+from AU2.plugins.util.colors import CORRUPT_POLICE_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import get_now_dt
 
 PLAYER_TABLE_TEMPLATE = """
@@ -81,6 +82,24 @@ class WantedPlugin(AbstractPlugin):
         self.event_html_ids = {
             "Wanted": self.identifier + "_wanted"
         }
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        wanted_manager = WantedManager()
+        yield_next = None
+        while True:
+            e = yield yield_next
+            wanted_manager.add_event(e)
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for wanted players"""
+                if wanted_manager.is_player_wanted(assassin.identifier, time=e.datetime):
+                    ind = sum(ord(c) for c in pseudonym)
+                    if assassin.is_police:
+                        return 6, CORRUPT_POLICE_COLS[ind % len(CORRUPT_POLICE_COLS)]
+                    else:
+                        return 6, WANTED_COLS[ind % len(WANTED_COLS)]
+
+            yield_next = color_fn
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         data = {}

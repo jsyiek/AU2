@@ -1,9 +1,9 @@
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Generator, List, Optional, Tuple, Union
 
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
-from AU2.html_components.SimpleComponents.Label import Label
 
+ColorFnGenerator = Generator[Callable[[Assassin, str], Optional[Tuple[float, str]]], Event, None]
 
 class Export:
     """
@@ -202,3 +202,26 @@ class AbstractPlugin:
         Display any information about an EVENT that is managed by this plugin
         """
         return []
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        """
+        Allows plugins to affect the colouring of assassin pseudonyms.
+        For reference, the priority values for each situation are:
+            6: wanted (with different colours for police and non-police)
+            5: dead police (only when PolicePlugin enabled)
+            4: dead
+            3: inco
+            2: hardcoded pseudonym-based colours
+            1: police (only when PolicePlugin enabled)
+
+        Yields:
+            Callable[[Assassin, int], Optional[Tuple[float, str]]]: A function taking an assassin model and pseudonym
+                as input and returning either
+                    - a tuple of a float-valued priority and colour hexcode, or
+                    - `None` to ignore this plugin.
+
+        Receives:
+            Event: events are sent to the generator in chronological order
+        """
+        while True:
+            yield lambda a, p: None
