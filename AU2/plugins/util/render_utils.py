@@ -10,7 +10,8 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.CorePlugin import PLUGINS
-from AU2.plugins.util.colors import HEX_COLS
+from AU2.plugins.util.colors import CORRUPT_POLICE_COLS, DEAD_COLS, DEAD_POLICE_COLS, HARDCODED_COLORS, HEX_COLS, \
+    INCO_COLS, POLICE_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
 
@@ -64,13 +65,12 @@ def event_url(e: Event, page: Optional[str] = None) -> str:
     return f"{page}.html#{e._Event__secret_id}"
 
 
-
 def get_color(pseudonym: str,
               dead: bool = False,
               incompetent: bool = False,
               is_police: bool = False,
               is_wanted: bool = False) -> str:
-    """Basic colouring rules that can be used by `ColorFn`s."""
+    """Basic colouring rules, currently only used by ScoringPlugin"""
     ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
     # colour appropriately
     if is_wanted:

@@ -3,7 +3,7 @@ HARDCODED_COLORS = {
     "The Dragon Queen": "#19268A",
     "Water Ghost": "#606060",
     "Valheru": "#03FCEC",
-    "Vendetta": "#B920DB"
+    "Vendetta": "#B920DB",
 }
 
 HEX_COLS = [
