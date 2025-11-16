@@ -441,7 +441,7 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
-                    *self.ask_core_plugin_update_reports(standalone=False),
+                    *self.ask_core_plugin_update_reports(assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
@@ -469,7 +469,7 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
-                    *self.ask_core_plugin_update_reports(e.identifier, standalone=False),
+                    *self.ask_core_plugin_update_reports(e.identifier, assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
@@ -714,28 +714,30 @@ class CorePlugin(AbstractPlugin):
             components += p.on_event_update(event, html_response_args)
         return components
 
-    def ask_core_plugin_update_reports(self, event_id: str = "", standalone: bool = True) -> List[HTMLComponent]:
+    def ask_core_plugin_update_reports(self, event_id: str = "", assassin_pseudonyms_identifier: str = "") -> List[HTMLComponent]:
+        """
+        Export for updating the reports in an event.
+        If assassin_pseudonyms_identifier this returns only the AssassinDependentReportEntry component, for use in
+        Event -> Create and Event -> Update, otherwise it returns the components necessary to function as a standalone
+        export.
+        """
+        FALLBACK_ID = self.event_html_ids["Assassin Pseudonym"]
         event = EVENTS_DATABASE.get(event_id)
-
-        if standalone:
-            # case where this is being used as a standalone export
-            assert event is not None
+        component = AssassinDependentReportEntry(assassin_pseudonyms_identifier or FALLBACK_ID,
+                                                 self.event_html_ids["Reports"],
+                                                 "Reports", event.reports if event else [])
+        if assassin_pseudonyms_identifier:
+            return [component]
+        else:
             return [
                 HiddenTextbox(self.HTML_SECRET_ID, event_id),
                 Dependency(
-                    dependentOn=self.event_html_ids["Assassin Pseudonym"],
+                    dependentOn=FALLBACK_ID,
                     htmlComponents=[
-                        HiddenJSON(self.event_html_ids["Assassin Pseudonym"], event.assassins),
-                        AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"],
-                                                     self.event_html_ids["Reports"], "Reports", event.reports),
+                        HiddenJSON(FALLBACK_ID, event.assassins),
+                        component
                     ]
                 ),
-            ]
-        else:
-            # case where using this as part of Event -> Update / Event -> Create
-            return [
-                AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"],
-                                             "Reports", event.reports if event else []),
             ]
 
     def answer_core_plugin_update_reports(self, html_response: Dict, event: Optional[Event] = None) -> List[HTMLComponent]:
