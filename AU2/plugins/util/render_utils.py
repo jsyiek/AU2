@@ -284,7 +284,7 @@ def render_event(e: Event,
     return event_html, headline_html
 
 
-def render_all_events(page_allocator: PageAllocator = default_page_allocator) -> (List[str], Dict[Chapter, List[str]]):
+def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> (List[str], Dict[Chapter, List[str]]):
     """
     Produces renderings of all events, sorted into pages according to `page_allocator`.
 
