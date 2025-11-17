@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import itertools
 import os
@@ -51,17 +52,51 @@ Chapter = NamedTuple("Chapter", (("page", str), ("title", str)))
 
 
 def default_page_allocator(e: Event) -> Optional[Chapter]:
-    # TODO: move hidden Event attribute into core
+    """Basis page allocation function"""
     if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
         week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
         return Chapter(f"news{week:02}", f"Week {week} News")
+
+
+PageAllocator = Callable[[Event], Optional[Chapter]]
+
+
+@dataclasses.dataclass
+class PageAllocatorData:
+    """
+    Dataclass for the data sent to plugins for the "page_allocator" data hook.
+
+    Attributes:
+        event (Event): tells plugins which event is being allocated a page
+        chapter (Optional[Chapter]): modified by plugins to set the page alloction for the event
+        priority (float): tracks the priority level of the previous modification
+    """
+    event: Event
+    chapter: Optional[Chapter]
+    priority: float
+
+
+def hooked_page_allocator(e: Event) -> Optional[Chapter]:
+    """
+    Gets the (main) page allocation of a given Event, by calling a the "page_allocator" data hook
+
+    Args:
+        e (Event): Event to get the page of
+
+    Returns:
+        Optional[Chapter]: Either a Chapter NamedTuple representing the page that the event has been rendered on,
+            or `None` if it hasn't been rendered.
+    """
+    data = PLUGINS.data_hook("page_allocator", PageAllocatorData(event=e, priority=0, chapter=default_page_allocator(e)))
+    return data.chapter
 
 
 def event_url(e: Event, page: Optional[str] = None) -> str:
     """
     Generates the (relative) url pointing to this event's appearance on the news pages.
     """
-    page = page or default_page_allocator(e).page
+    # TODO: deal with `None` case!
+    page = page or hooked_page_allocator(e).page
     return f"{page}.html#{e._Event__secret_id}"
 
 
@@ -249,10 +284,6 @@ def render_event(e: Event,
     return event_html, headline_html
 
 
-# required signature when replacing default_page_allocator
-PageAllocator = Callable[[Event], Optional[Chapter]]
-
-
 def render_all_events(page_allocator: PageAllocator = default_page_allocator) -> (List[str], Dict[Chapter, List[str]]):
     """
     Produces renderings of all events, sorted into pages according to `page_allocator`.
@@ -322,7 +353,7 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator) ->
     return head_days, chapters
 
 
-def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = default_page_allocator):
+def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = hooked_page_allocator):
     """
     Generates news pages sorted according to `page_allocator`.
 

@@ -26,7 +26,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.colors import HEX_COLS
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import Chapter, generate_news_pages
+from AU2.plugins.util.render_utils import Chapter, PageAllocatorData
 
 
 CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
@@ -665,17 +665,21 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         return scores
 
+    def on_data_hook(self, hook: str, data):
+        if hook == "page_allocator":
+            """Collate all the events onto a single page, rather than paginating into weeks"""
+            data: PageAllocatorData
+            PRIORITY = 1
+            if data.priority < PRIORITY:
+                data.chapter = Chapter("mw-news", "May Week News")
+                data.priority = PRIORITY
+
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         """
         Generates player info page and may week news page.
 
         The player info page displays two lists, one giving player pseudonyms, scores, teams (if applicable) and
         multipliers, the other giving the real names and other targeting information for all the players.
-
-        The may week news page collates all the events onto a single page (rather than paginating like
-        PageGeneratorPlugin) and applies May Week name colouring (i.e. crews share a colour, don't colour police (casual
-        players) differently, don't colour dead players differently outside the event in which they died, don't colour
-        incos).
         """
 
         # player info page
@@ -732,14 +736,5 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     TEAM_STR = self.get_cosmetic_name("Teams") if teams_enabled else ""
                 )
             ))
-
-        # may week news page
-
-        MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News")
-
-        generate_news_pages(
-            headlines_path="mw-head.html",
-            page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
-        )
 
         return [Label("[MAY WEEK] Success!")]

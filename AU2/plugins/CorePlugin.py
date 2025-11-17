@@ -776,8 +776,16 @@ class CorePlugin(AbstractPlugin):
                 sanity_check_count += 1
             events_count += 1
 
+        # first call PageGeneratorPlugin.on_page_generate, if active.
+        # this is so that the duel page settings are saved before other plugins generate pages,
+        # so that page allocations are correct
         for p in PLUGINS:
-            components += p.on_page_generate(html_response_args)
+            if p.identifier == "PageGeneratorPlugin":
+                components += p.on_page_generate(html_response_args)
+
+        for p in PLUGINS:
+            if p.identifier != "PageGeneratorPlugin":
+                components += p.on_page_generate(html_response_args)
         return components
 
     def answer_core_plugin_update_config(self, htmlResponse):
