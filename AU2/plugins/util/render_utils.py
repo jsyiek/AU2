@@ -94,10 +94,10 @@ def hooked_page_allocator(e: Event) -> Optional[Chapter]:
 def event_url(e: Event, page: Optional[str] = None) -> str:
     """
     Generates the (relative) url pointing to this event's appearance on the news pages.
+    If the event doesn't appear on any page (i.e. is hidden), "" is returned.
     """
-    # TODO: deal with `None` case!
     page = page or hooked_page_allocator(e).page
-    return f"{page}.html#{e._Event__secret_id}"
+    return f"{page}.html#{e._Event__secret_id}" if page else ""
 
 
 def get_color(pseudonym: str,
