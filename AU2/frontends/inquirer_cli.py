@@ -195,7 +195,7 @@ def render(html_component, dependency_context={}):
                         name="q",
                         message=f"{escape_format_braces(player)}: Choose pseudonym",
                         choices=choices,
-                        default=html_component.default.get(player, "")
+                        default=html_component.default.get(player, choices[-1])
                     )]
                 pseudonym_index = inquirer_prompt_with_abort(q)["q"]
             else:
