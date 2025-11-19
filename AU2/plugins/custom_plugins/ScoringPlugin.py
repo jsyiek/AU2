@@ -1,6 +1,5 @@
 import os
 import pathlib
-import datetime
 from typing import List, Optional, Tuple, Any, Dict, Iterable
 
 from AU2 import ROOT_DIR
@@ -17,6 +16,7 @@ from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.SimpleComponents.OptionalIntegerEntry import OptionalIntegerEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -24,7 +24,6 @@ from AU2.plugins.util.render_utils import get_color, render_headline_and_reports
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 
@@ -100,8 +99,11 @@ KILLTREE_LINK = f"""
 <p>View a visualisation of the kill graph <a href={KILLTREE_PATH}>here</a>.</p>
 """
 
-NODE_SHAPE = "dot"
-def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManager) -> str:
+def generate_killtree_visualiser(events: List[Event],
+                                 score_manager: ScoreManager,
+                                 node_shape: str = "box",
+                                 include_hidden: bool = False,
+                                 graph_seed: Optional[int] = None) -> str:
     # local import because importing pyvis every time impacts performance significantly
     try:
         from pyvis.network import Network
@@ -109,9 +111,12 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
     except ModuleNotFoundError:
         return "Skipping killtree visualisation due to missing modules -- check `requirements.txt`."
 
-    net = Network(directed=True, cdn_resources="in_line", height="calc(100vh - 90px)", select_menu=True)
-    added_nodes = set()
+    net = Network(directed=True, cdn_resources="in_line", height="calc(100vh - 90px)", select_menu=True, layout=True)
+    net.options.layout.hierarchical.enabled = False
+    if isinstance(graph_seed, int):
+        net.options.layout.randomSeed = graph_seed
 
+    added_nodes = set()
     # first add nodes for players that died,
     # colouring based on their status upon death
     competency_manager = CompetencyManager(get_game_start())
@@ -119,8 +124,8 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
     for e in events:
         competency_manager.add_event(e)
         wanted_manager.add_event(e)
-        # ignore hidden events
-        if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
+        # ignore hidden events if so configured
+        if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) and not include_hidden:
             continue
         for (_, victim) in e.kills:
             if victim not in added_nodes:
@@ -129,7 +134,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                 net.add_node(
                     victim_searchable,
                     label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
-                    shape=NODE_SHAPE,
+                    shape=node_shape,
                     color=get_color(
                              victim_model.get_pseudonym(e.assassins.get(victim, 0)),
                              is_police=victim_model.is_police,
@@ -149,8 +154,8 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
     for e in events:
         competency_manager.add_event(e)
         wanted_manager.add_event(e)
-        # ignore hidden events
-        if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
+        # ignore hidden events if so configured
+        if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) and not include_hidden:
             continue
         for (killer, victim) in e.kills:
             killer_model = ASSASSINS_DATABASE.get(killer)
@@ -161,7 +166,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                 net.add_node(
                     killer_searchable,
                     label=killer_model.real_name + (" (Police)" if killer_model.is_police else ""),
-                    shape=NODE_SHAPE,
+                    shape=node_shape,
                     color=get_color(
                         killer_model.get_pseudonym(0),
                         is_police=killer_model.is_police,
@@ -211,7 +216,10 @@ class ScoringPlugin(AbstractPlugin):
                 "Real Name", "Pseudonym", "Number of Kills", "Conkers Score"
             ]},
             "Visualise Kills?": {'id': self.identifier + "_visualise_kills", 'default': True},
-            "Stats Order": {'id': self.identifier + "_stats_order", 'default': 'By Kills (London style)'}
+            "Stats Order": {'id': self.identifier + "_stats_order", 'default': 'By Kills (London style)'},
+            "Graph Seed": {'id': self.identifier + "_killtree_seed", 'default': 156},
+            "Include Hidden?": {'id': self.identifier + "_include_hidden_kills_in_graph", 'default': False},
+            "Node Shape": {'id': self.identifier + "_node_shape", 'default': "box"},
         }
 
         self.assassin_plugin_state = {
@@ -240,7 +248,13 @@ class ScoringPlugin(AbstractPlugin):
                 "Scoring -> Set formula",
                 self.ask_set_formula,
                 self.answer_set_formula
-            )
+            ),
+            ConfigExport(
+                "scoring_kill_graph_config",
+                "Scoring -> Configure kill graph visualiser",
+                self.ask_set_killtree_config,
+                self.answer_set_killtree_config
+            ),
         ]
 
     # plugin state management is copied from PolicePlugin
@@ -295,6 +309,37 @@ class ScoringPlugin(AbstractPlugin):
         self.aps_set(ident, "Bonus", new_bonus)
         return [Label("[SCORING] Set bonus.")]
 
+    def ask_set_killtree_config(self) -> List[HTMLComponent]:
+        return [
+            Label("For examples of the different node shapes, see "
+                  "https://visjs.github.io/vis-network/examples/network/nodeStyles/shapes.html"),
+            InputWithDropDown(
+                self.identifier + "_node_shape",
+                "Select node shape",
+                [
+                    "box", "circle", "database", "ellipse", "text",  # these have text *inside*
+                    "diamond", "dot", "square", "star", "triangle", "triangleDown",  # these have text *outside*
+                ],
+                self.gsdb_get("Node Shape")
+            ),
+            Checkbox(
+                self.identifier + "_include_hidden",
+                "Include kills from hidden events?",
+                self.gsdb_get("Include Hidden?")
+            ),
+            OptionalIntegerEntry(
+                self.identifier + "_graph_seed",
+                "Seed for node placement (blank for non-deterministic placement)",
+                self.gsdb_get("Graph Seed")
+            ),
+        ]
+
+    def answer_set_killtree_config(self, html_response) -> List[HTMLComponent]:
+        self.gsdb_set("Node Shape", html_response[self.identifier + "_node_shape"])
+        self.gsdb_set("Include Hidden?", html_response[self.identifier + "_include_hidden"])
+        self.gsdb_set("Graph Seed", html_response[self.identifier + "_graph_seed"])
+        return [Label("[SCORING] Set kill graph config.")]
+
     def _generate_stats_page(self,
                              columns: List[str],
                              generate_killtree: bool,
@@ -345,7 +390,13 @@ class ScoringPlugin(AbstractPlugin):
         killtree_embed = ""
         killtree_link = ""
         if generate_killtree:
-            msg = generate_killtree_visualiser(events, score_manager)
+            msg = generate_killtree_visualiser(
+                events,
+                score_manager,
+                node_shape=self.gsdb_get("Node Shape"),
+                include_hidden=self.gsdb_get("Include Hidden?"),
+                graph_seed=self.gsdb_get("Graph Seed")
+            )
             if msg:
                 components.append(Label(f"[WARNING] [SCORING] {msg}"))
             else:
