@@ -109,44 +109,65 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
     except ModuleNotFoundError:
         return "Skipping killtree visualisation due to missing modules -- check `requirements.txt`."
 
-    # track competency and wantedness for edge colouring
-    competency_manager = CompetencyManager(get_game_start())
-    wanted_manager = WantedManager()
-
     net = Network(directed=True, cdn_resources="in_line", height="calc(100vh - 90px)", select_menu=True)
     added_nodes = set()
+
+    # first add nodes for players that died,
+    # colouring based on their status upon death
+    competency_manager = CompetencyManager(get_game_start())
+    wanted_manager = WantedManager()
     for e in events:
         competency_manager.add_event(e)
         wanted_manager.add_event(e)
-
-        # don't show kills in hidden events in graph
+        # ignore hidden events
         if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
             continue
+        for (_, victim) in e.kills:
+            if victim not in added_nodes:
+                victim_model = ASSASSINS_DATABASE.get(victim)
+                victim_searchable = f"{victim_model.all_pseudonyms(fn=lambda x: x)} ({victim_model.real_name})"
+                net.add_node(
+                    victim_searchable,
+                    label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
+                    shape=NODE_SHAPE,
+                    color=get_color(
+                             victim_model.get_pseudonym(e.assassins.get(victim, 0)),
+                             is_police=victim_model.is_police,
+                             incompetent=competency_manager.is_inco_at(victim_model, e.datetime),
+                             is_wanted=wanted_manager.is_player_wanted(victim, e.datetime)
+                         ),
+                    title=victim_searchable,
+                    value=1 + score_manager.get_conkers(victim_model)
+                )
+                added_nodes.add(victim)
 
-        # construct kill tree network
+    # now add edges for the kills, and nodes for the remaining assassins
+    # edges are coloured according to the *killer*'s status during the event
+    # nodes for assassins that didn't die are coloured based on their initial pseudonym (as an arbitrary choice...)
+    competency_manager = CompetencyManager(get_game_start())
+    wanted_manager = WantedManager()
+    for e in events:
+        competency_manager.add_event(e)
+        wanted_manager.add_event(e)
+        # ignore hidden events
+        if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
+            continue
         for (killer, victim) in e.kills:
             killer_model = ASSASSINS_DATABASE.get(killer)
-            victim_model = ASSASSINS_DATABASE.get(victim)
             killer_searchable = f"{killer_model.all_pseudonyms(fn=lambda x: x)} ({killer_model.real_name})"
+            victim_model = ASSASSINS_DATABASE.get(victim)
             victim_searchable = f"{victim_model.all_pseudonyms(fn=lambda x: x)} ({victim_model.real_name})"
             if killer not in added_nodes:
                 net.add_node(
                     killer_searchable,
                     label=killer_model.real_name + (" (Police)" if killer_model.is_police else ""),
                     shape=NODE_SHAPE,
-                    color=get_color(killer_model.get_pseudonym(0), is_police=killer_model.is_police),
+                    color=get_color(
+                        killer_model.get_pseudonym(0),
+                        is_police=killer_model.is_police,
+                    ),
                     title=killer_searchable,
                     value=1 + score_manager.get_conkers(killer_model)
-                )
-                added_nodes.add(killer)
-            if victim not in added_nodes:
-                net.add_node(
-                    victim_searchable,
-                    label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
-                    shape=NODE_SHAPE,
-                    color=get_color(victim_model.get_pseudonym(0), is_police=victim_model.is_police),
-                    title=victim_searchable,
-                    value=1 + score_manager.get_conkers(victim_model)
                 )
                 added_nodes.add(victim)
             headline, _ = render_headline_and_reports(e, plugin_managers=(competency_manager, wanted_manager))
@@ -154,13 +175,14 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             net.add_edge(killer_searchable, victim_searchable,
                          label=e.datetime.strftime("%d %b"),
                          color=get_color(
-                             victim_model.get_pseudonym(e.assassins.get(victim, 0)),
-                             is_police=victim_model.is_police,
-                             incompetent=competency_manager.is_inco_at(victim_model, e.datetime),
-                             is_wanted=wanted_manager.is_player_wanted(victim, e.datetime)
+                             killer_model.get_pseudonym(e.assassins.get(killer, 0)),
+                             is_police=killer_model.is_police,
+                             incompetent=competency_manager.is_inco_at(killer_model, e.datetime),
+                             is_wanted=wanted_manager.is_player_wanted(killer, e.datetime)
                          ),
                          title=f"[{e.datetime.strftime(DATETIME_FORMAT)}] {plaintext_headline}"
-                         )
+            )
+
     with open(os.path.join(WEBPAGE_WRITE_LOCATION, KILLTREE_PATH), "w+", encoding="utf-8") as F:
         F.write(net.generate_html())
     return "" # empty string indicates success
