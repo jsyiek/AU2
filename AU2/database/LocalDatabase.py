@@ -27,4 +27,4 @@ class LocalDatabase(PersistentFile):
         self.arb_state = loaded.arb_state
 
 
-LOCAL_DATABASE = LocalDatabase()
+LOCAL_DATABASE = LocalDatabase.load()

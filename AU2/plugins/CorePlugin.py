@@ -579,7 +579,10 @@ class CorePlugin(AbstractPlugin):
 
     def answer_suppress_exports(self, htmlResponse):
         new_suppressed_exports = set(htmlResponse[self.config_html_ids["Suppressed Exports"]])
-        current_suppression = set(GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", []))
+        current_suppression = set(LOCAL_DATABASE.arb_state.get("CorePlugin", {}).get(
+            "suppressed_exports",
+            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+        ))
         # only update suppression for exports of loaded plugins
         for exp in self.get_all_exports(include_suppressed=True):
             exp_id = exp.identifier
