@@ -17,7 +17,7 @@ class LocalConfigDatabase(PersistentFile):
     arb_state: Dict[str, Any] = field(default_factory=dict)
 
     # __ signals that the database file shouldn't be uploaded
-    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "__LocalDatabase.json")
+    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "__LocalConfigDatabase.json")
 
     def _refresh(self):
         """
