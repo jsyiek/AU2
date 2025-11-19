@@ -10,7 +10,7 @@ from AU2.database.model.PersistentFile import PersistentFile
 
 @dataclass_json
 @dataclass
-class LocalDatabase(PersistentFile):
+class LocalConfigDatabase(PersistentFile):
     """
     This class is for storing local settings that shouldn't be uploaded to SRCF or saved in backups
     """
@@ -27,4 +27,4 @@ class LocalDatabase(PersistentFile):
         self.arb_state = loaded.arb_state
 
 
-LOCAL_DATABASE = LocalDatabase.load()
+LOCAL_CONFIG_DATABASE = LocalConfigDatabase.load()

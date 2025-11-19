@@ -4,7 +4,7 @@ from collections import namedtuple
 from typing import Optional, Callable, List
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.LocalDatabase import LOCAL_DATABASE
+from AU2.database.LocalConfigDatabase import LOCAL_CONFIG_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
@@ -49,10 +49,10 @@ class UIChange:
     replacement_effects: Callable[[HTMLComponent, HTMLComponent], None] = lambda *args: None
 
     def set_status(self, enabled: List[str]):
-        LOCAL_DATABASE.arb_state.setdefault("UIChanges", {})[self.replaces] = self.name in enabled
+        LOCAL_CONFIG_DATABASE.arb_state.setdefault("UIChanges", {})[self.replaces] = self.name in enabled
 
     def is_enabled(self):
-        return LOCAL_DATABASE.arb_state.get("UIChanges", {}).get(
+        return LOCAL_CONFIG_DATABASE.arb_state.get("UIChanges", {}).get(
             self.replaces,
             GENERIC_STATE_DATABASE.arb_state.get("UIChanges", {}).get(self.replaces, False)
         )
