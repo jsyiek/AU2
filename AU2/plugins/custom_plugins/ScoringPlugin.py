@@ -147,7 +147,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             headline, _ = render_headline_and_reports(e, plugin_managers=(competency_manager, wanted_manager))
             plaintext_headline = lxml.html.fromstring(f"<html>{headline}</html>").text_content()
             net.add_edge(killer_searchable, victim_searchable,
-                         label=e.datetime.strftime(DATETIME_FORMAT),
+                         label=e.datetime.strftime("%d %b"),
                          color=get_color(
                              victim_model.get_pseudonym(e.assassins.get(victim, 0)),
                              is_police=victim_model.is_police,
