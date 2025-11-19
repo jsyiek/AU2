@@ -278,6 +278,10 @@ def render_event(e: Event,
         # If they tell it not to, they do so at their own risk. Make sure you know what you want to do!
         # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
         assassin_model = ASSASSINS_DATABASE.get(assassin)
+        if pseudonym_index is None:
+            # Auto pseudonym mode
+            # unfortunately can't do `= pseudonym_index or` because pseudonym_index can also be 0....
+            pseudonym_index = e.assassins[assassin]
         pseudonym = assassin_model.get_pseudonym(pseudonym_index)
         color = color_fn(
             pseudonym,
