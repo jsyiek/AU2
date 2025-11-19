@@ -116,10 +116,15 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
     net = Network(directed=True, cdn_resources="in_line", height="calc(100vh - 90px)", select_menu=True)
     added_nodes = set()
     for e in events:
+        competency_manager.add_event(e)
+        wanted_manager.add_event(e)
+
+        # don't show kills in hidden events in graph
+        if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
+            continue
+
         # construct kill tree network
         for (killer, victim) in e.kills:
-            competency_manager.add_event(e)
-            wanted_manager.add_event(e)
             killer_model = ASSASSINS_DATABASE.get(killer)
             victim_model = ASSASSINS_DATABASE.get(victim)
             killer_searchable = f"{killer_model.all_pseudonyms(fn=lambda x: x)} ({killer_model.real_name})"
