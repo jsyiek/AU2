@@ -111,9 +111,13 @@ def generate_killtree_visualiser(events: List[Event],
     except ModuleNotFoundError:
         return "Skipping killtree visualisation due to missing modules -- check `requirements.txt`."
 
-    net = Network(directed=True, cdn_resources="in_line", height="calc(100vh - 90px)", select_menu=True, layout=True)
-    net.options.layout.hierarchical.enabled = False
-    if isinstance(graph_seed, int):
+    have_seed = isinstance(graph_seed, int)
+    net = Network(directed=True, cdn_resources="in_line", height="calc(100vh - 90px)", select_menu=True, layout=have_seed)
+    # to have deterministic graph placement need to set layout=True,
+    # but this defaults to hierarchical layout, so need to explicitly disable this.
+    # if a random seed *isn't* set here, pyvis seems to choose one at random and still make the layout deterministic
+    if have_seed:
+        net.options.layout.hierarchical.enabled = False
         net.options.layout.randomSeed = graph_seed
 
     added_nodes = set()
