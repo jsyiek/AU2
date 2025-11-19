@@ -548,9 +548,15 @@ class CorePlugin(AbstractPlugin):
                     )
                 )
 
-        suppressed_exports = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+        suppressed_exports = LOCAL_DATABASE.arb_state.get("CorePlugin", {}).get(
+            "suppressed_exports",
+            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+        )
         exports = [e for e in exports if include_suppressed or e.identifier not in suppressed_exports]
-        export_priorities = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+        export_priorities = LOCAL_DATABASE.arb_state.get("CorePlugin", {}).get(
+            "export_priorities",
+            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+        )
         exports.sort(key=lambda e: (-export_priorities.get(e.identifier, 0), e.display_name))
         return exports
 
