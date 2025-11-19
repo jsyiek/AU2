@@ -7,8 +7,9 @@ from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.LocalDatabase import LOCAL_DATABASE
 from AU2.database.model import Assassin, Event
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database.model.database_utils import is_database_file, refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
@@ -557,7 +558,10 @@ class CorePlugin(AbstractPlugin):
         export_name_id_pairs = [(export.display_name, export.identifier)
                                 for export in self.get_all_exports(include_suppressed=True)
                                 if export.identifier not in self.IRREMOVABLE_EXPORTS]
-        default_suppression = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+        default_suppression = LOCAL_DATABASE.arb_state.get("CorePlugin", {}).get(
+            "suppressed_exports",
+            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+        )
         return [
             SelectorList(
                 identifier=self.config_html_ids["Suppressed Exports"],
@@ -582,7 +586,7 @@ class CorePlugin(AbstractPlugin):
         for exp_id in self.IRREMOVABLE_EXPORTS:
             current_suppression.discard(exp_id)
 
-        GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = list(current_suppression)
+        LOCAL_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = list(current_suppression)
         return [Label("[CORE] Success!")]
 
     def ask_reorder_exports(self) -> List[HTMLComponent]:
@@ -593,7 +597,10 @@ class CorePlugin(AbstractPlugin):
         With the current 'pinning' interface, these take values 0 and 1 only.
         """
         export_name_id_pairs = [(export.display_name, export.identifier) for export in self.get_all_exports()]
-        default_priorities = GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+        default_priorities = LOCAL_DATABASE.arb_state.get("CorePlugin", {}).get(
+            "export_priorities",
+            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+        )
         default_pinned = [export_id for export_id, priority in default_priorities.items() if priority > 0]
         return [
             SelectorList(
@@ -609,7 +616,10 @@ class CorePlugin(AbstractPlugin):
         # leave any hidden/unloaded exports' priorities intact,
         # and keep any priorities that are not 0 or 1 intact if they prioritise the correct exports
         # (this is for forwards-compatibility)
-        current_priorities = GENERIC_STATE_DATABASE.arb_state.setdefault("CorePlugin", {}).setdefault("export_priorities", {})
+        current_priorities = LOCAL_DATABASE.arb_state.setdefault("CorePlugin", {}).setdefault(
+            "export_priorities",
+            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+        )
         for e in self.get_all_exports():
             old_prio = current_priorities.get(e.identifier, 0)
             if e.identifier not in pinned_exports and old_prio > 0:
@@ -928,13 +938,19 @@ class CorePlugin(AbstractPlugin):
                 identifier_prefix=self.identifier,
                 title="Type {digits} to reset the database"
             ),
+            Checkbox(
+                self.identifier + "_include_local",
+                "Also reset UI config?",
+                False
+            ),
         ]
 
     def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
         if not verify_DigitsChallenge(self.identifier, htmlResponse):
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
+        include_local = htmlResponse[self.identifier + "_include_local"]
         for f in os.listdir(BASE_WRITE_LOCATION):
-            if f.endswith(".json"):
+            if is_database_file(f, include_local):
                 os.remove(os.path.join(BASE_WRITE_LOCATION, f))
         refresh_databases()
         return [Label("[CORE] Databases successfully reset.")]
