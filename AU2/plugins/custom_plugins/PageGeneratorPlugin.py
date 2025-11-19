@@ -39,15 +39,6 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         self.exports = []
 
-    def enable(self):
-        self.enabled = True
-
-    def disable(self):
-        self.enabled = False
-
-    def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
-        return []
-
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
             Checkbox(self.html_ids["Hidden"], "Hidden: if 'Yes' then do not display on website", checked=False),
@@ -97,9 +88,6 @@ class PageGeneratorPlugin(AbstractPlugin):
         e.pluginState[self.identifier][self.plugin_state["HIDDEN"]] = htmlResponse[self.html_ids["Hidden"]]
 
         return [Label("[NEWS PAGE GENERATOR] Success!")]
-
-    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return []
 
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return []

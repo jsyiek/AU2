@@ -8,9 +8,11 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -75,16 +77,40 @@ class TargetingPlugin(AbstractPlugin):
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
             "Random Seed": self.identifier + "_random_seed",
-            "Initial Seeding": self.identifier + "_initial_seeding"
+            "Initial Seeding": self.identifier + "_initial_seeding",
+            "Skip Setup": self.identifier + "_skip_setup",
         }
+
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        if self.get_last_emailed_event() > -1:
+            return [
+                Label("[TARGETING] Skipping targeting config, as emails have already been sent out with targets."),
+                HiddenTextbox(self.html_ids["Skip Setup"], ""),
+            ]
+        else:
+            return [
+                *self.ask_set_seeds(),
+                # I have omitted setting the random seed since it's not strictly necessary,
+                # but maybe we do want the umpire to set this?
+            ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        if self.html_ids["Skip Setup"] in htmlResponse:
+            return []
+        else:
+            return [
+                *self.answer_set_seeds(htmlResponse),
+            ]
+
+    def get_last_emailed_event(self) -> int:
+        return int(GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("last_emailed_event", -1))
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
         if hook == "SRCFPlugin_email":
             # if graph computation time becomes an issue, we could yield the `last_graph` and then compute
             # current_graph without needing to recompute
             response = []
-            last_emailed_event = int(
-                GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("last_emailed_event", -1))
+            last_emailed_event = self.get_last_emailed_event()
             last_graph = self.compute_targets(response, max_event=last_emailed_event)
             current_graph = self.compute_targets(response)
 
@@ -133,8 +159,15 @@ class TargetingPlugin(AbstractPlugin):
             return response
         return []
 
+    def on_data_hook(self, hook: str, data):
+        if hook == "WantedPlugin_targeting_graph":
+            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
+            data["targeting_graph"] = self.compute_targets([], max_event)
+
     def ask_set_seeds(self):
         return [
+            Label("Seeding players will cause the targeting algorithm to avoid these players targeting each other if "
+                  "possible."),
             SelectorList(
                 identifier=self.html_ids["Seeds"],
                 title="Choose which assassins should be seeded",
@@ -146,7 +179,7 @@ class TargetingPlugin(AbstractPlugin):
     def answer_set_seeds(self, htmlResponse):
         seeds = htmlResponse[self.html_ids["Seeds"]]
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["seeds"] = seeds
-        return [Label("[TARGETING] Success!")]
+        return [Label("[TARGETING] Set seeded players")]
 
     def ask_set_random_seed(self):
         return [
