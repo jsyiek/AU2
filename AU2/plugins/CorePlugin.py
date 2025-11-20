@@ -7,7 +7,6 @@ from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.LocalConfigDatabase import LOCAL_CONFIG_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.database.model.database_utils import is_database_file, refresh_databases
 from AU2.html_components import HTMLComponent
@@ -30,8 +29,8 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
-    AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, Export, ConfigExport, \
+    DangerousConfigExport, HookedExport, local_config_property
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
@@ -275,6 +274,16 @@ class CorePlugin(AbstractPlugin):
                 self.answer_reorder_exports
             )
         ]
+
+    suppressed_exports = local_config_property(
+        "suppressed_exports",
+        GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
+    )
+
+    export_priorities = local_config_property(
+        "export_priorities",
+        GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
+    )
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
         player_type = assassin.is_police and "Police" or "Player"
@@ -547,42 +556,26 @@ class CorePlugin(AbstractPlugin):
                             )
                     )
                 )
-
-        suppressed_exports = LOCAL_CONFIG_DATABASE.arb_state.get("CorePlugin", {}).get(
-            "suppressed_exports",
-            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
-        )
-        exports = [e for e in exports if include_suppressed or e.identifier not in suppressed_exports]
-        export_priorities = LOCAL_CONFIG_DATABASE.arb_state.get("CorePlugin", {}).get(
-            "export_priorities",
-            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
-        )
-        exports.sort(key=lambda e: (-export_priorities.get(e.identifier, 0), e.display_name))
+        exports = [e for e in exports if include_suppressed or e.identifier not in self.suppressed_exports]
+        exports.sort(key=lambda e: (-self.export_priorities.get(e.identifier, 0), e.display_name))
         return exports
 
     def ask_suppress_exports(self):
         export_name_id_pairs = [(export.display_name, export.identifier)
                                 for export in self.get_all_exports(include_suppressed=True)
                                 if export.identifier not in self.IRREMOVABLE_EXPORTS]
-        default_suppression = LOCAL_CONFIG_DATABASE.arb_state.get("CorePlugin", {}).get(
-            "suppressed_exports",
-            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
-        )
         return [
             SelectorList(
                 identifier=self.config_html_ids["Suppressed Exports"],
                 title="Choose the menu options that should not be displayed",
-                defaults=default_suppression,
+                defaults=self.suppressed_exports,
                 options=export_name_id_pairs
             )
         ]
 
     def answer_suppress_exports(self, htmlResponse):
         new_suppressed_exports = set(htmlResponse[self.config_html_ids["Suppressed Exports"]])
-        current_suppression = set(LOCAL_CONFIG_DATABASE.arb_state.get("CorePlugin", {}).get(
-            "suppressed_exports",
-            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("suppressed_exports", [])
-        ))
+        current_suppression = set(self.suppressed_exports)
         # only update suppression for exports of loaded plugins
         for exp in self.get_all_exports(include_suppressed=True):
             exp_id = exp.identifier
@@ -595,7 +588,7 @@ class CorePlugin(AbstractPlugin):
         for exp_id in self.IRREMOVABLE_EXPORTS:
             current_suppression.discard(exp_id)
 
-        LOCAL_CONFIG_DATABASE.arb_state.setdefault("CorePlugin", {})["suppressed_exports"] = list(current_suppression)
+        self.suppressed_exports = list(current_suppression)
         return [Label("[CORE] Success!")]
 
     def ask_reorder_exports(self) -> List[HTMLComponent]:
@@ -606,11 +599,7 @@ class CorePlugin(AbstractPlugin):
         With the current 'pinning' interface, these take values 0 and 1 only.
         """
         export_name_id_pairs = [(export.display_name, export.identifier) for export in self.get_all_exports()]
-        default_priorities = LOCAL_CONFIG_DATABASE.arb_state.get("CorePlugin", {}).get(
-            "export_priorities",
-            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
-        )
-        default_pinned = [export_id for export_id, priority in default_priorities.items() if priority > 0]
+        default_pinned = [export_id for export_id, priority in self.export_priorities.items() if priority > 0]
         return [
             SelectorList(
                 identifier=self.config_html_ids["Pinned Exports"],
@@ -625,10 +614,7 @@ class CorePlugin(AbstractPlugin):
         # leave any hidden/unloaded exports' priorities intact,
         # and keep any priorities that are not 0 or 1 intact if they prioritise the correct exports
         # (this is for forwards-compatibility)
-        current_priorities = LOCAL_CONFIG_DATABASE.arb_state.setdefault("CorePlugin", {}).setdefault(
-            "export_priorities",
-            GENERIC_STATE_DATABASE.arb_state.get("CorePlugin", {}).get("export_priorities", {})
-        )
+        current_priorities = self.export_priorities
         for e in self.get_all_exports():
             old_prio = current_priorities.get(e.identifier, 0)
             if e.identifier not in pinned_exports and old_prio > 0:
