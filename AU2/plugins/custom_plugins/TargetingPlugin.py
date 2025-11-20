@@ -57,20 +57,23 @@ class TargetingPlugin(AbstractPlugin):
                 "targeting_set_player_seeds",
                 "Targeting Graph -> Set player seeds",
                 self.ask_set_seeds,
-                self.answer_set_seeds
+                self.answer_set_seeds,
+                self.danger_explanation
             ),
             DangerousConfigExport(
                 "targeting_set_random_seed",
                 "Targeting Graph -> Set random seed",
                 self.ask_set_random_seed,
-                self.answer_set_random_seed
+                self.answer_set_random_seed,
+                self.danger_explanation
             ),
             # TODO: DebugConfigExport only accessible in 'developer mode'
             DangerousConfigExport(
                 "targeting_disable_initial_seeding",
                 "Targeting Graph -> Seed only for updates",
                 self.ask_set_initial_seeding,
-                self.answer_set_initial_seeding
+                self.answer_set_initial_seeding,
+                self.danger_explanation
             )
         ]
 
@@ -163,6 +166,13 @@ class TargetingPlugin(AbstractPlugin):
         if hook == "WantedPlugin_targeting_graph":
             max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
             data["targeting_graph"] = self.compute_targets([], max_event)
+
+    def danger_explanation(self) -> str:
+        if int(GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("last_emailed_event", -1)) > -1:
+            return "Targets have already been sent out to players. " \
+                   "Changing targeting settings will change players' targets!"
+        else:
+            ""
 
     def ask_set_seeds(self):
         return [

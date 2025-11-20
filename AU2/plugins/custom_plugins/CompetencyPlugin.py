@@ -214,7 +214,8 @@ class CompetencyPlugin(AbstractPlugin):
                 identifier="CompetencyPlugin_auto_competency",
                 display_name="Competency -> Change Auto Competency",
                 ask=self.ask_auto_competency,
-                answer=self.answer_auto_competency
+                answer=self.answer_auto_competency,
+                danger_explanation=self.auto_competency_danger_explanation
             ),
             ConfigExport(
                 identifier="CompetencyPlugin_attempt_tracking",
@@ -338,6 +339,12 @@ class CompetencyPlugin(AbstractPlugin):
                 Label("[COMPETENCY] Warning: Attempt Tracking not enabled. Attempt competency must be added manually.")
             )
         return response
+
+    def auto_competency_danger_explanation(self) -> str:
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual":
+            return "Auto competency is enabled. It is inadvisable to disable it."
+        else:
+            return ""
 
     def ask_toggle_attempt_tracking(self) -> List[HTMLComponent]:
         return [

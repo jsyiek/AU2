@@ -253,7 +253,8 @@ class CorePlugin(AbstractPlugin):
                 "core_plugin_set_game_start",
                 "CorePlugin -> Set game start",
                 self.ask_set_game_start,
-                self.answer_set_game_start
+                self.answer_set_game_start,
+                self.set_game_start_danger_explanation
             ),
             ConfigExport(
                 "core_plugin_set_game_end",
@@ -955,6 +956,9 @@ class CorePlugin(AbstractPlugin):
         return [
             Label(f"[CORE] Set game start to {get_game_start().strftime('%Y-%m-%d %H:%M:%S')}")
         ]
+
+    def set_game_start_danger_explanation(self) -> str:
+        return "Changing the game start affects competence deadlines and pagination of news."
 
     def ask_set_game_end(self) -> List[HTMLComponent]:
         default = get_game_end()
