@@ -72,7 +72,7 @@ class DangerousConfigExport(ConfigExport):
     This is signalled to the user by colouring the option red
     """
     def __init__(self, identifier: str, display_name: str, ask, answer,
-                 danger_explanation: Callable[[], str] = lambda: ""):
+                 danger_explanation: Callable[[], str] = lambda: DEFAULT_DCE_EXPLANATION):
         self.danger_explanation = danger_explanation
         super().__init__(identifier, display_name, ask, answer)
 
