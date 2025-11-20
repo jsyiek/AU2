@@ -763,7 +763,8 @@ def render(html_component, dependency_context={}):
 
     elif isinstance(html_component, ConfigOptionsList):
         # render dangerous config exports in red
-        choices = [("\033[31m" + c.display_name + "\033[0m", c) if isinstance(c, DangerousConfigExport)
+        choices = [("\033[31m" + c.display_name + "\033[0m", c)
+                   if isinstance(c, DangerousConfigExport) and c.danger_explanation()
                    else (c.display_name, c)
                    for c in html_component.config_options]
         selection = inquirer.list_input(
@@ -774,11 +775,11 @@ def render(html_component, dependency_context={}):
             raise KeyboardInterrupt
 
         if isinstance(selection, DangerousConfigExport):
-            # give explanation of why confirmation needed
-            print(selection.explanation)
-            i = random.randint(0, 1000000)
-            if str(i) != inquirer.text(f"Type {i} to access this config option"):
-                raise KeyboardInterrupt
+            if explanation := selection.danger_explanation():
+                print(explanation)
+                i = random.randint(0, 1000000)
+                if str(i) != inquirer.text(f"Type {i} to access this config option"):
+                    raise KeyboardInterrupt
 
         return {html_component.identifier: selection}
 
