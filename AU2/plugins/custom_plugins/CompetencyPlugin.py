@@ -381,7 +381,7 @@ class CompetencyPlugin(AbstractPlugin):
             email_list: List[Email] = data
             for email in email_list:
                 recipient = email.recipient
-                if recipient.is_police:
+                if recipient.is_police or death_manager.is_dead(recipient):
                     continue
                 if competency_manager.is_inco_at(recipient, now):
                     content = "It would seem you've become incompetent. You might wish to change that.\nIn order to " \
@@ -397,6 +397,7 @@ class CompetencyPlugin(AbstractPlugin):
                 )
 
                 # only record emailed competency if emails will actually be sent
+                # the component is named confusingly. here, True = *do* send emails!
                 # TODO: would be good to be able to do this *after* emails sent...
                 if htmlResponse.get("SRCFPlugin_dry_run", True):
                     recipient.__last_emailed_competency = competency_manager.deadlines[recipient.identifier]
