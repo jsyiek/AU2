@@ -88,6 +88,7 @@ GAME_TYPE_PLUGIN_MAP = {
     #     "WantedPlugin": True,
     # }
 }
+BOUNTY_PLUGINS = ("BountyNewsPlugin", "BountyPlugin")
 
 
 @registered_plugin
@@ -1014,6 +1015,23 @@ class CorePlugin(AbstractPlugin):
         for plugin in PLUGINS:
             components += plugin.on_request_setup_game(game_type)
 
+        # also ask which bounty style to use.
+        # TODO: merge bounty plugins??
+        components += [
+            Label("AU2 has two different plugins for setting bounties."),
+            Label("'BountyNewsPlugin' is the allows you to mark certain events as bounties, "
+                  "causing them to be rendered on the page bounty-news.html. See May Week 2025 in the archive for an "
+                  "example."),
+            Label("'BountyPlugin' on the other hand displays bounties in a table, on the page bounties.html. "
+                  "See Lent 2025 in the archive for an example."),
+            SelectorList(
+                self.identifier + "_bounty_style",
+                "Select which bounty plugin(s) to use",
+                list(BOUNTY_PLUGINS),
+                [x for x in BOUNTY_PLUGINS if PLUGINS[x].enabled],
+            ),
+        ]
+
         return components
 
     def answer_setup_game(self, htmlResponse) -> List[HTMLComponent]:
@@ -1025,4 +1043,17 @@ class CorePlugin(AbstractPlugin):
         components = []
         for plugin in PLUGINS:
             components += plugin.on_setup_game(htmlResponse)
+
+        # enable selected bounty plugin
+        to_enable = htmlResponse[self.identifier + "_bounty_style"]
+        to_disable = [x for x in BOUNTY_PLUGINS if x not in to_enable]
+        for p in to_enable:
+            PLUGINS[p].enabled = True
+        if to_enable:
+            components += [Label(f"[CORE] Enabled {' and '.join(to_enable)}")]
+        for p in to_disable:
+            PLUGINS[p].enabled = False
+        if to_disable:
+            components += [Label(f"[CORE] Disabled {' and '.join(to_disable)}")]
+
         return components
