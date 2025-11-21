@@ -226,10 +226,10 @@ def render(html_component, dependency_context={}):
         if assassins_mapping:
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
-            print(
-                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
-            print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
+            print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X")
+            print("    [LX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
             print("    [NX] Renders real name of assassin with ID X (if in the event)")
+            print("    [VX] Is a shortcut for [LX] ([NX])")
             print("ASSASSIN IDENTIFIERS")
             for a in assassins_mapping:
                 assassin_model = ASSASSINS_DATABASE.get(a)
