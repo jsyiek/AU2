@@ -53,3 +53,11 @@ class Event(PersistentFile):
             self.identifier = "(" + self.__secret_id + ") " + self.headline[0:25].rstrip()
 
         # self.datetime = self.datetime.replace(tzinfo=None)
+
+    def text_display(self) -> str:
+        """
+        Gives a (plaintext) rendering of this Event's headline, as a human-readable reference to this Event that, unlike
+        the internal `identifier`, changes as the Event is updated.
+        """
+        # TODO: render pseudonym codes?
+        return f"[{self.datetime.strftime('%Y-%m-%d %H:%M %p')}] {self.headline}"
