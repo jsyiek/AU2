@@ -93,22 +93,22 @@ LIST_ITEM_TEMPLATE = """<li><a href="{URL}">{DISPLAY}</a></li>\n"""
 
 FORMAT_SPECIFIER_REGEX = r"\[[D,P,N]([0-9]+)(?:_([0-9]+))?\]"
 
-Chapter = NamedTuple("Chapter", (("page", str), ("title", str), ("navbar", str), ("position", float)))
+Chapter = NamedTuple("Chapter", (("title", str), ("nav_entry", NavbarEntry)))
 
 
 def default_page_allocator(e: Event) -> Optional[Chapter]:
     # TODO: move hidden Event attribute into core
     if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
         week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
-        return Chapter(f"news{week:02}", f"Week {week} News", f"Week {week} Reports", week)
+        return Chapter(f"Week {week} News", NavbarEntry(f"news{week:02}.html", f"Week {week} Reports", week))
 
 
 def event_url(e: Event, page: Optional[str] = None) -> str:
     """
     Generates the (relative) url pointing to this event's appearance on the news pages.
     """
-    page = page or default_page_allocator(e).page
-    return f"{page}.html#{e._Event__secret_id}"
+    page = page or default_page_allocator(e).nav_entry.url
+    return f"{page}#{e._Event__secret_id}"
 
 
 class Manager(Protocol):
@@ -270,7 +270,7 @@ def render_headline_and_reports(e: Event,
 
 
 def render_event(e: Event,
-                 chapter: str,
+                 page: str,
                  plugin_managers: Sequence[Manager] = tuple(),
                  color_fn: ColorFn = default_color_fn) -> (str, str):
     """
@@ -279,7 +279,7 @@ def render_event(e: Event,
 
     Args:
         e (Event): the event to render as html
-        chapter (str): the page that the Event is being rendered for. Needed for the correct href in the headline.
+        page (str): the page that the Event is being rendered for. Needed for the correct href in the headline.
         plugin_managers (Sequence[Manager]): A sequence of managers that have been updated up to the event
             `e`. When called by PageGeneratorPlugin this will contain a CompetencyManager, DeathManager, and
             WantedManager, but other plugins may use it differently.
@@ -325,7 +325,7 @@ def render_event(e: Event,
         REPORTS=report_text
     )
     headline_html = HEAD_HEADLINE_TEMPLATE.format(
-        URL=event_url(e, chapter),
+        URL=event_url(e, page),
         TIME=time_str,
         HEADLINE=headline
     )
@@ -341,9 +341,10 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
     Produces renderings of all events, sorted into pages according to `page_allocator`.
 
     Args:
-        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the name and title
-            of the page the event is to be rendered on, or `None` if the event should be skipped.
-            E.g. an event in week 2 would be mapped to Chapter("week02", "Week 2 News").
+        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the title and
+            navbar entry of the page the event is to be rendered on, or `None` if the event should be skipped.
+            E.g. an event in week 2 would be mapped to
+            Chapter("Week 2 News", NavbarEntry("week02.html", "Week 2 Reports", 2)).
         color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
             returning a colour hexcode (including #). Defaults to `default_color_fn`.
         plugin_managers (Sequence[Manager]): Sequence of additional, newly-initialised Managers that will be
@@ -382,7 +383,7 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
 
         event_text, headline_text = render_event(
             e,
-            chapter.page,
+            chapter.nav_entry.url,
             color_fn=color_fn,
             plugin_managers=plugin_managers,
         )
@@ -463,7 +464,7 @@ def generate_news_pages(headlines_path: str,
         plugin_managers=plugin_managers
     )
 
-    news_page_list = ""
+    news_navbar_entries = []
 
     # generate headlines page
     if headlines_path and headline_days:
@@ -473,23 +474,17 @@ def generate_news_pages(headlines_path: str,
         )
         with open(WEBPAGE_WRITE_LOCATION / headlines_path, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(head_page_text)
-        news_page_list += LIST_ITEM_TEMPLATE.format(URL=headlines_path, DISPLAY="Headlines")
+        news_navbar_entries.append(NavbarEntry(headlines_path, "Headlines", -1))
 
     # generate news pages
-    for chapter, days in sorted(chapters.items(), key=lambda x: x[0].position):
-        path = f"{chapter.page}.html"
+    for chapter, days in chapters.items():
         week_page_text = NEWS_TEMPLATE.format(
             TITLE=chapter.title,
             DAYS="".join(days),
             YEAR=str(get_now_dt().year)
         )
-        with open(WEBPAGE_WRITE_LOCATION / path, "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / chapter.nav_entry.url, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(week_page_text)
-        news_page_list += LIST_ITEM_TEMPLATE.format(URL=path, DISPLAY=chapter.navbar)
+        news_navbar_entries.append(chapter.nav_entry)
 
-    # save list of news pages for header
-    if news_list_path:
-        if not news_page_list:
-            news_page_list = LIST_ITEM_TEMPLATE.format(URL="#", DISPLAY="None Yet")
-        with open(WEBPAGE_WRITE_LOCATION / news_list_path, "w+", encoding="utf-8", errors="ignore") as F:
-            F.write(news_page_list)
+    generate_navbar(news_navbar_entries or [NavbarEntry("#", "None Yet", 0)], news_list_path)
