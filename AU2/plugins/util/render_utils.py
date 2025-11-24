@@ -1,5 +1,6 @@
 import datetime
 import itertools
+import markdown
 import re
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Protocol
 
@@ -10,7 +11,7 @@ from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt, weeks_and_days_to_str
-from AU2.plugins.util.game import get_game_start, soft_escape
+from AU2.plugins.util.game import get_game_start, HTML_REPORT_PREFIX, soft_escape
 
 DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {EVENTS}"""
 
@@ -150,6 +151,19 @@ def get_color(pseudonym: str,
     return HEX_COLS[ind % len(HEX_COLS)]
 
 
+def escape_pseudonym_specifiers(string: str, assassin: Assassin) -> str:
+    """
+    Replaces the [] with {} in the pseudonym codes for a single assassin, to make them markdown-safe.
+    """
+    id_ = assassin._secret_id
+    string = string.replace(f"[P{id_}]", f"{{P{id_}}}")
+    for i in range(len(assassin.pseudonyms)):
+        string = string.replace(f"[P{id_}_{i}]", f"{{P{id_}_{i}}}")
+    string = string.replace(f"[D{id_}]", f"{{D{id_}}}")
+    string = string.replace(f"[N{id_}]", f"{{N{id_}}}")
+    return string
+
+
 def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: Optional[datetime.datetime] = None) -> str:
     """
     Renders [PX], [DX], [NX], [PX_i] pseudonym codes as HTML, for a single assassin
@@ -168,14 +182,35 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     """
     dt = dt or get_now_dt()
     id_ = assassin._secret_id
-    string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
+    string = string.replace(f"{{P{id_}}}", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
     for i in range(len(assassin.pseudonyms)):
-        string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
-    string = string.replace(f"[D{id_}]",
+        string = string.replace(f"{{P{id_}_{i}}}", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
+    string = string.replace(f"{{D{id_}}}",
                             " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
-    string = string.replace(f"[N{id_}]",
+    string = string.replace(f"{{N{id_}}}",
                             PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
     return string
+
+
+headline_markdown_renderer = markdown.Markdown(extensions=['md_in_html'])
+
+
+def inline_markdown(string: str) -> str:
+    # To render markdown inline we need to wrap it in <td> tags and use the md_in_html extension.
+    # Note that the `markdown='span'` attribute disappears after rendering, hence only 4 characters
+    # need to be stripped from the start.
+    # we also use a separate markdown renderer to not include the nl2br extension which renders newlines as <br />
+    return headline_markdown_renderer.convert(f"<td markdown='span'>{string}</td>")[4:-5]
+
+
+markdown_renderer = markdown.Markdown(extensions=['nl2br'])
+
+
+def block_markdown(string: str) -> str:
+    out = markdown_renderer.convert(string)
+    if out.endswith("<br />"):
+        out = out[:-6]
+    return out
 
 
 # required signature when replacing default_color_fn
@@ -239,6 +274,22 @@ def render_headline_and_reports(e: Event,
 
             candidate_pseudonyms.append((assassin_model, pseudonym, color))
 
+    # first, convert from [] pseudonym specifies to {} pseudonym specifiers to make them markdown-safe
+    for (assassin_model, _, _) in candidate_pseudonyms:
+        headline = escape_pseudonym_specifiers(headline, assassin_model)
+        for (k, r) in reports.items():
+            reports[k] = escape_pseudonym_specifiers(r, assassin_model)
+
+    # next, render markdown.
+    headline = inline_markdown(headline)
+    for (k, r) in reports.items():
+        # only render markdown for non-html reports. it's perfectly safe to render markdown in html reports, but the
+        # spacing works differently to html, so they won't come out as players expect
+        if not r.startswith(HTML_REPORT_PREFIX):
+            reports[k] = block_markdown(r)
+
+    # finally, substitute pseudonyms. We need to do this *after* rendering markdown so that they don't accidentally
+    # introduce unwanted markdown formatting.
     for (assassin_model, pseudonym, color) in candidate_pseudonyms:
         headline = substitute_pseudonyms(headline, pseudonym, assassin_model, color, e.datetime)
         for (k, r) in reports.items():
