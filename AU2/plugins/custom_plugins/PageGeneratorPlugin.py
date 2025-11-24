@@ -3,15 +3,15 @@ import os
 from typing import List
 
 from AU2 import ROOT_DIR
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import render_all_events
+from AU2.plugins.util.render_utils import get_color_real_names, render_all_events, set_color_real_names
 
 NEWS_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "news.html"), "r", encoding="utf-8", errors="ignore") as F:
@@ -31,6 +31,7 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         self.html_ids = {
             "Hidden": self.identifier + "_hidden",
+            "Colour real names?": self.identifier + "_color_real_names"
         }
 
         self.plugin_state = {
@@ -38,6 +39,15 @@ class PageGeneratorPlugin(AbstractPlugin):
         }
 
         self.exports = []
+
+        self.config_exports = [
+            ConfigExport(
+                "page_generator_plugin_colour_real_names",
+                "PageGeneratorPlugin -> Toggle colouring real names",
+                self.ask_set_color_real_names,
+                self.answer_set_color_real_names,
+            ),
+        ]
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
@@ -89,14 +99,26 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         return [Label("[NEWS PAGE GENERATOR] Success!")]
 
-    def on_assassin_request_create(self) -> List[HTMLComponent]:
-        return []
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        return [
+            *self.ask_set_color_real_names()
+        ]
 
-    def on_assassin_create(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
-        return []
+    def on_setup_game(self, html_response) -> List[HTMLComponent]:
+        return [
+            *self.answer_set_color_real_names(html_response)
+        ]
 
-    def on_assassin_request_update(self, _: Assassin) -> List[HTMLComponent]:
-        return []
+    def ask_set_color_real_names(self) -> List[HTMLComponent]:
+        return [
+            Checkbox(
+                self.html_ids["Colour real names?"],
+                "Colour real names in headlines?",
+                get_color_real_names()
+            )
+        ]
 
-    def on_assassin_update(self, _: Assassin, htmlResponse) -> List[HTMLComponent]:
-        return []
+    def answer_set_color_real_names(self, html_response) -> List[HTMLComponent]:
+        newval = html_response[self.html_ids["Colour real names?"]]
+        set_color_real_names(newval)
+        return [Label(f"[NEWS PAGE GENERATOR] {'En' if newval else 'Dis'}abled colouring of real names.")]

@@ -5,6 +5,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Pr
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
@@ -150,6 +151,14 @@ def get_color(pseudonym: str,
     return HEX_COLS[ind % len(HEX_COLS)]
 
 
+def get_color_real_names() -> bool:
+    return bool(GENERIC_STATE_DATABASE.arb_int_state.get("COLOR_REAL_NAMES", 1))
+
+
+def set_color_real_names(val: bool):
+    GENERIC_STATE_DATABASE.arb_int_state["COLOR_REAL_NAMES"] = int(val)
+
+
 def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: Optional[datetime.datetime] = None) -> str:
     """
     Renders [PX], [DX], [NX], [PX_i] pseudonym codes as HTML, for a single assassin
@@ -174,7 +183,10 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     string = string.replace(f"[D{id_}]",
                             " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
     string = string.replace(f"[N{id_}]",
-                            PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
+                            PSEUDONYM_TEMPLATE.format(
+                                COLOR=color if get_color_real_names() else "",
+                                PSEUDONYM=soft_escape(assassin.real_name)
+                            ))
     return string
 
 
