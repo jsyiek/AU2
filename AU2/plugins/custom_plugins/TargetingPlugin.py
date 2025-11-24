@@ -100,6 +100,8 @@ class TargetingPlugin(AbstractPlugin):
             "Skip Setup": self.identifier + "_skip_setup",
         }
 
+        Assassin.__last_emailed_targets = self.assassin_property("last_emailed_targets", list)
+
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         if self.get_last_emailed_event() > -1:
             return [
@@ -129,8 +131,6 @@ class TargetingPlugin(AbstractPlugin):
             # if graph computation time becomes an issue, we could yield the `last_graph` and then compute
             # current_graph without needing to recompute
             response = []
-            last_emailed_event = self.get_last_emailed_event()
-            last_graph = self.compute_targets(response, max_event=last_emailed_event)
             current_graph = self.compute_targets(response)
 
             if not current_graph:
@@ -162,18 +162,21 @@ class TargetingPlugin(AbstractPlugin):
 
                 # only send email if targets for this user have changed
                 targets_changed = any(
-                    a not in current_graph[assassin.identifier] for a in last_graph[assassin.identifier])
-                targets_changed |= len(current_graph[assassin.identifier]) != len(last_graph[assassin.identifier])
-                targets_changed |= last_emailed_event == -1  # we haven't emailed anything yet
+                    a not in current_graph[assassin.identifier] for a in assassin.__last_emailed_targets)
+                targets_changed |= len(current_graph[assassin.identifier]) != len(assassin.__last_emailed_targets)
 
                 email.add_content(
                     plugin_name="TargetingPlugin",
                     content=email_content,
                     require_send=targets_changed
                 )
+                # record the emailed targets, if emails are actually being sent.
+                # the component is named confusingly. Here, True means *do* send emails!
+                if htmlResponse.get("SRCFPlugin_dry_run", True):
+                    assassin.__last_emailed_targets = current_graph[assassin.identifier]
 
-            # only record the event up to which targets were emailed if emails will actually be sent
-            # the component is named confusingly. here, True = *do* send emails!
+            # we still record the last emailed event because it's useful for detecting whether any emails have been sent
+            # out
             if EVENTS_DATABASE.events and htmlResponse.get("SRCFPlugin_dry_run", True):
                 max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
@@ -272,8 +275,22 @@ class TargetingPlugin(AbstractPlugin):
         response: List[AttributePairTableRow] = []
         if assassin.identifier not in graph:
             return []
-        for (i, target) in enumerate(graph[assassin.identifier]):
-            response.append((f"Target {i+1}", target))
+        old_targets = set(assassin.__last_emailed_targets)
+        current_targets = set(graph[assassin.identifier])
+        new_targets = set()
+        i = 0
+        for target in current_targets:
+            if target in old_targets:
+                i += 1
+                response.append((f"Target {i}", target))
+                old_targets.discard(target)
+            else:
+                new_targets.add(target)
+        for target in new_targets:
+            i += 1
+            response.append((f"Target {i} (NEW)", target))
+            if old_targets:
+                response.append((f"Target {i} (OLD)", old_targets.pop()))
 
         num_attackers = 0
         for (attacker, targets) in graph.items():
