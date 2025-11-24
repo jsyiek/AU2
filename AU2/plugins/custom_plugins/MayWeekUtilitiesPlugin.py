@@ -752,7 +752,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # fallback for individual
             return get_color(pseudonym)
 
-        MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News", "Reports", 0)
+        MAYWEEK_CHAPTER = Chapter("May Week News", NavbarEntry("mw-news.html", "Reports", 0))
 
         generate_news_pages(
             headlines_path="mw-head.html",

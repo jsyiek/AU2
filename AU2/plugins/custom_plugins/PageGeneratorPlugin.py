@@ -8,7 +8,7 @@ from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin
+from AU2.plugins.AbstractPlugin import AbstractPlugin, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.util.game import get_game_end
 from AU2.plugins.util.render_utils import Chapter, default_page_allocator, generate_news_pages
@@ -77,11 +77,16 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         end = get_game_end() if duel_page else None
 
-        DUEL_CHAPTER = Chapter("duel", "The Duel", "The Duel", float("Inf"))
+        DUEL_CHAPTER = Chapter("The Duel", NavbarEntry("duel.html", "The Duel", float("Inf")))
 
         generate_news_pages(
             headlines_path="head.html",
-            page_allocator=lambda e: DUEL_CHAPTER if end and end < e.datetime else default_page_allocator(e),
+            # note: need to check default allocation first in case event is hidden!
+            page_allocator=lambda e: (DUEL_CHAPTER
+                                      if (default := default_page_allocator(e))
+                                         and end
+                                         and end < e.datetime
+                                      else default),
             news_list_path="news-list.html",
         )
 
