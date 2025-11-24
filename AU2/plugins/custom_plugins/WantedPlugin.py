@@ -1,6 +1,6 @@
 import os
 from html import escape
-from typing import Dict,  List
+from typing import List
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -11,7 +11,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, NavbarEntry
 from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -68,6 +68,8 @@ DEAD_CORRUPT_CITY_WATCH_TABLE_ROW_TEMPLATE = """<tr><td>{RANK}</td><td>{REAL_NAM
 NO_WANTED_PLAYERS = """<p xmlns="">Nobody is Wanted at the moment. What a bunch of law-abiding assassins.</p>"""
 NO_DEAD_WANTED_PLAYERS = """<p xmlns="">No Wanted players have been killed... yet.</p>"""
 
+WANTED_NAVBAR_ENTRY = NavbarEntry("wanted.html", "Wanted list", 1)
+
 WANTED_PAGE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r", encoding="utf-8", errors="ignore") as F:
     WANTED_PAGE = F.read()
@@ -75,8 +77,6 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 
 @registered_plugin
 class WantedPlugin(AbstractPlugin):
-    FILENAME = "wanted.html"
-
     def __init__(self):
         super().__init__("WantedPlugin")
 
@@ -158,7 +158,7 @@ class WantedPlugin(AbstractPlugin):
             results.append((f"Wanted redemption ({name} {sec_id})", redemption))
         return results
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         messages = []
         # sort by datetime to ensure we read events in chronological order
         # (umpires messing with event timings could affect the canon timeline!)
@@ -271,10 +271,12 @@ class WantedPlugin(AbstractPlugin):
 
         if not tables:
             tables.append(NO_WANTED_PLAYERS)
-        elif not (wanted_city_watch_deaths or wanted_player_deaths):
-            tables.append(NO_DEAD_WANTED_PLAYERS)
+        else:
+            navbar_entries.append(WANTED_NAVBAR_ENTRY)
+            if not (wanted_city_watch_deaths or wanted_player_deaths):
+                tables.append(NO_DEAD_WANTED_PLAYERS)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / WANTED_NAVBAR_ENTRY.url, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
                 WANTED_PAGE.format(
                     CONTENT="\n".join(tables),
