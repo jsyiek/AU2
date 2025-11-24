@@ -77,11 +77,12 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         end = get_game_end() if duel_page else None
 
-        DUEL_CHAPTER = Chapter("duel", "The Duel")
+        DUEL_CHAPTER = Chapter("duel", "The Duel", "The Duel", float("Inf"))
 
         generate_news_pages(
             headlines_path="head.html",
-            page_allocator=lambda e: DUEL_CHAPTER if end and end < e.datetime else default_page_allocator(e)
+            page_allocator=lambda e: DUEL_CHAPTER if end and end < e.datetime else default_page_allocator(e),
+            news_list_path="news-list.html",
         )
 
         return [Label("[NEWS PAGE GENERATOR] Successfully generated the story!")]

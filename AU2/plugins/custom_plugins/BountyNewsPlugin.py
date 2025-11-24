@@ -56,7 +56,7 @@ class BountyNewsPlugin(AbstractPlugin):
         return [Label("[BOUNTY NEWS] Success")]
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
-        BOUNTY_CHAPTER = Chapter("bounty-news", "Bounties")
+        BOUNTY_CHAPTER = Chapter("bounty-news", "Bounties", "Bounties", -1)
         _, bounty_chapters = render_all_events(
             # note: this will include hidden events,
             # to allow bounties to be set to appear only on the bounties page and not main news

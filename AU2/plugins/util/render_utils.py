@@ -89,16 +89,18 @@ HEAD_HEADLINE_TEMPLATE = """
 
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
+LIST_ITEM_TEMPLATE = """<li><a href="{URL}">{DISPLAY}</a></li>\n"""
+
 FORMAT_SPECIFIER_REGEX = r"\[[D,P,N]([0-9]+)(?:_([0-9]+))?\]"
 
-Chapter = NamedTuple("Chapter", (("page", str), ("title", str)))
+Chapter = NamedTuple("Chapter", (("page", str), ("title", str), ("navbar", str), ("position", float)))
 
 
 def default_page_allocator(e: Event) -> Optional[Chapter]:
     # TODO: move hidden Event attribute into core
     if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
         week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
-        return Chapter(f"news{week:02}", f"Week {week} News")
+        return Chapter(f"news{week:02}", f"Week {week} News", f"Week {week} Reports", week)
 
 
 def event_url(e: Event, page: Optional[str] = None) -> str:
@@ -415,7 +417,8 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
 def generate_news_pages(headlines_path: str,
                         page_allocator: PageAllocator = default_page_allocator,
                         color_fn: ColorFn = default_color_fn,
-                        plugin_managers: Sequence[Manager] = tuple()):
+                        plugin_managers: Sequence[Manager] = tuple(),
+                        news_list_path: str = ""):
     """
     Generates news pages sorted according to `page_allocator`.
 
@@ -432,6 +435,8 @@ def generate_news_pages(headlines_path: str,
             Defaults to an empty tuple in which case only the managers just named will be used.
 
             Events are added to these managers in chronological order.
+        news_list_path (str): filename to save the list of news pages for the header under. If empty ("") no list is
+            generated.
     """
     headline_days, chapters = render_all_events(
         page_allocator=page_allocator,
@@ -439,20 +444,33 @@ def generate_news_pages(headlines_path: str,
         plugin_managers=plugin_managers
     )
 
-    for (page, title), days in chapters.items():
-        path = os.path.join(WEBPAGE_WRITE_LOCATION, f"{page}.html")
-        week_page_text = NEWS_TEMPLATE.format(
-            TITLE=title,
-            DAYS="".join(days),
-            YEAR=str(get_now_dt().year)
-        )
-        with open(path, "w+", encoding="utf-8", errors="ignore") as F:
-            F.write(week_page_text)
+    news_page_list = ""
 
-    if headlines_path:
+    # generate headlines page
+    if headlines_path and headline_days:
         head_page_text = HEAD_TEMPLATE.format(
             CONTENT="".join(headline_days),
             YEAR=str(get_now_dt().year)
         )
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, headlines_path), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / headlines_path, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(head_page_text)
+        news_page_list += LIST_ITEM_TEMPLATE.format(URL=headlines_path, DISPLAY="Headlines")
+
+    # generate news pages
+    for chapter, days in sorted(chapters.items(), key=lambda x: x[0].position):
+        path = f"{chapter.page}.html"
+        week_page_text = NEWS_TEMPLATE.format(
+            TITLE=chapter.title,
+            DAYS="".join(days),
+            YEAR=str(get_now_dt().year)
+        )
+        with open(WEBPAGE_WRITE_LOCATION / path, "w+", encoding="utf-8", errors="ignore") as F:
+            F.write(week_page_text)
+        news_page_list += LIST_ITEM_TEMPLATE.format(URL=path, DISPLAY=chapter.navbar)
+
+    # save list of news pages for header
+    if news_list_path:
+        if not news_page_list:
+            news_page_list = LIST_ITEM_TEMPLATE.format(URL="#", DISPLAY="None Yet")
+        with open(WEBPAGE_WRITE_LOCATION / news_list_path, "w+", encoding="utf-8", errors="ignore") as F:
+            F.write(news_page_list)
