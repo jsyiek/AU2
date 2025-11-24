@@ -747,13 +747,14 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # fallback for individual
             return get_color(pseudonym)
 
-        MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News")
+        MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News", "Reports", 0)
 
         generate_news_pages(
             headlines_path="mw-head.html",
             page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
             color_fn=mw_color_fn,
-            plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
+            plugin_managers=(self.TeamManager() for _ in range(teams_enabled)),
+            news_list_path="mw-news-list.html",
         )
 
         return [Label("[MAY WEEK] Success!")]
