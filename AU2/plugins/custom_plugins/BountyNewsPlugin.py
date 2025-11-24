@@ -5,12 +5,13 @@ from AU2.database.model.Event import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin
+from AU2.plugins.AbstractPlugin import AbstractPlugin, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.render_utils import Chapter, render_all_events
 
+BOUNTY_NEWS_NAVBAR_ENTRY = NavbarEntry("bounty-news.html", "Bounties", -1)
 
 BOUNTIES_PAGE_TEMPLATE: str
 with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "bounty-news.html",
@@ -55,16 +56,20 @@ class BountyNewsPlugin(AbstractPlugin):
         e.pluginState.setdefault(self.identifier, {})["bounty"] = is_bounty
         return [Label("[BOUNTY NEWS] Success")]
 
-    def on_page_generate(self, _) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         BOUNTY_CHAPTER = Chapter("bounty-news", "Bounties", "Bounties", -1)
         _, bounty_chapters = render_all_events(
             # note: this will include hidden events,
             # to allow bounties to be set to appear only on the bounties page and not main news
             page_allocator=lambda e: BOUNTY_CHAPTER if e.pluginState.get(self.identifier, {}).get("bounty", False) else None
         )
-        bounty_content = "".join(bounty_chapters.get(BOUNTY_CHAPTER, ())) or "<p>Ah, no bounties yet.</p>"
+        bounty_content = "".join(bounty_chapters.get(BOUNTY_CHAPTER, ()))
+        if bounty_content:
+            navbar_entries.append(BOUNTY_NEWS_NAVBAR_ENTRY)
+        else:
+            bounty_content = "<p>Ah, no bounties yet.</p>"
 
-        with open(WEBPAGE_WRITE_LOCATION / "bounty-news.html", "w+", encoding="utf-8") as F:
+        with open(WEBPAGE_WRITE_LOCATION / BOUNTY_NEWS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 BOUNTIES_PAGE_TEMPLATE.format(
                     CONTENT=bounty_content,

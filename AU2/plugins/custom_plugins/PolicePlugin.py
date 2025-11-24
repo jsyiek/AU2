@@ -14,7 +14,7 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
@@ -39,6 +39,7 @@ POLICE_TABLE_ROW_TEMPLATE = """
 
 NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the moment</p>"""
 
+POLICE_NAVBAR_ENTRY = NavbarEntry("police.html", "Police list", 0)
 
 POLICE_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "police.html"), "r", encoding="utf-8", errors="ignore") as F:
@@ -266,7 +267,7 @@ class PolicePlugin(AbstractPlugin):
             e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
         return [Label("[POLICE] Success!")]
 
-    def on_page_generate(self, _) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         message = []
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
@@ -303,10 +304,11 @@ class PolicePlugin(AbstractPlugin):
             tables.append(
                 POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
+            navbar_entries.append(POLICE_NAVBAR_ENTRY)
         else:
             tables.append(NO_POLICE)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / POLICE_NAVBAR_ENTRY.url, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
                 POLICE_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
