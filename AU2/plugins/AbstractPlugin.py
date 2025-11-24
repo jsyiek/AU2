@@ -1,8 +1,10 @@
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, List, Tuple, Type, TypeVar, Union
 
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
+
+T = TypeVar("T")
 
 
 class Export:
@@ -42,6 +44,7 @@ class Export:
 
 DEFAULT_DCE_EXPLANATION = "This config option is dangerous to modify after a game has started."
 
+
 class ConfigExport(Export):
     """
     Represents a callback for a configuration parameter.
@@ -66,11 +69,13 @@ class ConfigExport(Export):
             answer
         )
 
+
 class DangerousConfigExport(ConfigExport):
     """
     Represents a config export which shouldn't be changed while a game is in progress
     This is signalled to the user by colouring the option red
     """
+
 
 class HookedExport:
     """
@@ -103,6 +108,7 @@ class HookedExport:
 
 
 AttributePairTableRow = Tuple[str, str]
+
 
 class AbstractPlugin:
     def __init__(self, identifier: str):
@@ -221,3 +227,19 @@ class AbstractPlugin:
         together.
         """
         return []
+
+    def assassin_property(self, id: str, default_factory: Callable[[], T]) -> property:
+        """
+        Creates a property corresponding to a value stored in the plugin_state of an assassin.
+        Should be assigned to an attribute of the Assassin model in the __init__ of a plugin.
+        It is recommended to use an attribute name starting with __ to trigger name mangling to avoid conflicts between
+        plugins.
+        """
+
+        def getter(assassin: Assassin) -> T:
+            return assassin.plugin_state.setdefault(self.identifier, {}).setdefault(id, default_factory())
+
+        def setter(assassin: Assassin, val: T):
+            assassin.plugin_state.setdefault(self.identifier, {})[id] = val
+
+        return property(getter, setter)
