@@ -10,8 +10,8 @@ import inquirer
 import paramiko
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
-from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE, AssassinsDatabase
+from AU2.database.EventsDatabase import EVENTS_DATABASE, EventsDatabase
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
 from AU2.database.model import Assassin
 from AU2.database.model.database_utils import refresh_databases
@@ -212,6 +212,17 @@ class SRCFPlugin(AbstractPlugin):
                 self.answer_enable_raw_page_editor
             )
         ]
+
+        # this is a property of the GSD so that it can be used for both the local and remote databases
+        @property
+        def gsd__last_upload(gsd: GenericStateDatabase) -> Optional[int]:
+            return gsd.arb_int_state.get("LAST_UPLOADED")
+
+        @gsd__last_upload.setter
+        def gsd__last_upload(gsd: GenericStateDatabase, val: int):
+            gsd.arb_int_state["LAST_UPLOADED"] = val
+
+        GenericStateDatabase.__last_uploaded = gsd__last_upload
 
     def ask_enable_raw_page_editor(self):
         def say(x, end="\n"):
@@ -727,8 +738,94 @@ class SRCFPlugin(AbstractPlugin):
             if db.endswith(".json"):
                 yield db
 
-    def _sync(self, sftp: paramiko.SFTPClient):
+    def _get_remote_time(self) -> int:
+        """Returns the UNIX timestamp on SRCF"""
+        with self._get_ssh_client() as ssh_client:
+            # get timestamp on SERVER
+            (_, stdout, _) = ssh_client.exec_command(f"date +%s")
+            return int(stdout.readline())
 
+    def _upload_databases(self, sftp: paramiko.SFTPClient):
+        old_gsb = GenericStateDatabase.load()
+        # ensure that timestamp is saved in the database being uploaded...
+        GENERIC_STATE_DATABASE.__last_uploaded = self._get_remote_time()
+        GENERIC_STATE_DATABASE.save()
+        # also save any other changes made during the upload process
+        # (e.g. in PR #170 last emailed competencies are stored in the AssassinsDatabase)
+        # do this *after* fetching remote timestamp in case that throws an exception!
+        old_ad = AssassinsDatabase.load()
+        ASSASSINS_DATABASE.save()
+        old_ed = EventsDatabase.load()
+        EVENTS_DATABASE.save()
+        try:
+            for database in self._find_jsons(BASE_WRITE_LOCATION):
+                localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                remotepath = REMOTE_DATABASE_LOCATION / database
+                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+                sftp.put(localpath, str(remotepath))
+                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+        except Exception as e:
+            # if error, rollback local databases
+            old_gsb.save()
+            old_ad.save()
+            old_ed.save()
+            # also revert timestamp in memory in case the exception is caught again
+            GENERIC_STATE_DATABASE.__last_uploaded = old_gsb.__last_uploaded
+            raise e
+
+    def _download_databases(self, sftp: paramiko.SFTPClient):
+        for database in self._find_jsons(BASE_WRITE_LOCATION):
+            localpath = os.path.join(BASE_WRITE_LOCATION, database)
+            remotepath = REMOTE_DATABASE_LOCATION / database
+
+            self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
+            sftp.get(str(remotepath), localpath)
+            self._log_to(sftp, ACCESS_LOG, f"Read {database}")
+
+    def _confirm_download(self, sftp: paramiko.SFTPClient):
+        print("[SRCF Plugin] Your databases appear to be BEHIND the copies on SRCF. "
+              "Do you want to bring the LOCAL copies up to date?")
+        a = inquirer.prompt([inquirer.Confirm(
+            "confirm",
+            default=True)
+        ])
+        if a is not None and a["confirm"]:
+            self._download_databases(sftp)
+            print("[SRCF Plugin] Success!")
+        else:
+            print("[SRCF Plugin] Did not update LOCAL copies.")
+
+    def _confirm_upload(self, sftp: paramiko.SFTPClient, message: str):
+        print(message)
+        a = inquirer.prompt([inquirer.Confirm(
+            "confirm",
+            default=True)
+        ])
+        if a is not None and a["confirm"]:
+            self._upload_databases(sftp)
+            print("[SRCF Plugin] Success!")
+        else:
+            print("[SRCF Plugin] Did not update REMOTE copies.")
+
+
+    def _choose_upload_or_download(self, sftp: paramiko.SFTPClient):
+        print("[SRCF Plugin] Do you want to download remote copies, upload local copies, or do nothing?")
+        a = inquirer.prompt([inquirer.List(
+            "confirm",
+            message="Choices",
+            choices=["Download", "Upload", "Nothing"],
+            default="Nothing")
+        ])
+        if a is None or a["confirm"] == "Nothing":
+            print("[SRCF Plugin] No changes made.")
+        elif a["confirm"] == "Download":
+            self._download_databases(sftp)
+            print("[SRCF Plugin] Success!")
+        elif a["confirm"] == "Upload":
+            self._upload_databases(sftp)
+            print("[SRCF Plugin] Success!")
+
+    def _sync(self, sftp: paramiko.SFTPClient):
         remotepath = REMOTE_DATABASE_LOCATION / os.path.basename(GENERIC_STATE_DATABASE.WRITE_LOCATION)
         exists = True
         try:
@@ -744,81 +841,45 @@ class SRCFPlugin(AbstractPlugin):
 
             remote_gsd = GenericStateDatabase.from_json(dump)
             os.remove(localpath)
-            if remote_gsd.uniqueId > GENERIC_STATE_DATABASE.uniqueId:
-                print("[SRCF Plugin] Your databases appear to be BEHIND the copies on SRCF. "
-                      "Do you want to bring the LOCAL copies up to date?")
-                a = inquirer.prompt([inquirer.Confirm(
-                    "confirm",
-                    default=True)
-                ])
-                if a is not None and a["confirm"]:
-                    for database in self._find_jsons(BASE_WRITE_LOCATION):
-                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
-                        remotepath = REMOTE_DATABASE_LOCATION / database
 
-                        self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
-                        sftp.get(str(remotepath), localpath)
-                        self._log_to(sftp, ACCESS_LOG, f"Read {database}")
-                    print("[SRCF Plugin] Success!")
+            local_last_upload = GENERIC_STATE_DATABASE.__last_uploaded
+            remote_last_upload = remote_gsd.__last_uploaded
+            if local_last_upload is None and remote_last_upload is not None:
+                print("[SRCF Plugin] Your databases appear to be from A NEW GAME.")
+                self._choose_upload_or_download(sftp)
+            elif remote_last_upload is None:
+                # If no upload timestamp on server db fall back to 'old style' versioning
+                if remote_gsd.uniqueId > GENERIC_STATE_DATABASE.uniqueId:
+                    self._confirm_download(sftp)
+                elif remote_gsd.uniqueId < GENERIC_STATE_DATABASE.uniqueId:
+                    self._confirm_upload(
+                        sftp,
+                        "[SRCF Plugin] Your databases appear to be AHEAD of the copies on SRCF. "
+                        "Do you want to bring the REMOTE copies up to date?"
+                    )
                 else:
-                    print("[SRCF Plugin] Did not update LOCAL copies.")
-
-            elif remote_gsd.uniqueId < GENERIC_STATE_DATABASE.uniqueId:
-                print("[SRCF Plugin] Your databases appear to be AHEAD of the copies on SRCF. "
-                      "Do you want to bring the REMOTE copies up to date?")
-                a = inquirer.prompt([inquirer.Confirm(
-                    "confirm",
-                    default=True)
-                ])
-                if a is not None and a["confirm"]:
-                    for database in self._find_jsons(BASE_WRITE_LOCATION):
-                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
-                        remotepath = REMOTE_DATABASE_LOCATION / database
-                        self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
-                        sftp.put(localpath, str(remotepath))
-                        self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
-                    print("[SRCF Plugin] Success!")
-                else:
-                    print("[SRCF Plugin] Did not update REMOTE copies.")
-
+                    print("[SRCF Plugin] Your local database APPEARS up to date. This may be the case if only small "
+                          "changes were made.")
+                    self._choose_upload_or_download(sftp)
+            elif remote_last_upload > local_last_upload:
+                self._confirm_download(sftp)
+            elif remote_last_upload == local_last_upload:
+                self._confirm_upload(
+                    sftp,
+                    "[SRCF Plugin] Your databases appear to be AHEAD OR UP TO DATE WITH of the copies on SRCF. "
+                    "Do you want to bring the REMOTE copies up to date?"
+                )
             else:
-                print("[SRCF Plugin] Your local database APPEARS up to date. This may be the case if only small "
-                      "changes were made.")
-                print("[SRCF Plugin] Do you want to download remote copies, upload local copies, or do nothing?")
-                a = inquirer.prompt([inquirer.List(
-                    "confirm",
-                    message="Choices",
-                    choices=["Download", "Upload", "Nothing"],
-                    default="Nothing")
-                ])
-                if a is None or a["confirm"] == "Nothing":
-                    print("[SRCF Plugin] No changes made.")
-                elif a["confirm"] == "Download":
-                    for database in self._find_jsons(BASE_WRITE_LOCATION):
-                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
-                        remotepath = REMOTE_DATABASE_LOCATION / database
-
-                        self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
-                        sftp.get(str(remotepath), localpath)
-                        self._log_to(sftp, ACCESS_LOG, f"Read {database}")
-                    print("[SRCF Plugin] Success!")
-                elif a["confirm"] == "Upload":
-                    for database in self._find_jsons(BASE_WRITE_LOCATION):
-                        localpath = os.path.join(BASE_WRITE_LOCATION, database)
-                        remotepath = REMOTE_DATABASE_LOCATION / database
-                        self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
-                        sftp.put(localpath, str(remotepath))
-                        self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
-                    print("[SRCF Plugin] Success!")
+                # in this case, remote_last_upload < local_last_upload,
+                # which should be impossible, unless the user is somehow connecting to a different server
+                # it may be helpful for testing purposes to at some point add config options for the hostname etc
+                # hence why I am including this case
+                print("[SRCF Plugin] You appear to be connecting to A NEW SERVER.")
+                self._choose_upload_or_download(sftp)
 
         else:
             self._makedirs(sftp, REMOTE_DATABASE_LOCATION)
-            for database in self._find_jsons(BASE_WRITE_LOCATION):
-                localpath = os.path.join(BASE_WRITE_LOCATION, database)
-                remotepath = REMOTE_DATABASE_LOCATION / database
-                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
-                sftp.put(localpath, str(remotepath))
-                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+            self._upload_databases(sftp)
             print("[SRCF Plugin] No databases were found in the SRCF, so local copies have been uploaded.")
 
         refresh_databases()
