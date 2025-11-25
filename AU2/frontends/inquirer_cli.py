@@ -606,6 +606,9 @@ def render(html_component, dependency_context={}):
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
+        if not html_component.options:
+            print(f"{html_component.title}: NO OPTIONS")
+            raise KeyboardInterrupt
         q = [inquirer.List(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
