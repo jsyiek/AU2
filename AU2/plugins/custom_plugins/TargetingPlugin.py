@@ -210,21 +210,25 @@ class TargetingPlugin(AbstractPlugin):
         answer = "won't" if use_seeds_for_updates_only else "will"
         return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
 
-    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
         graph = self.compute_targets([]) # we don't care about any issues that arise
-        response: List[AttributePairTableRow] = []
-        if assassin.identifier not in graph:
-            return []
-        for (i, target) in enumerate(graph[assassin.identifier]):
-            response.append((f"Target {i+1}", target))
+        out = {}
+        for assassin in assassins:
+            response: List[AttributePairTableRow] = []
+            if assassin.identifier not in graph:
+                continue
+            for (i, target) in enumerate(graph[assassin.identifier]):
+                response.append((f"Target {i+1}", target))
 
-        num_attackers = 0
-        for (attacker, targets) in graph.items():
-            if assassin.identifier in targets:
-                response.append((f"Attacker {num_attackers+1}", attacker))
-                num_attackers += 1
+            num_attackers = 0
+            for (attacker, targets) in graph.items():
+                if assassin.identifier in targets:
+                    response.append((f"Attacker {num_attackers+1}", attacker))
+                    num_attackers += 1
 
-        return response
+            out[assassin.identifier] = response
+
+        return out
 
     @property
     def seed(self):

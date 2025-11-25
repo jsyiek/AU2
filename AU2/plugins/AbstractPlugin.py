@@ -194,17 +194,24 @@ class AbstractPlugin:
     def on_request_event_summary(self) -> List[HTMLComponent]:
         return []
 
-    def render_assassin_summary(self, _: Assassin) -> List[AttributePairTableRow]:
+    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
         """
-        Display any information about an ASSASSIN that is managed by this plugin
-        """
-        return []
+        Display any information about selected ASSASSINS that is managed by this plugin
 
-    def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
+        Args:
+            assassins (list[Assassin]): list of assassins to produce information about
+
+        Returns:
+            dict[str, list[AttributePairTableRow]]: a dict mapping assassin identifiers to a list of table rows (pairs
+                of strings)
         """
-        Display any information about an EVENT that is managed by this plugin
+        return {}
+
+    def render_event_summary(self, _: List[Event]) -> Dict[str, List[AttributePairTableRow]]:
         """
-        return []
+        Display any information about selected EVENTS that is managed by this plugin
+        """
+        return {}
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         """

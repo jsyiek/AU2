@@ -139,17 +139,17 @@ class UIConfigPlugin(AbstractPlugin):
                 name="Searchable Assassins (Summary)",
                 replaces="CorePlugin_assassin",
                 component=Searchable(
-                    component=InputWithDropDown(
+                    component=SelectorList(
                         identifier="CorePlugin_assassin",
                         title="",
                         options=[]
                     ),
                     title="Enter assassin names to search for",
                     accessor=lambda component: sorted(component.options),
-                    setter=filter_input_dropdown
+                    setter=filter_options
                 ),
                 enabled_for=EnabledFor(call=Call.ASSASSIN_STATUS, hooks=tuple()),
-                replacement_effects=steal_input_dropdown_options
+                replacement_effects=steal_options
             )
         ]
 

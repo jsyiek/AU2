@@ -387,7 +387,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             )
         ]
 
-    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
         team_str = self.get_cosmetic_name("Teams").capitalize()
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
         teams_enabled = self.gsdb_get("Enable Teams?", False)
@@ -397,48 +397,55 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         multiplier_owners = self.get_multiplier_owners()
         multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
 
-        team = team_manager.member_to_team[assassin.identifier]
-        team_name = team_names[team] if team is not None else "(Individual)"
+        out = {}
+        for assassin in assassins:
+            team = team_manager.member_to_team[assassin.identifier]
+            team_name = team_names[team] if team is not None else "(Individual)"
+            out[assassin.identifier] = [
+                ("Score", scores[assassin.identifier]),
+                # will render as plural, but eh
+                *((team_str, team_name) for _ in range(teams_enabled)),
+                (f"Has {multiplier_str}", "Y" if assassin.identifier in multiplier_owners else "N"),
+                (f"Benefits from {multiplier_str}", "Y" if assassin.identifier in multiplier_beneficiaries else "N")
+            ]
 
-        return [
-            ("Score", scores[assassin.identifier]),
-            # will render as plural, but eh
-            *((team_str, team_name) for _ in range(teams_enabled)),
-            (f"Has {multiplier_str}", "Y" if assassin.identifier in multiplier_owners else "N"),
-            (f"Benefits from {multiplier_str}", "Y" if assassin.identifier in multiplier_beneficiaries else "N")
-        ]
+        return out
 
-    def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
-        response = []
-
+    def render_event_summary(self, events: List[Event]) -> Dict[str, List[AttributePairTableRow]]:
         snapshot = lambda a: f"{a.real_name} ({a._secret_id})" # TODO: move to common library location
 
-        if self.gsdb_get("Enable Teams?", False):
-            team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-            team_str = self.get_cosmetic_name("Teams").capitalize()
-            for i, (a_id, t_id) in enumerate(self.eps_get(event, "Team Changes", {}).items()):
+        out = {}
+        for event in events:
+            response = []
+
+            if self.gsdb_get("Enable Teams?", False):
+                team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
+                team_str = self.get_cosmetic_name("Teams").capitalize()
+                for i, (a_id, t_id) in enumerate(self.eps_get(event, "Team Changes", {}).items()):
+                    a = ASSASSINS_DATABASE.get(a_id)
+                    change_str = f"{snapshot(a)} " + (
+                        f"joins {team_names[t_id]}" if t_id is not None
+                        else "goes it alone"
+                    )
+                    response.append((f"{team_str} Change {i+1}", change_str))
+                for i, (killer_id, victim_id) in enumerate(self.eps_get(event, "Kills as Team", [])):
+                    killer = ASSASSINS_DATABASE.get(killer_id)
+                    victim = ASSASSINS_DATABASE.get(victim_id)
+                    response.append((f"{team_str} Kill {i+1} ", f"{snapshot(killer)} kills {snapshot(victim)}"))
+
+            multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
+            for i, (old_owner, receiver) in enumerate(self.eps_get(event, "Multiplier Transfers", [])):
+                a1 = snapshot(ASSASSINS_DATABASE.get(old_owner)) if old_owner is not None else "None"
+                a2 = snapshot(ASSASSINS_DATABASE.get(receiver)) if receiver is not None else "None"
+                response.append((f"{multiplier_str} Transfer {i+1}", f"{a1} -> {a2}"))
+
+            for i, (a_id, points) in enumerate(self.eps_get(event, "BS Points", {}).items()):
                 a = ASSASSINS_DATABASE.get(a_id)
-                change_str = f"{snapshot(a)} " + (
-                    f"joins {team_names[t_id]}" if t_id is not None
-                    else "goes it alone"
-                )
-                response.append((f"{team_str} Change {i+1}", change_str))
-            for i, (killer_id, victim_id) in enumerate(self.eps_get(event, "Kills as Team", [])):
-                killer = ASSASSINS_DATABASE.get(killer_id)
-                victim = ASSASSINS_DATABASE.get(victim_id)
-                response.append((f"{team_str} Kill {i+1} ", f"{snapshot(killer)} kills {snapshot(victim)}"))
+                response.append((f"BS Points for {snapshot(a)}", f"{points}"))
 
-        multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
-        for i, (old_owner, receiver) in enumerate(self.eps_get(event, "Multiplier Transfers", [])):
-            a1 = snapshot(ASSASSINS_DATABASE.get(old_owner)) if old_owner is not None else "None"
-            a2 = snapshot(ASSASSINS_DATABASE.get(receiver)) if receiver is not None else "None"
-            response.append((f"{multiplier_str} Transfer {i+1}", f"{a1} -> {a2}"))
+            out[event.identifier] = response
 
-        for i, (a_id, points) in enumerate(self.eps_get(event, "BS Points", {}).items()):
-            a = ASSASSINS_DATABASE.get(a_id)
-            response.append((f"BS Points for {snapshot(a)}", f"{points}"))
-
-        return response
+        return out
 
     def get_cosmetic_name(self, name: str) -> str:
         return self.gsdb_get(name, name.lower())

@@ -513,13 +513,17 @@ class CompetencyPlugin(AbstractPlugin):
             default=default
         )]
 
-    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        pinfo = get_player_infos()[assassin.identifier]
-        response = [("Competency status", str(pinfo.status))]
-        if pinfo.status in [PlayerStatus.COMPETENT, PlayerStatus.INCOMPETENT]:
-            datetime_str = datetime.datetime.strftime(pinfo.competency_deadline, DATETIME_FORMAT)
-            response.append(("Competency deadline", datetime_str))
-        return response
+    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+        infos = get_player_infos()
+        out = {}
+        for assassin in assassins:
+            pinfo = infos[assassin.identifier]
+            response = [("Competency status", str(pinfo.status))]
+            if pinfo.status in [PlayerStatus.COMPETENT, PlayerStatus.INCOMPETENT]:
+                datetime_str = datetime.datetime.strftime(pinfo.competency_deadline, DATETIME_FORMAT)
+                response.append(("Competency deadline", datetime_str))
+            out[assassin.identifier] = response
+        return out
 
     def ask_show_inco_deadlines(self):
         return [NamedSmallTextbox(

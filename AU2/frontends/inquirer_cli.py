@@ -726,6 +726,8 @@ def render(html_component, dependency_context={}):
                     ListUpdates(edited, new_values, deleted_indices)}
 
     elif isinstance(html_component, SelectorList):
+        if not html_component.options:
+            return {html_component.identifier: [], "skip": True}
         q = [
             inquirer.Checkbox(
                 name=html_component.identifier,
