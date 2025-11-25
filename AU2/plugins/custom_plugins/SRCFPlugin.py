@@ -663,12 +663,32 @@ class SRCFPlugin(AbstractPlugin):
         """
         Publishes all databases
         """
-        for database in self._find_jsons(BASE_WRITE_LOCATION):
-            localpath = os.path.join(BASE_WRITE_LOCATION, database)
-            remotepath = REMOTE_DATABASE_LOCATION / database
-            self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
-            sftp.put(localpath, str(remotepath))
-            self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+        old_gsb = GenericStateDatabase.load()
+        # ensure that timestamp is saved in the database being uploaded...
+        GENERIC_STATE_DATABASE.__last_uploaded = self._get_remote_time()
+        GENERIC_STATE_DATABASE.save()
+        # also save any other changes made during the upload process
+        # (e.g. in PR #170 last emailed competencies are stored in the AssassinsDatabase)
+        # do this *after* fetching remote timestamp in case that throws an exception!
+        old_ad = AssassinsDatabase.load()
+        ASSASSINS_DATABASE.save()
+        old_ed = EventsDatabase.load()
+        EVENTS_DATABASE.save()
+        try:
+            for database in self._find_jsons(BASE_WRITE_LOCATION):
+                localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                remotepath = REMOTE_DATABASE_LOCATION / database
+                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+                sftp.put(localpath, str(remotepath))
+                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+        except Exception as e:
+            # if error, rollback local copies of databases
+            old_gsb.save()
+            old_ad.save()
+            old_ed.save()
+            # also revert timestamp in memory in case the exception is caught again
+            GENERIC_STATE_DATABASE.__last_uploaded = old_gsb.__last_uploaded
+            raise e
 
     def _lock(self, sftp: paramiko.SFTPClient):
         """
@@ -745,34 +765,6 @@ class SRCFPlugin(AbstractPlugin):
             (_, stdout, _) = ssh_client.exec_command(f"date +%s")
             return int(stdout.readline())
 
-    def _upload_databases(self, sftp: paramiko.SFTPClient):
-        old_gsb = GenericStateDatabase.load()
-        # ensure that timestamp is saved in the database being uploaded...
-        GENERIC_STATE_DATABASE.__last_uploaded = self._get_remote_time()
-        GENERIC_STATE_DATABASE.save()
-        # also save any other changes made during the upload process
-        # (e.g. in PR #170 last emailed competencies are stored in the AssassinsDatabase)
-        # do this *after* fetching remote timestamp in case that throws an exception!
-        old_ad = AssassinsDatabase.load()
-        ASSASSINS_DATABASE.save()
-        old_ed = EventsDatabase.load()
-        EVENTS_DATABASE.save()
-        try:
-            for database in self._find_jsons(BASE_WRITE_LOCATION):
-                localpath = os.path.join(BASE_WRITE_LOCATION, database)
-                remotepath = REMOTE_DATABASE_LOCATION / database
-                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
-                sftp.put(localpath, str(remotepath))
-                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
-        except Exception as e:
-            # if error, rollback local databases
-            old_gsb.save()
-            old_ad.save()
-            old_ed.save()
-            # also revert timestamp in memory in case the exception is caught again
-            GENERIC_STATE_DATABASE.__last_uploaded = old_gsb.__last_uploaded
-            raise e
-
     def _download_databases(self, sftp: paramiko.SFTPClient):
         for database in self._find_jsons(BASE_WRITE_LOCATION):
             localpath = os.path.join(BASE_WRITE_LOCATION, database)
@@ -802,7 +794,7 @@ class SRCFPlugin(AbstractPlugin):
             default=True)
         ])
         if a is not None and a["confirm"]:
-            self._upload_databases(sftp)
+            self._publish_databases(sftp)
             print("[SRCF Plugin] Success!")
         else:
             print("[SRCF Plugin] Did not update REMOTE copies.")
@@ -822,7 +814,7 @@ class SRCFPlugin(AbstractPlugin):
             self._download_databases(sftp)
             print("[SRCF Plugin] Success!")
         elif a["confirm"] == "Upload":
-            self._upload_databases(sftp)
+            self._publish_databases(sftp)
             print("[SRCF Plugin] Success!")
 
     def _sync(self, sftp: paramiko.SFTPClient):
@@ -879,7 +871,7 @@ class SRCFPlugin(AbstractPlugin):
 
         else:
             self._makedirs(sftp, REMOTE_DATABASE_LOCATION)
-            self._upload_databases(sftp)
+            self._publish_databases(sftp)
             print("[SRCF Plugin] No databases were found in the SRCF, so local copies have been uploaded.")
 
         refresh_databases()
