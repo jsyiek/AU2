@@ -101,7 +101,6 @@ class PolicePlugin(AbstractPlugin):
                 answer=self.answer_set_special_ranks
             )
         ]
-
     # configs are only stored in database if changed; otherwise the hardcoded default configs are used.
 
     def gsdb_get(self, plugin_state_id):
@@ -110,6 +109,16 @@ class PolicePlugin(AbstractPlugin):
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]['id']] = data
+
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        return [
+            *self.ask_set_special_ranks(),
+        ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        return [
+            *self.answer_set_special_ranks(htmlResponse),
+        ]
 
     def gather_dead_non_police(self) -> List[str]:
         death_manager = DeathManager()
@@ -155,7 +164,7 @@ class PolicePlugin(AbstractPlugin):
     def answer_set_special_ranks(self, htmlResponse):
         self.gsdb_set("Umpires", htmlResponse[self.html_ids["Umpires"]])
         self.gsdb_set("Chief of Police", htmlResponse[self.html_ids["CoP"]])
-        return [Label("[POLICE] Success!")]
+        return [Label("[POLICE] Successfully set Umpire(s) and Chief(s) of Police")]
 
     def ask_set_ranks(self):
         question = []

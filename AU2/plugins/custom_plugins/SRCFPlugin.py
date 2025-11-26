@@ -100,7 +100,10 @@ def backup_sort_key(backup_name: str) -> (float, str):
 
     if m := BACKUP_TIME_PATTERN.search(backup_name):
         backup_time = datetime.datetime.strptime(m[0], BACKUP_TIME_FORMAT).time()
-    return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    try:
+        return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    except ValueError:
+        return 0, backup_name
 
 
 class Email:
@@ -859,7 +862,7 @@ class SRCFPlugin(AbstractPlugin):
         Disables SRCF plugin and prints an error message.
         """
         print("Login cancelled. Disabling SRCFPlugin.")
-        GENERIC_STATE_DATABASE.plugin_map["SRCFPlugin"] = False
+        self.enabled = False
         return []
 
     def _successful_login(self):

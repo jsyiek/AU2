@@ -1,6 +1,7 @@
 from typing import Any, Callable, List, NamedTuple, Tuple, Union
 
 from AU2.database.model import Event, Assassin
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 
 
@@ -112,7 +113,6 @@ class AbstractPlugin:
     def __init__(self, identifier: str):
         # unique identifier for the plugin
         self.identifier = identifier
-        self.enabled = True
         self.exports: List[Export] = []
 
         # for config parameters
@@ -129,11 +129,15 @@ class AbstractPlugin:
         """
         return
 
-    def enable(self):
-        self.enabled = True
+    @property
+    def enabled(self) -> bool:
+        return GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, True)
 
-    def disable(self):
-        self.enabled = False
+    @enabled.setter
+    def enabled(self, val: bool):
+        if not isinstance(val, bool):
+            raise TypeError(f"{self.__class__.__name__}.enabled must be a boolean, not '{type(val)}'")
+        GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []
@@ -224,5 +228,21 @@ class AbstractPlugin:
     def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
         """
         Display any information about an EVENT that is managed by this plugin
+        """
+        return []
+
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        """
+        Walk through config options. Generally this method should call the `ask` functions of important
+        `ConfigExport`s of this plugin and return the results concatenated together.
+        Make sure that all the components have unique identifiers.
+        """
+        return []
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        """
+        Effect config options. Generally this method should call the `answer` functions of the same `ConfigExport`s
+        called by `on_request_setup_game` above, passing `htmlResponse` to each, then returning the results concatenated
+        together.
         """
         return []
