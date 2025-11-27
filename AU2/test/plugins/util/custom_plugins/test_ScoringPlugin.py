@@ -51,7 +51,7 @@ class TestScoringPlugin:
 
         # add chain of kills
         for i in range(1, n):
-            game.assassin(p[i]).kills(p[i-1]).new_datetime()
+            game.assassin(p[i]).kills(p[i-1]).then().new_datetime()
 
         # hide some players (not player n-1) -- their kills should still be counted!
         for i in random.choices(range(0, n-1), k = 1 + n // 10):
@@ -105,18 +105,18 @@ class TestScoringPlugin:
         attempts_map = self.random_attempts(game)
 
         # mix of kills in same events and across events,
-        game.assassin(p[6]).kills(p[13], p[14]).new_datetime()
-        game.assassin(p[5]).kills(p[11]).assassin(p[5]).kills(p[12]).new_datetime()
+        game.assassin(p[6]).kills(p[13], p[14]).then().new_datetime()
+        game.assassin(p[5]).kills(p[11]).then().assassin(p[5]).kills(p[12]).then().new_datetime()
 
-        game.assassin(p[2]).kills(p[5]).new_datetime()
+        game.assassin(p[2]).kills(p[5]).then().new_datetime()
 
-        game.assassin(p[4]).kills(p[9], p[10]).new_datetime()
-        game.assassin(p[3]).kills(p[7]).assassin(p[3]).kills(p[8]).new_datetime()
+        game.assassin(p[4]).kills(p[9], p[10]).then().new_datetime()
+        game.assassin(p[3]).kills(p[7]).then().assassin(p[3]).kills(p[8]).then().new_datetime()
 
-        game.assassin(p[2]).kills(p[6]).new_datetime()
-        game.assassin(p[1]).kills(p[3], p[4]).new_datetime()
+        game.assassin(p[2]).kills(p[6]).then().new_datetime()
+        game.assassin(p[1]).kills(p[3], p[4]).then().new_datetime()
 
-        game.assassin(p[0]).kills(p[1], p[2]).new_datetime()
+        game.assassin(p[0]).kills(p[1], p[2]).then().new_datetime()
 
         # hide some players (not 0) -- their kills should still be counted!
         for i in random.choices(range(1, n), k = 1 + n // 5):
@@ -162,12 +162,12 @@ class TestScoringPlugin:
         game = MockGame().having_assassins(p)
 
         # construct kill graph
-        game.assassin(p[3]).kills(p[4]).new_datetime()
-        game.assassin(p[2]).kills(p[3]).new_datetime()
-        game.assassin(p[1]).kills(p[2]).new_datetime()
-        game.assassin(p[4]).kills(p[1]).new_datetime()
-        game.assassin(p[0]).kills(p[1]).new_datetime()
-        game.assassin(p[1]).kills(p[0]).new_datetime()
+        game.assassin(p[3]).kills(p[4]).then().new_datetime()
+        game.assassin(p[2]).kills(p[3]).then().new_datetime()
+        game.assassin(p[1]).kills(p[2]).then().new_datetime()
+        game.assassin(p[4]).kills(p[1]).then().new_datetime()
+        game.assassin(p[0]).kills(p[1]).then().new_datetime()
+        game.assassin(p[1]).kills(p[0]).then().new_datetime()
 
         manager = self.get_manager(game, perma_death=False)
 
@@ -207,12 +207,12 @@ class TestScoringPlugin:
         idents = [name + " identifier" for name in p]
 
         game.assassin(p[3]).with_accomplices(p[7]).are_police()
-        game.assassin(p[1]).kills(p[3]).new_datetime()
-        game.assassin(p[0]).kills(p[1]).new_datetime()
-        game.assassin(p[2]).kills(p[1]).new_datetime()
-        game.assassin(p[6]).kills(p[1]).new_datetime()
-        game.assassin(p[5]).kills(p[2]).new_datetime()
-        game.assassin(p[4]).kills(p[0]).new_datetime()
+        game.assassin(p[1]).kills(p[3]).then().new_datetime()
+        game.assassin(p[0]).kills(p[1]).then().new_datetime()
+        game.assassin(p[2]).kills(p[1]).then().new_datetime()
+        game.assassin(p[6]).kills(p[1]).then().new_datetime()
+        game.assassin(p[5]).kills(p[2]).then().new_datetime()
+        game.assassin(p[4]).kills(p[0]).then().new_datetime()
         game.assassin(p[7]).kills(p[6])
 
         manager = self.get_manager(game)

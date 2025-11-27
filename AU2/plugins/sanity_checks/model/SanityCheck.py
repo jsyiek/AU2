@@ -15,8 +15,9 @@ class Suggestion:
     # Keep this short.
     explanation: str
 
-    # Identifier that uniquely identifies the change to the SanityCheck.
-    identifier: str
+    # Dict determining the actual effect of the suggestion (structure depends on the SanityCheck which produced it).
+    # Should be JSON-serialisable.
+    data: dict
 
 
 class SanityCheck:
@@ -53,14 +54,15 @@ class SanityCheck:
         """
         raise NotImplementedError()
 
-    def fix_event(self, e: Event, suggestion_ids: List[str]) -> List[HTMLComponent]:
+    def fix_event(self, e: Event, suggestion_data: List[dict]) -> List[HTMLComponent]:
         """
         After a user has confirmed one or more changes are wanted, this function
         executes the changes
 
         Arguments:
             e: Event to fix
-            suggestion_ids: List of suggestion identifiers that should be implemented
+            suggestion_data: List dicts that specify which changes should be made. The structure of these dicts depends
+                on the SanityCheck.
 
         Returns:
             List of HTML components to display to user.
