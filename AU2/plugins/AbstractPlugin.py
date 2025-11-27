@@ -1,9 +1,10 @@
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, List, Tuple, Type, TypeVar, Union
 
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 
+T = TypeVar("T")
 
 class Export:
     """
@@ -221,3 +222,20 @@ class AbstractPlugin:
         together.
         """
         return []
+
+    def assassin_property(self, id: str, default: T) -> property:
+        """
+        Creates a property corresponding to a value stored in the plugin_state of an assassin.
+        Should be assigned to an attribute of the Assassin model in the __init__ of a plugin.
+        """
+
+        def getter(assassin: Assassin) -> T:
+            return assassin.plugin_state.get(self.identifier, {}).get(id, default)
+
+        def setter(assassin: Assassin, val: T):
+            assassin.plugin_state.setdefault(self.identifier, {})[id] = val
+
+        prop = property(getter)
+        prop = prop.setter(setter)
+
+        return prop
