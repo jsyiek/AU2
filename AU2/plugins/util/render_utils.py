@@ -150,6 +150,27 @@ def get_color(pseudonym: str,
     return HEX_COLS[ind % len(HEX_COLS)]
 
 
+def adjust_brightness(hexcode: str, factor: float) -> str:
+    """
+    Adjusts the brightness of the specified colour by the specified factor.
+    Used for making real names slightly darker than pseudonyms.
+
+    Args:
+        hexcode (str): hexcode of the original colour, including an initial #
+        factor (float): factor by which to multiply the brightness. If < 0 this will be set to 0.
+            If the factor is such that any of the rgb values ends up > 255, they are capped at 255.
+
+    Returns:
+        str: the hexcode of the brightness-adjusted colour, (including an initial #).
+    """
+    rgb = (int(hexcode[i : i+2], 16) for i in (1, 3, 5))
+    if factor < 0:
+        factor = 0
+    scaled = (int(factor * x) for x in rgb)
+    capped = (min(255, x) for x in scaled)
+    return '#' + "".join(f"{x:02x}" for x in capped)
+
+
 def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: Optional[datetime.datetime] = None) -> str:
     """
     Renders [PX], [DX], [NX], [PX_i] pseudonym codes as HTML, for a single assassin
