@@ -184,7 +184,8 @@ class PolicePlugin(AbstractPlugin):
 
     def answer_set_ranks(self, htmlResponse):
         answer = htmlResponse[self.html_ids['Ranks']].split("\n")
-        answer = [i_stripped for i in answer if (i_stripped := i.strip()) and not i_stripped.startswith('#')]
+        answer = (i.strip() for i in answer)
+        answer = [i for i in answer if i and not i.startswith('#')]
         if len(answer) < 3:
             return [Label("[POLICE] Rename failed - Must have enough ranks")]
 
