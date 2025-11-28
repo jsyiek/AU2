@@ -5,6 +5,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Pr
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
@@ -164,11 +165,28 @@ def adjust_brightness(hexcode: str, factor: float) -> str:
         str: the hexcode of the brightness-adjusted colour, (including an initial #).
     """
     rgb = (int(hexcode[i : i+2], 16) for i in (1, 3, 5))
-    if factor < 0:
-        factor = 0
+    factor = max(factor, 0)
     scaled = (int(factor * x) for x in rgb)
     capped = (min(255, x) for x in scaled)
     return '#' + "".join(f"{x:02x}" for x in capped)
+
+
+DEFAULT_REAL_NAME_BRIGHTNESS = 0.7
+
+
+def get_real_name_brightness() -> float:
+    """
+    Gets the brightness factor to apply to colours when rendering players' real names.
+    """
+    return GENERIC_STATE_DATABASE.arb_state.get("REAL_NAME_BRIGHTNESS", DEFAULT_REAL_NAME_BRIGHTNESS)
+
+
+def set_real_name_brightness(val: float):
+    """
+    Sets the brightness factor to apply to colours when rendering players' real names.
+    Truncates negative values to 0.
+    """
+    GENERIC_STATE_DATABASE.arb_state["REAL_NAME_BRIGHTNESS"] = max(val, 0)
 
 
 def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: Optional[datetime.datetime] = None) -> str:
@@ -194,8 +212,13 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
         string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
     string = string.replace(f"[D{id_}]",
                             " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
-    string = string.replace(f"[N{id_}]",
-                            PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
+    string = string.replace(
+        f"[N{id_}]",
+        PSEUDONYM_TEMPLATE.format(
+            COLOR=adjust_brightness(color, get_real_name_brightness()),
+            PSEUDONYM=soft_escape(assassin.real_name)
+        )
+    )
     return string
 
 
