@@ -31,7 +31,7 @@ from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalD
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
-from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.HiddenComponent import HiddenComponent
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
@@ -195,7 +195,7 @@ def render(html_component, dependency_context={}):
                         name="q",
                         message=f"{escape_format_braces(player)}: Choose pseudonym",
                         choices=choices,
-                        default=html_component.default.get(player, "")
+                        default=html_component.default.get(player, choices[-1])
                     )]
                 pseudonym_index = inquirer_prompt_with_abort(q)["q"]
             else:
@@ -344,9 +344,21 @@ def render(html_component, dependency_context={}):
 
     # dependent component
     elif isinstance(html_component, AssassinDependentCrimeEntry):
+        # render info pertaining to licitness of victims if available
+        if html_component.kill_entry_identifier in dependency_context and html_component.targeting_graph:
+            kills = dependency_context[html_component.kill_entry_identifier]
+            for (killer, victim) in kills:
+                if victim in html_component.targeting_graph.get(killer, []):
+                    print(f"{killer} had {victim} as a target.")
+                elif killer in html_component.targeting_graph.get(victim, []):
+                    print(f"{killer} was a target of {victim}.")
+                else:
+                    print(f"{killer} did not have {victim} as a target nor targeter; this may be an illicit kill.")
+
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
         q = [inquirer.Checkbox(
@@ -565,6 +577,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, Table):
         print(tabulate.tabulate(html_component.rows, headers=html_component.headings,
                                 maxcolwidths=[len(h) for h in html_component.headings]))
+        print()
         return {}
 
     elif isinstance(html_component, Checkbox):
@@ -580,7 +593,7 @@ def render(html_component, dependency_context={}):
         a = inquirer_prompt_with_abort(q)
         return {html_component.identifier: a["q"] == "Yes"}
 
-    elif isinstance(html_component, HiddenTextbox):
+    elif isinstance(html_component, HiddenComponent):
         return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, NamedSmallTextbox):

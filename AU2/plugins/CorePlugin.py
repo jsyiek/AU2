@@ -1,12 +1,9 @@
-import datetime
 import glob
 import os.path
-import random
 
-from typing import Dict, List, Tuple, Any, Callable
+from typing import Any, Callable, Dict, List, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
-from typing import Dict, List, Tuple, Any, Callable
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -18,6 +15,7 @@ from AU2.html_components.SpecialComponents.EditablePseudonymList import Editable
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.DerivativeComponents.DigitsChallenge import DigitsChallenge, verify_DigitsChallenge
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
@@ -48,12 +46,48 @@ def registered_plugin(plugin_class):
     return plugin_class
 
 
+PLUGINS = __PluginMap({})  # initialise first without any plugins to allow PLUGINS to be shared by other plugins
+
 for file in glob.glob(os.path.join(CUSTOM_PLUGINS_DIR, "*.py")):
     name = os.path.splitext(os.path.basename(file))[0]
     module = __import__(f"AU2.plugins.custom_plugins.{name}")
 
+PLUGINS.update(AVAILABLE_PLUGINS)  # actually enable plugins
 
-PLUGINS = __PluginMap(AVAILABLE_PLUGINS)
+# maps game types to default plugin settings for Setup Game
+# plugins not explicitly mentioned are left as is,
+# note that the bounty plugins will be dealt with separately
+GAME_TYPE_PLUGIN_MAP = {
+    "Standard Game": {
+        "CompetencyPlugin": True,
+        "LocalBackupPlugin": True,
+        "MafiaPlugin": False,
+        "MayWeekUtilitiesPlugin": False,
+        "PageGeneratorPlugin": True,
+        "PlayerImporterPlugin": True,
+        "PolicePlugin": True,
+        "RandomGamePlugin": False,
+        "ScoringPlugin": True,
+        "TargetingPlugin": True,
+        "UIConfigPlugin": True,
+        "WantedPlugin": True,
+    },
+    # Can't implement Setup Game for MayWeekUtilitiesPlugin at the moment because config options depend on whether
+    # teams are enabled or not, and doing a partial implementation would mislead users.
+    # "May Week": {
+    #     "CompetencyPlugin":False,
+    #     "LocalBackupPlugin": True,
+    #     "MafiaPlugin": False,
+    #     "MayWeekUtilitiesPlugin": True,
+    #     "PageGeneratorPlugin": True,  # needed to be able to hide events
+    #     "PolicePlugin": False,
+    #     "RandomGamePlugin": False,
+    #     "ScoringPlugin": False,
+    #     "TargetingPlugin": False,
+    #     "UIConfigPlugin": True,
+    #     "WantedPlugin": True,
+    # }
+}
 
 
 @registered_plugin
@@ -81,7 +115,8 @@ class CorePlugin(AbstractPlugin):
             "Police": self.identifier + "_police",
             "Hidden Assassins": self.identifier + "_hidden_assassins",
             "Nuke Database": self.identifier + "_nuke",
-            "Secret Number": self.identifier + "_secret_confirm"
+            "Secret Number": self.identifier + "_secret_confirm",
+            "Delete Event": self.identifier + "_delete_event",
         }
 
         self.params = {
@@ -114,7 +149,9 @@ class CorePlugin(AbstractPlugin):
 
         self.config_html_ids = {
             "Suppressed Exports": self.identifier + "_suppressed_exports",
-            "Pinned Exports": self.identifier + "_pinned_exports"
+            "Pinned Exports": self.identifier + "_pinned_exports",
+            "Plugins": self.identifier + "_plugins",
+            "Setup Error": self.identifier + "_setup_error",
         }
 
         self.exports = [
@@ -187,6 +224,13 @@ class CorePlugin(AbstractPlugin):
                 display_name="Reset Database",
                 ask=self.ask_reset_database,
                 answer=self.answer_reset_database
+            ),
+            Export(
+                identifier="core_plugin_setup_game",
+                display_name="Setup Game",
+                ask=self.ask_setup_game,
+                answer=self.answer_setup_game,
+                options_functions=(self.gather_game_types,)
             )
         ]
 
@@ -247,6 +291,10 @@ class CorePlugin(AbstractPlugin):
             ("College", assassin.college),
             ("Notes", assassin.notes)
         ]
+
+    # CorePlugin can't be disabled
+    def enabled(self) -> bool:
+        return True
 
     def ask_core_plugin_summary_assassin(self):
         return [
@@ -435,12 +483,6 @@ class CorePlugin(AbstractPlugin):
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_delete(self, e: Event) -> List[HTMLComponent]:
-        return [HiddenTextbox(self.HTML_SECRET_ID, e.identifier)]
-
-    def on_event_delete(self, _: Event, htmlResponse) -> List[HTMLComponent]:
-        return [Label("[CORE] Delete acknowledged.")]
-
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["hide_assassins"]:
             assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda x: True)
@@ -460,6 +502,16 @@ class CorePlugin(AbstractPlugin):
             return_components = [Label("[Core] Set assassins' visibilities")]
             return return_components
         return []
+
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        return [
+            *self.ask_set_game_start(),
+        ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        return [
+            *self.answer_set_game_start(htmlResponse),
+        ]
 
     def get_all_exports(self, include_suppressed: bool = False) -> List[Export]:
         """
@@ -641,30 +693,50 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_delete_event(self, event_id: str):
         event = EVENTS_DATABASE.get(event_id)
-        components = []
-        for p in PLUGINS:
-            components += p.on_event_request_delete(event)
-        return components
+        return [
+            HiddenTextbox(self.HTML_SECRET_ID, event_id),
+            Label(f"You are about to delete the event [{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline}"),
+            *DigitsChallenge(
+                identifier_prefix=self.identifier,
+                title="Type {digits} to confirm event deletion"
+            ),
+        ]
 
     def answer_core_plugin_delete_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
-        event = EVENTS_DATABASE.get(ident)
-        components = []
-        for p in PLUGINS:
-            components += p.on_event_delete(event, html_response_args)
-        del EVENTS_DATABASE.events[ident]
-        return components
+        if verify_DigitsChallenge(self.identifier, html_response_args):
+            del EVENTS_DATABASE.events[ident]
+            return [Label("[CORE] Delete acknowledged.")]
+        else:
+            return [Label("[CORE] ERROR: Aborting. You entered the code incorrectly.")]
 
     def ask_core_plugin_update_config(self):
-        plugins = [p for p in GENERIC_STATE_DATABASE.plugin_map]
+        plugins = [p for p in AVAILABLE_PLUGINS]
         plugins.remove("CorePlugin")
         return [
             SelectorList(
-                self.identifier + "_config",
+                self.config_html_ids["Plugins"],
                 title="Enable or disable plugins",
                 options=sorted(plugins),
-                defaults=[p for p in plugins if GENERIC_STATE_DATABASE.plugin_map[p]]
+                defaults=[p for p in plugins if PLUGINS[p].enabled]
             )
+        ]
+
+    def answer_core_plugin_update_config(self, htmlResponse):
+        enabled_plugins = htmlResponse[self.config_html_ids["Plugins"]]
+        enabled_plugins.append("CorePlugin")
+        newly_enabled = []
+        newly_disabled = []
+        for ident, p in AVAILABLE_PLUGINS.items():
+            to_enable = (ident in enabled_plugins)
+            if to_enable and not p.enabled:
+                newly_enabled.append(ident)
+            if not to_enable and p.enabled:
+                newly_disabled.append(ident)
+            p.enabled = to_enable
+        return [
+            Label(f"[CORE] Successfully {text}abled these plugins: {', '.join(l)}")
+            for l, text in ((newly_enabled, "en"), (newly_disabled, "dis")) if l
         ]
 
     def ask_generate_pages(self):
@@ -767,15 +839,6 @@ class CorePlugin(AbstractPlugin):
             components += p.on_page_generate(html_response_args)
         return components
 
-    def answer_core_plugin_update_config(self, htmlResponse):
-        enabled_plugins = htmlResponse[self.identifier + "_config"]
-        enabled_plugins.append("CorePlugin")
-        for p in GENERIC_STATE_DATABASE.plugin_map:
-            GENERIC_STATE_DATABASE.plugin_map[p] = (p in enabled_plugins)
-        return [
-            Label("[CORE] Plugin change success!")
-        ]
-
     def ask_custom_hook(self, hook: str) -> List[HTMLComponent]:
         """
         Allows Plugins to expose global hooks
@@ -851,7 +914,6 @@ class CorePlugin(AbstractPlugin):
         return config.answer(htmlResponse)
 
     def ask_reset_database(self) -> List[HTMLComponent]:
-        i = random.randint(0, 1000000)
         return [
             Label(
                 title="Are you sure you want to COMPLETELY RESET the database?"
@@ -862,20 +924,14 @@ class CorePlugin(AbstractPlugin):
             Label(
                 title="(You can type anything else and the reset will be aborted.)"
             ),
-            HiddenTextbox(
-                identifier=self.html_ids["Secret Number"],
-                default=str(i)
+            *DigitsChallenge(
+                identifier_prefix=self.identifier,
+                title="Type {digits} to reset the database"
             ),
-            NamedSmallTextbox(
-                identifier=self.html_ids["Nuke Database"],
-                title=f"Type {i} to reset the database"
-            )
         ]
 
     def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
-        hidden_number = htmlResponse[self.html_ids["Secret Number"]]
-        entered_number = htmlResponse[self.html_ids["Nuke Database"]]
-        if hidden_number != entered_number:
+        if not verify_DigitsChallenge(self.identifier, htmlResponse):
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
@@ -885,11 +941,13 @@ class CorePlugin(AbstractPlugin):
 
     def ask_set_game_start(self):
         return [
+            Label("Game start is used for paginating events into week 1, week 2, etc., "
+                  "and (if applicable) for calculating incompetence deadlines."),
             DatetimeEntry(
                 self.identifier + "_game_start",
                 title="Enter game start",
                 default=get_game_start()
-            )
+            ),
         ]
 
     def answer_set_game_start(self, htmlResponse) -> List[HTMLComponent]:
@@ -915,3 +973,56 @@ class CorePlugin(AbstractPlugin):
             Label(f"[CORE] Set game end to {new_end.strftime('%Y-%m-%d %H:%M:%S')}") if new_end
             else Label(f"[CORE] Unset game end.")
         ]
+
+    def gather_game_types(self) -> List[str]:
+        return list(GAME_TYPE_PLUGIN_MAP)
+
+    def ask_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        # check for missing plugins, and throw error if any required plugins are missing
+        missing = [
+            plugin for plugin, to_enable in GAME_TYPE_PLUGIN_MAP[game_type].items()
+            if to_enable and plugin not in AVAILABLE_PLUGINS
+        ]
+        if len(missing) > 0:
+            return [
+                HiddenTextbox(
+                    self.config_html_ids["Setup Error"],
+                    f"[CORE] Error: Missing required plugin{'s' if len(missing) > 1 else ''} {', '.join(missing)}"
+                )
+            ]
+
+        components = []
+        # enable/disable plugins as specified in GAME_TYPE_PLUGIN_MAP for the selected game type
+        for plugin, to_enable in GAME_TYPE_PLUGIN_MAP[game_type].items():
+            # still need to check existence of plugin in case a plugin that needs to be *disabled* is missing
+            if plugin in AVAILABLE_PLUGINS:
+                PLUGINS[plugin].enabled = to_enable
+                components.append(Label(f"[CORE] {'En' if to_enable else 'Dis'}abled {plugin}"))
+
+        # require players to be added first.
+        # this is done *after* enabling plugins, so that Setup Game can at least help to set up the correct plugins
+        if not ASSASSINS_DATABASE.assassins:
+            components.append(
+                HiddenTextbox(
+                    self.config_html_ids["Setup Error"],
+                    "[CORE] Error: must add players first."
+                )
+            )
+            return components
+
+        # request components for setup from plugins
+        for plugin in PLUGINS:
+            components += plugin.on_request_setup_game(game_type)
+
+        return components
+
+    def answer_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        # check for errors
+        error = htmlResponse.get(self.config_html_ids["Setup Error"], None)
+        if error is not None:
+            return [Label(error)]
+        # effect config changes
+        components = []
+        for plugin in PLUGINS:
+            components += plugin.on_setup_game(htmlResponse)
+        return components

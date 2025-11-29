@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Dict, List, Set, Optional, Iterable
 
 from AU2.database.model import Event, Assassin
+from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import dt_to_timestamp, get_now_dt
 # TODO: from ??? import calculate_formula
 
@@ -22,18 +23,18 @@ class ScoreManager:
         self.bonuses = bonuses
         self.perma_death = perma_death
         self.game_end = game_end
-        self.deaths: Dict[str, List[Event]] = defaultdict(list)
+        self.death_manager = DeathManager()
 
     def add_event(self, e: Event):
         # adding an event invalidates the cache
         self._score.cache_clear()
+        self.death_manager.add_event(e)
         for (killer, victim) in e.kills:
             # in regular games, live_assassins will initially only include non-police,
             # and dead players will be pruned as events are added
             if victim not in self.live_assassins:
                 continue
             self.kill_tree[killer].append(victim)
-            self.deaths[victim].append(e)
             if self.perma_death:
                 self.live_assassins.discard(victim)
         for assassin_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
@@ -87,7 +88,7 @@ class ScoreManager:
         return self._attempts(a.identifier)
 
     def get_death_events(self, a: Assassin) -> List:
-        return self.deaths[a.identifier]
+        return self.death_manager.get_death_events(a)
 
     def get_rating(self, a: Assassin) -> float:
         """
@@ -101,7 +102,7 @@ class ScoreManager:
         a player's rating is the timestamp of the end of open season plus that player's score.
         """
         game_end = self.game_end or get_now_dt()
-        deaths = self.deaths[a.identifier]
+        deaths = self.get_death_events(a)
         if deaths and (game_end is None or deaths[-1].datetime < game_end):
             return dt_to_timestamp(deaths[-1].datetime)
         else:
