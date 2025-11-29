@@ -72,6 +72,8 @@ WANTED_COLS = [
     "#ff0033", "#cc3333", "#ff3300"
 ]
 
+DEFAULT_REAL_NAME_BRIGHTNESS = 0.7
+
 HEAD_HEADLINE_TEMPLATE = """
     <div xmlns="" class="event">
   [<a href="{URL}">{TIME}</a>]
@@ -169,9 +171,6 @@ def adjust_brightness(hexcode: str, factor: float) -> str:
     scaled = (int(factor * x) for x in rgb)
     capped = (min(255, x) for x in scaled)
     return '#' + "".join(f"{x:02x}" for x in capped)
-
-
-DEFAULT_REAL_NAME_BRIGHTNESS = 0.7
 
 
 def get_real_name_brightness() -> float:
