@@ -2,11 +2,14 @@
 import copy
 import datetime
 import random
-import tabulate
-import html5lib
 from typing import List, Any, Dict, Optional, Tuple
 
+import editor
+import html5lib
 import inquirer
+import tabulate
+
+from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -77,7 +80,7 @@ def html_validator(_, to_validate: str) -> bool:
     try:
         parser.parse(f"<!DOCTYPE html>{to_validate}")
     except Exception:
-        return False
+        raise ValidationError("", reason="Invalid HTML")
     return True
 
 
@@ -248,13 +251,13 @@ def render(html_component, dependency_context={}):
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
         for r in reporters:
             key = (r, assassins_mapping[r])
-            q = [inquirer.Editor(
-                name="report",
-                message=f"Report: {escape_format_braces(r)}",
-                default=escape_format_braces(default_mapping.get(key, '')),
-                validate=soft_html_validator
-            )]
-            report = inquirer_prompt_with_abort(q)["report"]
+            report = render(HtmlEntry(
+                identifier="report",
+                title=f"Report: {r}",
+                default=default_mapping.get(key, ''),
+                soft=True,
+                short=False,
+            ))["report"]
             results.append((r, assassins_mapping[r], report))
         return {html_component.identifier: results}
 
@@ -860,6 +863,19 @@ def key_addons(f):
 # wrap List and Checkbox input processing for PgUp, PgDown, Home and End key support
 inquirer.render.console._list.List.process_input = key_addons(inquirer.render.console._list.List.process_input)
 inquirer.render.console._checkbox.Checkbox.process_input = key_addons(inquirer.render.console._checkbox.Checkbox.process_input)
+
+
+def editor_process_input_addon(f):
+    """Wrapper function that fixes the process_input method of inquirer Editor input,
+    so that validation doesn't wipe user input."""
+    def process_input(self, pressed):
+        if pressed in (key.CR, key.LF, key.ENTER):
+            data = editor.editor(text=self.question.default or "")
+            self.question._default = data
+            raise EndOfInput(data)
+        f(self, pressed)
+    return process_input
+inquirer.render.console._editor.Editor.process_input = editor_process_input_addon(inquirer.render.console._editor.Editor.process_input)
 
 if __name__ == "__main__":
     main()

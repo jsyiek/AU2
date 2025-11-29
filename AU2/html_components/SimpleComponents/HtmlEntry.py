@@ -7,7 +7,7 @@ class HtmlEntry(HTMLComponent):
     """
     name: str = "HtmlEntry"
 
-    def __init__(self, identifier: str, title: str, default: str = "", soft: bool = False, short: bool = True):
+    def __init__(self, identifier: str, title: str, default: str = "", soft: bool = False, short: bool = False):
         self.title = title
         self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
