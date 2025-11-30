@@ -6,6 +6,7 @@ from typing import Dict, Any, List
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.TemplatesDatabase import TEMPLATES_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
@@ -28,10 +29,9 @@ ROW_TEMPLATE = """
 <tr><td>{TARGET_NAME}</td><td>{PLACER_NAME}</td><td>{CRIME}</td><td>{REWARD}</td></tr>
 """
 
-BOUNTIES_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "bounties.html"), "r", encoding="utf-8",
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "bounties.html", "r", encoding="utf-8",
           errors="ignore") as F:
-    BOUNTIES_PAGE_TEMPLATE = F.read()
+    TEMPLATES_DATABASE.register("bounties.html", F.read())
 
 BOUNTYPLUGIN_IDENTIFIER = "BountyPlugin"
 
@@ -174,7 +174,7 @@ class BountyPlugin(AbstractPlugin):
 
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, "bounties.html"), "w+", encoding="utf-8") as F:
             F.write(
-                BOUNTIES_PAGE_TEMPLATE.format(
+                TEMPLATES_DATABASE.get("bounties.html").format(
                     YEAR=get_now_dt().year,
                     TABLE_OPTIONAL=table_str
                 )

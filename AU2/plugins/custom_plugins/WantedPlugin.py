@@ -6,6 +6,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.TemplatesDatabase import TEMPLATES_DATABASE
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
@@ -66,9 +67,8 @@ DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE = """<tr><td>{RANK}</td><td>{REAL_NAME}</
 NO_WANTED_PLAYERS = """<p xmlns="">Nobody is Wanted at the moment. What a bunch of law-abiding assassins.</p>"""
 NO_DEAD_WANTED_PLAYERS = """<p xmlns="">No Wanted players have been killed... yet.</p>"""
 
-WANTED_PAGE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "wanted.html"), "r", encoding="utf-8", errors="ignore") as F:
-    WANTED_PAGE = F.read()
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "wanted.html", "r", encoding="utf-8", errors="ignore") as F:
+    TEMPLATES_DATABASE.register("wanted.html", F.read())
 
 
 @registered_plugin
@@ -273,9 +273,9 @@ class WantedPlugin(AbstractPlugin):
         elif not (wanted_police_deaths or wanted_player_deaths):
             tables.append(NO_DEAD_WANTED_PLAYERS)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / self.FILENAME, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
-                WANTED_PAGE.format(
+                TEMPLATES_DATABASE.get("wanted.html").format(
                     CONTENT="\n".join(tables),
                     YEAR=get_now_dt().year
                 )

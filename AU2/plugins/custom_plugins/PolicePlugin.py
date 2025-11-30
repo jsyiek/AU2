@@ -5,6 +5,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.TemplatesDatabase import TEMPLATES_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
@@ -40,9 +41,8 @@ POLICE_TABLE_ROW_TEMPLATE = """
 NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the moment</p>"""
 
 
-POLICE_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "police.html"), "r", encoding="utf-8", errors="ignore") as F:
-    POLICE_PAGE_TEMPLATE = F.read()
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "police.html", "r", encoding="utf-8", errors="ignore") as F:
+     TEMPLATES_DATABASE.register("police.html", F.read())
 
 
 @registered_plugin
@@ -316,9 +316,9 @@ class PolicePlugin(AbstractPlugin):
         else:
             tables.append(NO_POLICE)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / "police.html", "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
-                POLICE_PAGE_TEMPLATE.format(
+                TEMPLATES_DATABASE.get("police.html").format(
                     CONTENT="\n".join(tables),
                     YEAR=get_now_dt().year
                 )

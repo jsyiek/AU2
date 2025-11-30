@@ -1,12 +1,12 @@
 import os
 import pathlib
-import datetime
 from typing import List, Optional, Tuple, Any, Dict, Iterable
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.TemplatesDatabase import TEMPLATES_DATABASE
 from AU2.database.model.Event import Event
 from AU2.html_components.HTMLComponent import HTMLComponent
 from AU2.html_components.SimpleComponents.Label import Label
@@ -24,7 +24,6 @@ from AU2.plugins.util.render_utils import get_color, render_headline_and_reports
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 
@@ -39,10 +38,9 @@ OPENSEASON_ROW_TEMPLATE = """
 <tr><td>{NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td><td>{POINTS:g}</tr>
 """
 
-OPENSEASON_PAGE_TEMPLATE: str
 OPENSEASON_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "openseason.html"
 with open(OPENSEASON_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
-    OPENSEASON_PAGE_TEMPLATE = F.read()
+    TEMPLATES_DATABASE.register("openseason.html", F.read())
 
 # LHS is table header, RHS is template string for table cell values
 # note the order here determines the order in which columns are displayed
@@ -77,10 +75,9 @@ STATS_ORDERING_KEYS = {
     "By Kills (London style)": lambda score_manager, a: (-score_manager.get_kills(a), -score_manager.get_conkers(a)),
 }
 
-STATS_PAGE_TEMPLATE: str
 STATS_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "stats.html"
 with open(STATS_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
-    STATS_PAGE_TEMPLATE = F.read()
+    TEMPLATES_DATABASE.register("stats.html", F.read())
 
 KILLTREE_PATH = "killtree.html"
 KILLTREE_EMBED = """
@@ -326,9 +323,9 @@ class ScoringPlugin(AbstractPlugin):
                 killtree_embed = KILLTREE_EMBED
                 components.append(Label("[SCORING] Generated killtree page."))
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "stats.html"), "w+", encoding="utf-8") as F:
+        with open(WEBPAGE_WRITE_LOCATION / "stats.html", "w+", encoding="utf-8") as F:
             F.write(
-                STATS_PAGE_TEMPLATE.format(
+                TEMPLATES_DATABASE.get("stats.html").format(
                     YEAR=get_now_dt().year,
                     TABLE=table_str,
                     KILLTREE_EMBED=killtree_embed,
@@ -462,9 +459,9 @@ Syntax:
                 )
             table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "openseason.html"), "w+", encoding="utf-8") as F:
+        with open(WEBPAGE_WRITE_LOCATION / "openseason.html", "w+", encoding="utf-8") as F:
             F.write(
-                OPENSEASON_PAGE_TEMPLATE.format(
+                TEMPLATES_DATABASE.get("openseason.html").format(
                     YEAR=get_now_dt().year,
                     TABLE=table_str
                 )

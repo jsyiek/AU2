@@ -1,12 +1,13 @@
 from collections import defaultdict
 import dataclasses
 import functools
-from typing import DefaultDict, Dict, Iterable, List, Optional, Sequence, Set
+from typing import DefaultDict, Dict, List, Optional, Sequence, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.TemplatesDatabase import TEMPLATES_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
@@ -47,11 +48,11 @@ PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
 
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
-    MAYWEEK_PLAYERS_TEMPLATE = F.read()
+    TEMPLATES_DATABASE.register("mw-players.html", F.read())
 
 MAYWEEK_NEWS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_news.html"
 with open(MAYWEEK_NEWS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
-    MAYWEEK_NEWS_TEMPLATE = F.read()
+    TEMPLATES_DATABASE.register("mw-news.html", F.read())
 
 @dataclasses.dataclass
 class ScoringParameter:
@@ -716,7 +717,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             )
 
         with open(WEBPAGE_WRITE_LOCATION / "mw-players.html", "w+", encoding="utf-8") as F:
-            F.write(MAYWEEK_PLAYERS_TEMPLATE.format(
+            F.write(TEMPLATES_DATABASE.get("mw-players.html").format(
                 PSEUDONYM_ROWS = "\n".join(pseudonym_rows),
                 PLAYER_ROWS = "\n".join(player_rows),
                 YEAR = get_now_dt().year,
@@ -759,7 +760,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         with open(WEBPAGE_WRITE_LOCATION / "mw-news.html", "w+", encoding="utf-8") as F:
             F.write(
-                MAYWEEK_NEWS_TEMPLATE.format(
+                TEMPLATES_DATABASE.get("mw-news.html").format(
                     CONTENT=mw_content,
                     YEAR=str(get_now_dt().year)
                 )

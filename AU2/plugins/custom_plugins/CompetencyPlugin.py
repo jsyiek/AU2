@@ -8,6 +8,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.TemplatesDatabase import TEMPLATES_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
@@ -70,9 +71,8 @@ DEFAULT_GIGABOLT_HEADLINE = """# Write a headline for the gigabolt event
 [num_players] assassins are eliminated for inactivity!
 """
 
-INCOS_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "inco.html"), "r", encoding="utf-8", errors="ignore") as F:
-    INCOS_PAGE_TEMPLATE = F.read()
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "inco.html", "r", encoding="utf-8", errors="ignore") as F:
+    TEMPLATES_DATABASE.register("inco.html", F.read())
 
 
 class PlayerStatus(enum.Enum):
@@ -613,7 +613,7 @@ class CompetencyPlugin(AbstractPlugin):
 
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, "inco.html"), "w+", encoding="utf-8") as F:
             F.write(
-                INCOS_PAGE_TEMPLATE.format(
+                TEMPLATES_DATABASE.get("inco.html").format(
                     CONTENT="\n".join(tables),
                     YEAR=get_now_dt().year
                 )
