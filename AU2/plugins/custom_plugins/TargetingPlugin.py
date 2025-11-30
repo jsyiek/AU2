@@ -329,12 +329,13 @@ class TargetingPlugin(AbstractPlugin):
             if not deaths:
                 continue
 
-            # process one death at a time, to prevent `update_graph` needing to check too many permutations
-            for d in deaths:
-                death = [d]
+            # process deaths in chunks, to prevent `update_graph` needing to check too many permutations
+            n = 3
+            subdivided_deaths = [deaths[i:i + n] for i in range(0, len(deaths), n)]
+            for deaths in subdivided_deaths:
                 # try to fix with triangle elimination
                 # this function has side effects
-                success = self.update_graph(response, targeting_graph, targeters_graph, death, player_seeds_set)
+                success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
                 if success:
                     continue
 
@@ -342,7 +343,7 @@ class TargetingPlugin(AbstractPlugin):
                     response,
                     targeting_graph,
                     targeters_graph,
-                    death,
+                    deaths,
                     player_seeds_set,
                     allow_mutual_seed_targets=True
                 )
@@ -356,7 +357,7 @@ class TargetingPlugin(AbstractPlugin):
                     response,
                     targeting_graph,
                     targeters_graph,
-                    death,
+                    deaths,
                     player_seeds_set,
                     allow_mutual_seed_targets=True,
                     allow_mutual_targets=True

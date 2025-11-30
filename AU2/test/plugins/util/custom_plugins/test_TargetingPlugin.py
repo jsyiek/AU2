@@ -128,4 +128,4 @@ class TestTargetingPlugin:
         assert valid_targets(num_players - kills, targets)
 
         # test passes only if calculation took a reasonable amount of time
-        assert perf < 0.1
+        assert perf < 0.05
