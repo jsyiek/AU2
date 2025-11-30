@@ -7,6 +7,7 @@ from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.TemplatesDatabase import TEMPLATES_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
@@ -116,6 +117,7 @@ class CorePlugin(AbstractPlugin):
             "Hidden Assassins": self.identifier + "_hidden_assassins",
             "Nuke Database": self.identifier + "_nuke",
             "Secret Number": self.identifier + "_secret_confirm",
+            "Reset Templates": self.identifier + "_reset_templates",
             "Delete Event": self.identifier + "_delete_event",
         }
 
@@ -231,6 +233,14 @@ class CorePlugin(AbstractPlugin):
                 ask=self.ask_setup_game,
                 answer=self.answer_setup_game,
                 options_functions=(self.gather_game_types,)
+            ),
+            Export(
+                identifier="core_plugin_templates",
+                display_name="Templates",
+                ask=self.ask_templates,
+                answer=self.answer_templates,
+                options_functions=(lambda: list(sorted(TEMPLATES_DATABASE.list_templates())),
+                                   lambda _: ["Edit", "Reset"])
             )
         ]
 
@@ -1026,3 +1036,22 @@ class CorePlugin(AbstractPlugin):
         for plugin in PLUGINS:
             components += plugin.on_setup_game(htmlResponse)
         return components
+
+    def ask_templates(self, template_identifier: str, action: str) -> List[HTMLComponent]:
+        if action == "Reset":
+            return [HiddenTextbox(template_identifier, "")]
+        else:
+            return [LargeTextEntry(
+                template_identifier,
+                f"Edit template {template_identifier}",
+                TEMPLATES_DATABASE.get(template_identifier)
+            )]
+
+    def answer_templates(self, html_response) -> List[HTMLComponent]:
+        for template_identifier, new_template in html_response.items():
+            if new_template:
+                TEMPLATES_DATABASE.set(template_identifier, new_template)
+                return [Label(f"[CORE] Successfully updated template {template_identifier}!")]
+            else:
+                TEMPLATES_DATABASE.reset(template_identifier)
+                return [Label(f"[CORE] Successfully reset template {template_identifier}!")]
