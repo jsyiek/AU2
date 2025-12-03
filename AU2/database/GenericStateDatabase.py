@@ -52,8 +52,7 @@ class GenericStateDatabase(PersistentFile):
             return
 
         self.uniqueId = loaded.uniqueId
-        # there is no need to refresh the plugin map
-        # self.plugin_map = loaded.plugin_map
+        self.plugin_map = loaded.plugin_map
         self.arb_state = loaded.arb_state
         self.arb_int_state = loaded.arb_int_state
 
