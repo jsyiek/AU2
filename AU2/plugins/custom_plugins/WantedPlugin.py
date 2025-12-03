@@ -6,7 +6,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
@@ -82,6 +82,8 @@ class WantedPlugin(AbstractPlugin):
         self.event_html_ids = {
             "Wanted": self.identifier + "_wanted"
         }
+
+        Assassin.__last_emailed_crime = self.assassin_property("last_emailed_crime", None, store_default=False)
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         data = {}
@@ -300,13 +302,26 @@ class WantedPlugin(AbstractPlugin):
             for email in email_list:
                 recipient = email.recipient.identifier
                 crime_data = wanted_data.get(recipient, corrupt_data.get(recipient))
+                last_emailed_crime = email.recipient.__last_emailed_crime
+                content = ""
+                require_send = False
                 if crime_data:
-                    content = (f"You are currently {'WANTED' if recipient in wanted_data else 'CORRUPT'}. " 
+                    content = (f"You are currently {'WANTED' if recipient in wanted_data else 'CORRUPT'}.\n" 
                                f"Reason: {crime_data['crime']}\n"
                                f"Redemption conditions: {crime_data['redemption']}")
+                    require_send = crime_data != last_emailed_crime
+                elif last_emailed_crime:
+                    content = ("You have been REDEEMED and are no longer on the "
+                              f"{'corrupt' if email.recipient.is_police else 'wanted'} list.")
+                    require_send = crime_data != last_emailed_crime
+
+                if content:
                     email.add_content(
                         self.identifier,
                         content=content,
-                        require_send=False
+                        require_send=require_send,
                     )
+                    # the component is named confusingly. here, True = *do* send emails!
+                    if html_response.get("SRCFPlugin_dry_run", True):
+                        email.recipient.__last_emailed_crime = crime_data
         return []

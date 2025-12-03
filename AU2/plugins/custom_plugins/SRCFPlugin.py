@@ -415,14 +415,14 @@ class SRCFPlugin(AbstractPlugin):
                     if send_emails:
                         #(stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
 
-                        if stdout:
+                        """if stdout:
                             print("stdout:")
                             # TODO: Implement proper print
                             print(stdout)
                         if stderr:
                             print("stderr (useful for debugging):")
                             # TODO: Implement proper print
-                            print(stderr)
+                            print(stderr)"""
 
                         components.append(Label("[SRCFPlugin] Sent emails!"))
                     else:
