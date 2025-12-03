@@ -188,7 +188,7 @@ class CompetencyPlugin(AbstractPlugin):
             "CURRENT DEFAULT": "current_default"
         }
 
-        Assassin.__last_emailed_competency = self.assassin_property("last_emailed_competency", None)
+        Assassin.__last_emailed_competency = self.assassin_property("last_emailed_competency", None, store_default=False)
 
         self.exports = [
             Export(

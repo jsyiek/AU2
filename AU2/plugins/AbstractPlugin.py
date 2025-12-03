@@ -223,19 +223,28 @@ class AbstractPlugin:
         """
         return []
 
-    def assassin_property(self, id: str, default: T) -> property:
+    def assassin_property(self, identifier: str, default: T, store_default: bool = True) -> property:
         """
         Creates a property corresponding to a value stored in the plugin_state of an assassin.
-        Should be assigned to an attribute of the Assassin model in the __init__ of a plugin.
+
+        Args:
+            identifier (str): identifier under which to store the property
+            default: the default value of the property
+            store_default (bool): whether to store the default value in the database. Necessary for mutable default
+                values.
+        Returns:
+            property: a property whose getter and setter functions read and write from Assassin.plugin_state.
+                Needs to be assigned to a CLASS attribute of Assassin to work!
         """
 
-        def getter(assassin: Assassin) -> T:
-            return assassin.plugin_state.get(self.identifier, {}).get(id, default)
+        if store_default:
+            def getter(assassin: Assassin) -> T:
+                return assassin.plugin_state.setdefault(self.identifier, {}).setdefault(identifier, default)
+        else:
+            def getter(assassin: Assassin) -> T:
+                return assassin.plugin_state.get(self.identifier, {}).get(identifier, default)
 
         def setter(assassin: Assassin, val: T):
-            assassin.plugin_state.setdefault(self.identifier, {})[id] = val
+            assassin.plugin_state.setdefault(self.identifier, {})[identifier] = val
 
-        prop = property(getter)
-        prop = prop.setter(setter)
-
-        return prop
+        return property(getter, setter)
