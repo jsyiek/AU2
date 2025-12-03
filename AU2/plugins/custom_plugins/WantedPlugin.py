@@ -14,6 +14,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow
 from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.custom_plugins.SRCFPlugin import Email
 from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
@@ -282,3 +283,30 @@ class WantedPlugin(AbstractPlugin):
             )
         messages.append(Label("[WANTED] Success!"))
         return messages
+
+    def on_hook_respond(self, hook: str, html_response, data) -> List[HTMLComponent]:
+        if hook == "SRCFPlugin_email":
+            events = list(EVENTS_DATABASE.events.values())
+            events.sort(key=lambda event: event.datetime)
+
+            wanted_manager = WantedManager()
+            for e in events:
+                wanted_manager.add_event(e)
+
+            wanted_data = wanted_manager.get_live_wanted_players(police=False)
+            corrupt_data = wanted_manager.get_live_wanted_players(police=True)
+
+            email_list: List[Email] = data
+            for email in email_list:
+                recipient = email.recipient.identifier
+                crime_data = wanted_data.get(recipient, corrupt_data.get(recipient))
+                if crime_data:
+                    content = (f"You are currently {'WANTED' if recipient in wanted_data else 'CORRUPT'}. " 
+                               f"Reason: {crime_data['crime']}\n"
+                               f"Redemption conditions: {crime_data['redemption']}")
+                    email.add_content(
+                        self.identifier,
+                        content=content,
+                        require_send=False
+                    )
+        return []
