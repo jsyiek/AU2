@@ -687,7 +687,7 @@ class CorePlugin(AbstractPlugin):
     def gather_events(self) -> List[Tuple[str, str]]:
         # headline is truncated because `inquirer` doesn't deal with overlong options well
         return [
-                (f"[{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline[0:25].rstrip()}", identifier)
+                (event.display_text()[:100], identifier)
                 for identifier, event in sorted(EVENTS_DATABASE.events.items(), key=lambda x: x[1].datetime, reverse=True)
         ]
 

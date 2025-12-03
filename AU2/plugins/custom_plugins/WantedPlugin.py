@@ -6,7 +6,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
@@ -17,7 +17,7 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_POLICE_RANK
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.date_utils import DATETIME_FORMAT, get_now_dt
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -153,6 +153,26 @@ class WantedPlugin(AbstractPlugin):
             results.append((f"Wanted crime ({name} {sec_id})", crime))
             results.append((f"Wanted redemption ({name} {sec_id})", redemption))
         return results
+
+    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+        events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
+        wanted_manager = WantedManager()
+        for e in events:
+            wanted_manager.add_event(e)
+
+        wanted_data = wanted_manager.get_live_wanted_players(police=False)
+        corrupt_data = wanted_manager.get_live_wanted_players(police=True)
+        crime_data = wanted_data.get(assassin.identifier, corrupt_data.get(assassin.identifier))
+        if crime_data:
+            return [
+                ("Crime", crime_data['crime']),
+                ("Crime", EVENTS_DATABASE.get(crime_data['event_identifier']).display_text()),
+                ("End of wantedness", (crime_data['event_time'] + crime_data['wanted_duration']).strftime(DATETIME_FORMAT)),
+                ("Redemption conditions", crime_data['redemption']),
+            ]
+
+        return []
+
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         messages = []

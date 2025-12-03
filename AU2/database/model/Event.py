@@ -46,6 +46,9 @@ class Event(PersistentFile):
     def get_numerical_id(self) -> int:
         return int(self.__secret_id)
 
+    def display_text(self) -> str:
+        return f"[{self.datetime.strftime('%Y-%m-%d %H:%M %p')}] {self.headline}".replace("\n", " ")
+
     def __post_init__(self):
         if not self.__secret_id:
             self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()

@@ -24,6 +24,7 @@ class WantedManager:
             duration, crime, redemption = e.pluginState["WantedPlugin"][playerID]
             self.wanted_events.setdefault(playerID, [])
             self.wanted_events[playerID].append({'event_time': e.datetime,
+                                                 'event_identifier': e.identifier,
                                                  'wanted_duration': datetime.timedelta(days=duration),
                                                  'crime': crime,
                                                  'redemption': redemption})
@@ -37,8 +38,7 @@ class WantedManager:
             if ASSASSINS_DATABASE.get(player_id).is_police != police:
                 continue
             if self.is_player_wanted(player_id):
-                last_event = self.wanted_events[player_id][-1]
-                players[player_id] = {'crime': last_event['crime'], 'redemption': last_event['redemption']}
+                players[player_id] = self.wanted_events[player_id][-1]
         return players
 
     def is_player_wanted(self, player_id, time=get_now_dt()):
