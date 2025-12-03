@@ -30,14 +30,12 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt
 
-SRCF_WEBSITE = "localhost"
-#SRCF_WEBSITE = "shell.srcf.net"
+SRCF_WEBSITE = "shell.srcf.net"
 SSH_PORT = 22
 
 # Since these are REMOTE paths we want PurePaths,
 # not concrete paths for the machine AU2 is running on!
-ASSASSINS_PATH = pathlib.PurePosixPath("AU2_test_server")
-#ASSASSINS_PATH = pathlib.PurePosixPath("/societies/assassins")
+ASSASSINS_PATH = pathlib.PurePosixPath("/societies/assassins")
 AU2_DATA_PATH = ASSASSINS_PATH / "AU2_files"
 DATABASES = AU2_DATA_PATH / "databases"  # this appears to be unused?
 LOGS = AU2_DATA_PATH / "logs"
@@ -413,16 +411,16 @@ class SRCFPlugin(AbstractPlugin):
                     self._log_to(sftp, PUBLISH_LOG, "Trying to send email...")
 
                     if send_emails:
-                        #(stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
+                        (stdin, stdout, stderr) = ssh_client.exec_command(f"/usr/sbin/sendmail -bS < {remotetarget}")
 
-                        """if stdout:
+                        if stdout:
                             print("stdout:")
                             # TODO: Implement proper print
                             print(stdout)
                         if stderr:
                             print("stderr (useful for debugging):")
                             # TODO: Implement proper print
-                            print(stderr)"""
+                            print(stderr)
 
                         components.append(Label("[SRCFPlugin] Sent emails!"))
                     else:
