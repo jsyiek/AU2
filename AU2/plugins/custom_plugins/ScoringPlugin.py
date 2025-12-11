@@ -25,7 +25,7 @@ from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
+from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 
 OPENSEASON_TABLE_TEMPLATE = """
@@ -289,7 +289,7 @@ class ScoringPlugin(AbstractPlugin):
         for rank, p in enumerate(full_players):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
-            deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
+            deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
                       for e in score_manager.get_death_events(p)]
