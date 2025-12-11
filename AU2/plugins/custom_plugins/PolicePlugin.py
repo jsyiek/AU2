@@ -307,7 +307,7 @@ class PolicePlugin(AbstractPlugin):
                         EMAIL=a.email,
                         COLLEGE=a.college,
                         NOTES=a.notes,
-                        DEATHS='<br />'.join(deaths) if deaths else "&mdash;",
+                        DEATHS=f"{len(deaths)} ({';<br />'.join(deaths)})" if deaths else "&mdash;",
                     )
                 )
             tables.append(
