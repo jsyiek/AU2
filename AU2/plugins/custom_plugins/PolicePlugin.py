@@ -20,7 +20,7 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.PoliceRankManager import DEFAULT_RANKS, PoliceRankManager, DEFAULT_POLICE_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT
-from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
+from AU2.plugins.util.date_utils import get_now_dt, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.render_utils import event_url
 
 POLICE_TABLE_TEMPLATE = """
@@ -297,7 +297,7 @@ class PolicePlugin(AbstractPlugin):
             police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
             rows = []
             for a in police:
-                deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
+                deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                           for e in death_manager.get_death_events(a)]
                 rows.append(
                     POLICE_TABLE_ROW_TEMPLATE.format(
