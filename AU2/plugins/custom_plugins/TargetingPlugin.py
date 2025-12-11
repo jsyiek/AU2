@@ -153,7 +153,9 @@ class TargetingPlugin(AbstractPlugin):
                     require_send=targets_changed
                 )
 
-            if EVENTS_DATABASE.events:
+            # only record the event up to which targets were emailed if emails will actually be sent
+            # the component is named confusingly. here, True = *do* send emails!
+            if EVENTS_DATABASE.events and htmlResponse.get("SRCFPlugin_dry_run", True):
                 max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
             return response
