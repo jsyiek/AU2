@@ -3,7 +3,7 @@ import shutil
 from typing import List
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database.model.database_utils import is_database_file, refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -57,7 +57,7 @@ class LocalBackupPlugin(AbstractPlugin):
         backup_path = os.path.join(self.BACKUP_LOCATION, htmlResponse[self.html_ids["Backup Name"]])
         os.mkdir(backup_path)
         for f in os.listdir(BASE_WRITE_LOCATION):
-            if f.endswith(".json"):
+            if is_database_file(f):
                 shutil.copy(os.path.join(BASE_WRITE_LOCATION, f), os.path.join(backup_path, f))
         return [Label("[BACKUP] Success!")]
 
@@ -76,7 +76,7 @@ class LocalBackupPlugin(AbstractPlugin):
         if chosen_backup == "Exit":
             return [Label("[BACKUP] Aborted.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
-            if f.endswith(".json"):
+            if is_database_file(f):
                 os.remove(os.path.join(BASE_WRITE_LOCATION, f))
         backup_path = os.path.join(self.BACKUP_LOCATION, chosen_backup)
         for f in os.listdir(backup_path):
