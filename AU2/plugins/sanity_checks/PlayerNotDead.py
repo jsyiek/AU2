@@ -7,18 +7,18 @@ from AU2.html_components import HTMLComponent
 from AU2.plugins.sanity_checks.model.SanityCheck import SanityCheck
 from AU2.plugins.sanity_checks.model.SanityCheck import Suggestion
 
-DX_NX_PATTERN = re.compile(r"(\[[DN](\d+)\])")
+DX_NX_PATTERN = re.compile(r"(\[[DNLV](\d+)\])")
 
 class PlayerNotDead(SanityCheck):
     """
-    Finds and detects cases where [DX] and [NX] appear,
+    Finds and detects cases where [VX], [LX], [DX] and [NX] appear,
     despite the player being alive.
     """
 
     identifier = "Player_Not_Dead"
 
     def _find_incorrect(self, string: str, dead_secret_ids: Set[str], fixes: Dict[str, str]):
-        # matches either [DX] or [NX]
+        # matches either [VX], [LX], [DX] or [NX]
         for match in DX_NX_PATTERN.findall(string):
             X = match[1]
             if X not in dead_secret_ids:
