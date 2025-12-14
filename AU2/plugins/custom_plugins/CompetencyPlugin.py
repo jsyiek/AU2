@@ -2,7 +2,7 @@ import dataclasses
 import datetime
 import enum
 import os
-from typing import List, Any, Dict, Set
+from typing import Any, Dict, List, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -187,6 +187,8 @@ class CompetencyPlugin(AbstractPlugin):
             "ATTEMPTS": "attempts",
             "CURRENT DEFAULT": "current_default"
         }
+
+        Assassin.__last_emailed_competency = self.assassin_property("last_emailed_competency", None, store_default=False)
 
         self.exports = [
             Export(
@@ -379,7 +381,7 @@ class CompetencyPlugin(AbstractPlugin):
             email_list: List[Email] = data
             for email in email_list:
                 recipient = email.recipient
-                if recipient.is_police:
+                if recipient.is_police or death_manager.is_dead(recipient):
                     continue
                 if competency_manager.is_inco_at(recipient, now):
                     content = "It would seem you've become incompetent. You might wish to change that.\nIn order to " \
@@ -391,8 +393,15 @@ class CompetencyPlugin(AbstractPlugin):
                 email.add_content(
                     self.identifier,
                     content=content,
-                    require_send=False
+                    require_send=recipient.__last_emailed_competency != competency_manager.deadlines[recipient.identifier]
                 )
+
+                # only record emailed competency if emails will actually be sent
+                # the component is named confusingly. here, True = *do* send emails!
+                # TODO: would be good to be able to do this *after* emails sent...
+                if htmlResponse.get("SRCFPlugin_dry_run", True):
+                    recipient.__last_emailed_competency = competency_manager.deadlines[recipient.identifier]
+
         return []
 
     def on_event_request_create(self) -> List[HTMLComponent]:
