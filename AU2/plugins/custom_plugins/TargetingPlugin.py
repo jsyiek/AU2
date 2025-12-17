@@ -157,7 +157,7 @@ class TargetingPlugin(AbstractPlugin):
 
             # we still record the last emailed event because it's useful for detecting whether any emails have been sent
             # out
-            if EVENTS_DATABASE.events:
+            if EVENTS_DATABASE.events and htmlResponse.get("SRCFPlugin_dry_run", True):
                 max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
             return response

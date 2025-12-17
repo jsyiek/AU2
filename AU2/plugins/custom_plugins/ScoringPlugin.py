@@ -417,7 +417,7 @@ Syntax:
     def _generate_openseason_page(self):
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
-        if open_season_start and open_season_start >= get_now_dt():
+        if not open_season_start or open_season_start > get_now_dt():
             return []
         # also don't generate if formula is invalid
         formula = self.gsdb_get("Formula")
