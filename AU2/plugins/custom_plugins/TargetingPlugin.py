@@ -80,7 +80,7 @@ class TargetingPlugin(AbstractPlugin):
             "Skip Setup": self.identifier + "_skip_setup",
         }
 
-        Assassin.__last_emailed_targets = self.assassin_property("last_emailed_targets", list)
+        Assassin.__last_emailed_targets = self.assassin_property("last_emailed_targets", (), store_default=False)
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         if self.get_last_emailed_event() > -1:
@@ -165,8 +165,12 @@ class TargetingPlugin(AbstractPlugin):
 
     def on_data_hook(self, hook: str, data):
         if hook == "WantedPlugin_targeting_graph":
-            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
-            data["targeting_graph"] = self.compute_targets([], max_event)
+            # note: targeting graph is only requested when using Event -> Create
+            data["targeting_graph"] = {
+                assassin.identifier: assassin.__last_emailed_targets
+                for assassin in ASSASSINS_DATABASE.get_filtered(include=lambda a: a.__last_emailed_targets,
+                                                                include_hidden=True)
+            }
 
     def ask_set_seeds(self):
         return [
