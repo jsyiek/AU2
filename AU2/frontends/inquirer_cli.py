@@ -14,8 +14,7 @@ from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
-from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database import save_all_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
 from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
@@ -958,9 +957,7 @@ def main():
                 render(component)
 
             print("Saving databases...")
-            ASSASSINS_DATABASE.save()
-            EVENTS_DATABASE.save()
-            GENERIC_STATE_DATABASE.save()  # utility database
+            save_all_databases()
 
 from readchar import key
 def key_addons(f):
