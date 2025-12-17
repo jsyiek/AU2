@@ -115,9 +115,6 @@ class WantedPlugin(AbstractPlugin):
         return [Label("[WANTED] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
-        data = {"secret_id": e.get_numerical_id()}
-        PLUGINS.data_hook("WantedPlugin_targeting_graph", data)
-        targeting_graph = data.get("targeting_graph", {})
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
@@ -131,7 +128,7 @@ class WantedPlugin(AbstractPlugin):
                                 title="WANTED: Choose players to set a new Wanted duration",
                                 default=e.pluginState.get(self.identifier, {}),
                                 kill_entry_identifier="CorePlugin_kills",
-                                targeting_graph=targeting_graph
+                                targeting_graph={}
                             )
                         ]
                     )]
