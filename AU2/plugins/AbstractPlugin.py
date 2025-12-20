@@ -6,6 +6,7 @@ from AU2.html_components import HTMLComponent
 
 T = TypeVar("T")
 
+
 class Export:
     """
     Represents an HTML callback
@@ -43,6 +44,7 @@ class Export:
 
 DEFAULT_DCE_EXPLANATION = "This config option is dangerous to modify after a game has started."
 
+
 class ConfigExport(Export):
     """
     Represents a callback for a configuration parameter.
@@ -67,11 +69,13 @@ class ConfigExport(Export):
             answer
         )
 
+
 class DangerousConfigExport(ConfigExport):
     """
     Represents a config export which shouldn't be changed while a game is in progress
     This is signalled to the user by colouring the option red
     """
+
 
 class HookedExport:
     """
@@ -104,6 +108,7 @@ class HookedExport:
 
 
 AttributePairTableRow = Tuple[str, str]
+
 
 class AbstractPlugin:
     def __init__(self, identifier: str):

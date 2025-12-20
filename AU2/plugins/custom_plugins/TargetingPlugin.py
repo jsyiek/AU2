@@ -5,15 +5,14 @@ from typing import Tuple, Dict, List, Set
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, DangerousConfigExport, AttributePairTableRow
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -81,6 +80,8 @@ class TargetingPlugin(AbstractPlugin):
             "Skip Setup": self.identifier + "_skip_setup",
         }
 
+        Assassin.__last_emailed_targets = self.assassin_property("last_emailed_targets", (), store_default=False)
+
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         if self.get_last_emailed_event() > -1:
             return [
@@ -110,8 +111,6 @@ class TargetingPlugin(AbstractPlugin):
             # if graph computation time becomes an issue, we could yield the `last_graph` and then compute
             # current_graph without needing to recompute
             response = []
-            last_emailed_event = self.get_last_emailed_event()
-            last_graph = self.compute_targets(response, max_event=last_emailed_event)
             current_graph = self.compute_targets(response)
 
             if not current_graph:
@@ -143,18 +142,21 @@ class TargetingPlugin(AbstractPlugin):
 
                 # only send email if targets for this user have changed
                 targets_changed = any(
-                    a not in current_graph[assassin.identifier] for a in last_graph[assassin.identifier])
-                targets_changed |= len(current_graph[assassin.identifier]) != len(last_graph[assassin.identifier])
-                targets_changed |= last_emailed_event == -1  # we haven't emailed anything yet
+                    a not in current_graph[assassin.identifier] for a in assassin.__last_emailed_targets)
+                targets_changed |= len(current_graph[assassin.identifier]) != len(assassin.__last_emailed_targets)
 
                 email.add_content(
                     plugin_name="TargetingPlugin",
                     content=email_content,
                     require_send=targets_changed
                 )
+                # record the emailed targets, if emails are actually being sent.
+                # the component is named confusingly. Here, True means *do* send emails!
+                if htmlResponse.get("SRCFPlugin_dry_run", True):
+                    assassin.__last_emailed_targets = current_graph[assassin.identifier]
 
-            # only record the event up to which targets were emailed if emails will actually be sent
-            # the component is named confusingly. here, True = *do* send emails!
+            # we still record the last emailed event because it's useful for detecting whether any emails have been sent
+            # out
             if EVENTS_DATABASE.events and htmlResponse.get("SRCFPlugin_dry_run", True):
                 max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
@@ -163,8 +165,12 @@ class TargetingPlugin(AbstractPlugin):
 
     def on_data_hook(self, hook: str, data):
         if hook == "WantedPlugin_targeting_graph":
-            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
-            data["targeting_graph"] = self.compute_targets([], max_event)
+            # note: targeting graph is only requested when using Event -> Create
+            data["targeting_graph"] = {
+                assassin.identifier: assassin.__last_emailed_targets
+                for assassin in ASSASSINS_DATABASE.get_filtered(include=lambda a: a.__last_emailed_targets,
+                                                                include_hidden=True)
+            }
 
     def ask_set_seeds(self):
         return [
@@ -217,8 +223,22 @@ class TargetingPlugin(AbstractPlugin):
         response: List[AttributePairTableRow] = []
         if assassin.identifier not in graph:
             return []
-        for (i, target) in enumerate(graph[assassin.identifier]):
-            response.append((f"Target {i+1}", target))
+        old_targets = set(assassin.__last_emailed_targets)
+        current_targets = set(graph[assassin.identifier])
+        new_targets = set()
+        i = 0
+        for target in current_targets:
+            if target in old_targets:
+                i += 1
+                response.append((f"Target {i}", target))
+                old_targets.discard(target)
+            else:
+                new_targets.add(target)
+        for target in new_targets:
+            i += 1
+            response.append((f"Target {i} (NEW)", target))
+            if old_targets:
+                response.append((f"Target {i} (OLD)", old_targets.pop()))
 
         num_attackers = 0
         for (attacker, targets) in graph.items():
