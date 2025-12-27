@@ -12,9 +12,9 @@ class TestLocalBackupPlugin:
 
         p = some_players(200)
         game = MockGame().having_assassins(p)                                           \
-                         .assassin(p[0]).with_accomplices(p[1], p[2], p[3]).kills(p[4]) \
-                         .assassin(p[5]).kills(p[6])                                    \
-                         .assassin(p[7]).kills(p[8])                                    \
+                         .assassin(p[0]).with_accomplices(p[1], p[2], p[3]).kills(p[4]).then() \
+                         .assassin(p[5]).kills(p[6]).then()                                    \
+                         .assassin(p[7]).kills(p[8]).then()                                    \
                          .assassin(p[9]).kills(p[10])
 
         plugin = LocalBackupPlugin()
