@@ -7,7 +7,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 
 DEFAULT_RANKS = [
     'Bog-standard Constable',  # Default police rank
-    'Chief of Police',
+    'Commander of the City Watch',
     'Umpire',
 ]
 DEFAULT_POLICE_RANK = 0

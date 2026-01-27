@@ -25,7 +25,7 @@ from AU2.plugins.util.render_utils import event_url
 
 POLICE_TABLE_TEMPLATE = """
 <p xmlns="">
-    Here is a list of members of our loyal police, charged with protecting Cambridge from murderers of innocents and people that annoy the all powerful Umpire:
+    Here is a list of members of our loyal city watch, charged with protecting Cambridge from murderers of innocents and people that annoy the all powerful Umpire:
 </p>
 <table xmlns="" class="playerlist">
   <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th><th>Deaths</th></tr>
@@ -37,7 +37,7 @@ POLICE_TABLE_ROW_TEMPLATE = """
 <tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td><td>{DEATHS}</td></tr>
 """
 
-NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the moment</p>"""
+NO_POLICE = """<p xmlns="">The city watch is suspiciously understaffed at the moment.</p>"""
 
 
 POLICE_PAGE_TEMPLATE: str
@@ -316,7 +316,7 @@ class PolicePlugin(AbstractPlugin):
         else:
             tables.append(NO_POLICE)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "citywatch.html"), "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
                 POLICE_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),

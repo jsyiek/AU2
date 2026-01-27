@@ -31,7 +31,7 @@ PLAYER_TABLE_TEMPLATE = """
 
 POLICE_TABLE_TEMPLATE = """
 <p xmlns="">
-    Those that were corrupted by the dark side of the police force....
+    Those that were corrupted by the dark side of the city watch....
 </p>
 <table xmlns="" class="playerlist">
     <tr><th>Rank</th><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>

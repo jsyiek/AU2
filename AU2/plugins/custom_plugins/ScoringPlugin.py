@@ -127,7 +127,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             if killer not in added_nodes:
                 net.add_node(
                     killer_searchable,
-                    label=killer_model.real_name + (" (Police)" if killer_model.is_police else ""),
+                    label=killer_model.real_name + (" (City Watch)" if killer_model.is_police else ""),
                     shape=NODE_SHAPE,
                     color=get_color(killer_model.get_pseudonym(0), is_police=killer_model.is_police),
                     title=killer_searchable,
@@ -137,7 +137,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             if victim not in added_nodes:
                 net.add_node(
                     victim_searchable,
-                    label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
+                    label=victim_model.real_name + (" (City Watch)" if victim_model.is_police else ""),
                     shape=NODE_SHAPE,
                     color=get_color(victim_model.get_pseudonym(0), is_police=victim_model.is_police),
                     title=victim_searchable,
