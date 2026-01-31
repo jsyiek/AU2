@@ -65,7 +65,7 @@ GAME_TYPE_PLUGIN_MAP = {
         "MayWeekUtilitiesPlugin": False,
         "PageGeneratorPlugin": True,
         "PlayerImporterPlugin": True,
-        "PolicePlugin": True,
+        "CityWatchPlugin": True,
         "RandomGamePlugin": False,
         "ScoringPlugin": True,
         "TargetingPlugin": True,
@@ -80,7 +80,7 @@ GAME_TYPE_PLUGIN_MAP = {
     #     "MafiaPlugin": False,
     #     "MayWeekUtilitiesPlugin": True,
     #     "PageGeneratorPlugin": True,  # needed to be able to hide events
-    #     "PolicePlugin": False,
+    #     "CityWatchPlugin": False,
     #     "RandomGamePlugin": False,
     #     "ScoringPlugin": False,
     #     "TargetingPlugin": False,
@@ -276,7 +276,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        player_type = assassin.is_police and "Police" or "Player"
+        player_type = assassin.is_police and "City Watch" or "Player"
         hidden = assassin.hidden and "HIDDEN" or ""
         return [
             ("ID", str(assassin._secret_id)),
@@ -376,7 +376,7 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
             LargeTextEntry(self.html_ids["Notes"], "Notes"),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+            Checkbox(self.html_ids["Police"], "City Watch? (y/n)",
                      checked=last_emailed_event >= 0,
                      force_default=last_emailed_event >= 0)
         ]
@@ -404,7 +404,7 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+            Checkbox(self.html_ids["Police"], "City Watch? (y/n)",
                      checked=assassin.is_police,
                      force_default=last_emailed_event >= 0)
         ]

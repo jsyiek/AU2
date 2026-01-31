@@ -738,7 +738,7 @@ def render(html_component, dependency_context={}):
             inquirer.List(
                 name="emails",
                 message="Which assassins would you like to email? (All options exclude hidden assassins)",
-                choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL POLICE", "MANUAL SELECTION"],
+                choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL CITY WATCH", "MANUAL SELECTION"],
                 default="UPDATES ONLY",
             )
         ]
@@ -747,7 +747,7 @@ def render(html_component, dependency_context={}):
             return {html_component.identifier: html_component.assassins}
         elif out == "ALL ALIVE":
             return {html_component.identifier: html_component.alive_assassins}
-        elif out == "ALL POLICE":
+        elif out == "ALL CITY WATCH":
             return {html_component.identifier: html_component.police_assassins}
         elif out == "UPDATES ONLY":
             return {html_component.identifier: ["UPDATES ONLY"]}

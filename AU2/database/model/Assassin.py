@@ -60,7 +60,7 @@ class Assassin(PersistentFile):
         # Don't move this out of __post_init__
         if not self.identifier:
             dotdotdot = "..." if len(self.pseudonyms[0]) > 15 else ""
-            self.identifier = f"{self.real_name} ({self.pseudonyms[0][:15]}{dotdotdot}){' [police]' if self.is_police else ''} ID: {self._secret_id}"
+            self.identifier = f"{self.real_name} ({self.pseudonyms[0][:15]}{dotdotdot}){' [city watch]' if self.is_police else ''} ID: {self._secret_id}"
 
     def clone(self, **changes):
         """

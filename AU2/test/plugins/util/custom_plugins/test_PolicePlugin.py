@@ -3,7 +3,7 @@ import datetime
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import Event
-from AU2.plugins.custom_plugins.PolicePlugin import PolicePlugin
+from AU2.plugins.custom_plugins.CityWatchPlugin import CityWatchPlugin
 from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
 
 
@@ -18,7 +18,7 @@ class TestPolicePlugin:
         n = 4*k
         p = some_players(n)
         game = MockGame().having_assassins(p)
-        plugin = PolicePlugin()
+        plugin = CityWatchPlugin()
 
         # add some regular deaths
         for i in range(k):

@@ -216,7 +216,7 @@ class ScoringPlugin(AbstractPlugin):
             )
         ]
 
-    # plugin state management is copied from PolicePlugin
+    # plugin state management is copied from CityWatchPlugin
     def gsdb_get(self, plugin_state_id: str):
         return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state[plugin_state_id]['id'],
                                                                              self.plugin_state[plugin_state_id][
@@ -363,7 +363,7 @@ class ScoringPlugin(AbstractPlugin):
 Parameters:
     a: attempts
     b: bonus points -- awarded manually using Scoring -> Set bonuses
-    k: kills -- excludes kills of police, and of players who had already died when the kill was made
+    k: kills -- excludes kills of the city watch, and of players who had already died when the kill was made
     c: conkers -- a player's conkers score is the number of kills made by the player, plus the sum of \
 the conkers of all players killed by the player, ignoring any kills that do not count towards the kill score \
 as defined above

@@ -160,14 +160,14 @@ class WantedPlugin(AbstractPlugin):
         # (umpires messing with event timings could affect the canon timeline!)
         events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
 
-        police_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("PolicePlugin", False)
+        police_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("CityWatchPlugin", False)
 
         wanted_manager = WantedManager()
         if police_ranks_enabled:
             police_rank_manager = PoliceRankManager(
-                auto_ranking=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get(
+                auto_ranking=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get(
                     "PolicePlugin_auto_rank", AUTO_RANK_DEFAULT),
-                police_kill_ranking=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get(
+                police_kill_ranking=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get(
                     "PolicePlugin_police_kills_rankup", POLICE_KILLS_RANKUP_DEFAULT)
             )
             for e in events:
@@ -207,8 +207,8 @@ class WantedPlugin(AbstractPlugin):
             # TODO: These look like they can be deleted? Pycharm identifies default_rank and ranks as unread vars
             if police_ranks_enabled:
                 default_rank = GENERIC_STATE_DATABASE.arb_state.get(
-                    "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
-                ranks = GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
+                    "CityWatchPlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
+                ranks = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
             for player_id in wanted_police:
                 player = ASSASSINS_DATABASE.get(player_id)
                 rank = "Police"
@@ -249,8 +249,8 @@ class WantedPlugin(AbstractPlugin):
             # TODO: These look like they can be deleted? Pycharm identifies default_rank and ranks as unread vars
             if police_ranks_enabled:
                 default_rank = GENERIC_STATE_DATABASE.arb_state.get(
-                    "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
-                ranks = GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
+                    "CityWatchPlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
+                ranks = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
             for wanted_death_event in wanted_police_deaths:
                 player = ASSASSINS_DATABASE.get(wanted_death_event['player_id'])
                 rank = "Police"
