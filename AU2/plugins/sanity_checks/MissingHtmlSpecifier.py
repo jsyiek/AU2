@@ -17,7 +17,8 @@ class MissingHtmlSpecifier(SanityCheck):
         "<br>",
         "<b>",
         "<html>",
-        "<em>"
+        "<em>",
+        "<i>",
     ]
 
     def suggest_event_fixes(self, e: Event) -> List[Suggestion]:
@@ -28,13 +29,14 @@ class MissingHtmlSpecifier(SanityCheck):
                 suggestions.append(
                     Suggestion(
                         explanation=f"Enable HTML in {name}'s report (id={i})",
-                        identifier=f"{i}"
+                        data=i,
                     )
                 )
         return suggestions
 
-    def fix_event(self, e: Event, suggestion_ids: List[str]) -> List[HTMLComponent]:
-        suggestion_ids = sorted([int(s) for s in suggestion_ids])
+    def fix_event(self, e: Event, suggestion_data: List[int]) -> List[HTMLComponent]:
+        suggestion_ids = suggestion_data
+        suggestion_ids.sort()
         fix_ptr = 0
         labels = []
         for i, (assassin, pseudonym_id, report) in enumerate(e.reports):
