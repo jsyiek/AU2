@@ -89,14 +89,15 @@ class PlayerImporterPlugin(AbstractPlugin):
             if any(f in inp for f in [field, field.replace("_", " ")]):
                 return field
             elif field == "real_name" and "name" in inp \
-                    or field == "is_police" and "police" in inp:
+                    or field == "is_police" and any(x in inp for x in ('police', 'watch', 'casual')):
                 return field
 
     def guess_if_police(self, field) -> bool:
         possible_police = [
             "police",
             "yes",
-            "casual"
+            "casual",
+            "watch",
         ]
         return any(f in field.lower() for f in possible_police)
 
