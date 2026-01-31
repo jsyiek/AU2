@@ -34,8 +34,8 @@ class PoliceRankManager:
             for (killer, victim) in e.kills:
                 if not ASSASSINS_DATABASE.get(killer).is_police:
                     continue
-                if (killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_umpires", [])
-                        or killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_cop", [])):
+                if (killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [])
+                        or killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_cop", [])):
                     continue
                 if self.police_kill_ranking:
                     self.assassin_relative_ranks[killer] += 1
@@ -55,24 +55,24 @@ class PoliceRankManager:
             return 0
 
     def get_relative_rank(self, player_id: str):
-        if player_id in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_umpires", []):
+        if player_id in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", []):
             return self.get_max_rank() + 2
-        if player_id in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_cop", []):
+        if player_id in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_cop", []):
             return self.get_max_rank() + 1
         return self.assassin_relative_ranks[player_id]
 
     def get_rank_name(self, player_id: str):
-        return GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)[
+        return GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_ranks", DEFAULT_RANKS)[
             self.get_relative_rank(player_id)
-            + int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK))
+            + int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_POLICE_RANK))
         ]
 
     def generate_new_ranks_if_necessary(self):
         # Code to generate new ranks if police are promoted/demoted more than ever before
         # This will add them to the database to be renamed by the umpire
         message = []
-        default_rank = int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK))
-        rank_list = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
+        default_rank = int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_POLICE_RANK))
+        rank_list = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_ranks", DEFAULT_RANKS)
         if self.get_min_rank() < -default_rank:
             current_ranks = rank_list
             current_default = default_rank
@@ -80,14 +80,14 @@ class PoliceRankManager:
                 current_ranks.insert(0, f"Level {-(i + current_default + 1)} Constable")
             rank_list = current_ranks
             default_rank = -self.get_min_rank()
-            GENERIC_STATE_DATABASE.arb_state.setdefault("CityWatchPlugin", {})["PolicePlugin_ranks"] = rank_list
-            GENERIC_STATE_DATABASE.arb_state.setdefault("CityWatchPlugin", {})["PolicePlugin_default_rank"] = default_rank
+            GENERIC_STATE_DATABASE.arb_state.setdefault("CityWatchPlugin", {})["CityWatchPlugin_ranks"] = rank_list
+            GENERIC_STATE_DATABASE.arb_state.setdefault("CityWatchPlugin", {})["CityWatchPlugin_default_rank"] = default_rank
             message.append(Label("[CITY WATCH] Warning: New ranks generated below existing. Rename them in the config"))
         if self.get_max_rank() > (len(rank_list) - int(default_rank) - 3):
             current_ranks = rank_list
             for i in range(self.get_max_rank() - (
                     len(rank_list) - default_rank - 3)):
                 current_ranks.insert(-2, f"Level {len(current_ranks) - 2} Constable")
-            GENERIC_STATE_DATABASE.arb_state.setdefault("CityWatchPlugin", {})["PolicePlugin_ranks"] = current_ranks
+            GENERIC_STATE_DATABASE.arb_state.setdefault("CityWatchPlugin", {})["CityWatchPlugin_ranks"] = current_ranks
             message.append(Label("[CITY WATCH] Warning: New ranks generated above existing. Rename them in the config"))
         return message

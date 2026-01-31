@@ -65,7 +65,7 @@ class CityWatchPlugin(AbstractPlugin):
             "Default Rank": {'id': self.identifier + "_default_rank", 'default': DEFAULT_POLICE_RANK},  # Int
             "Auto Rank": {'id': self.identifier + "_auto_rank", 'default': AUTO_RANK_DEFAULT},  # Bool
             "Manual Rank": {'id': self.identifier + "_manual_rank", 'default': MANUAL_RANK_DEFAULT},  # Bool
-            "City Watch Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT},  # Bool
+            "City Watch Kills Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT},  # Bool
             "Umpires": {'id': self.identifier + "_umpires", 'default': []},
             "Chief of Police": {'id': self.identifier + "_cop", 'default': []},
         }
