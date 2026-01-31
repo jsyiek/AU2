@@ -171,10 +171,10 @@ class CorePlugin(AbstractPlugin):
             ),
             Export(
                 "core_assassin_update_pseudonyms",
-                "Assassin -> Pseudonyms",
+                "Assassin -> Update Pseudonyms",
                 self.ask_core_plugin_update_pseudonyms,
                 self.answer_core_plugin_update_pseudonyms,
-                ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
+                (ASSASSINS_DATABASE.get_identifiers,)
             ),
             Export(
                 "core_assassin_summary",
@@ -210,7 +210,7 @@ class CorePlugin(AbstractPlugin):
             ),
             Export(
                 "core_event_update_reports",
-                "Event -> Reports",
+                "Event -> Update Reports",
                 self.ask_core_plugin_update_reports,
                 self.answer_core_plugin_update_reports,
                 (self.gather_events,)
@@ -659,8 +659,8 @@ class CorePlugin(AbstractPlugin):
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
 
-    def ask_core_plugin_update_pseudonyms(self, arg: str):
-        assassin = ASSASSINS_DATABASE.get(arg)
+    def ask_core_plugin_update_pseudonyms(self, assassin_id: str):
+        assassin = ASSASSINS_DATABASE.get(assassin_id)
         return [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
             EditablePseudonymList(
