@@ -7,8 +7,9 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import PersistentFile, Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components.HTMLComponent import HTMLComponent
-from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.util import random_data
 from AU2.plugins.util.date_utils import get_now_dt
 
@@ -23,6 +24,8 @@ def evaluate_components(components: List[HTMLComponent]) -> dict:
         if isinstance(c, SelectorList):
             val = [t[1] if isinstance(t, tuple) else t for t in c.defaults]
             out[c.identifier] = val
+        elif isinstance(c, DatetimeEntry):
+            out[c.identifier] = c.default
         elif isinstance(c, HiddenJSON):
             out[c.identifier] = c.default
     return out

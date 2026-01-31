@@ -76,6 +76,8 @@ WATER_STATUSES = [
     "Full water"
 ]
 
+HEADLINE_TRUNCATION_CUTOFF = 50
+
 WEBPAGE_WRITE_LOCATION = pathlib.Path.home() / "pages"
 
 if not os.path.exists(WEBPAGE_WRITE_LOCATION):

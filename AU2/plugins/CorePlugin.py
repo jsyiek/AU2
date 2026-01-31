@@ -1,6 +1,7 @@
 import glob
 import os.path
 
+from collections import defaultdict
 from typing import Any, Callable, Dict, List, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
@@ -33,7 +34,7 @@ from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
     AttributePairTableRow
 from AU2.plugins.AvailablePlugins import __PluginMap
-from AU2.plugins.constants import COLLEGES, WATER_STATUSES
+from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 from AU2.plugins.util.date_utils import get_now_dt
@@ -688,7 +689,7 @@ class CorePlugin(AbstractPlugin):
     def gather_events(self) -> List[Tuple[str, str]]:
         # headline is truncated because `inquirer` doesn't deal with overlong options well
         return [
-                (event.text_display()[:50], identifier)
+                (event.text_display()[:HEADLINE_TRUNCATION_CUTOFF], identifier)
                 for identifier, event in sorted(EVENTS_DATABASE.events.items(), key=lambda x: x[1].datetime, reverse=True)
         ]
 
@@ -743,7 +744,10 @@ class CorePlugin(AbstractPlugin):
     def ask_generate_pages(self):
         components = []
         event_count = 0
-        suggestion_data: Dict[str, Dict[str, Dict[str, dict]]] = {}
+        # suggestion_data is indexed first by event identifier, then sanitycheck identifier, then suggestion identifier
+        suggestion_data = defaultdict(lambda: defaultdict(dict))
+        # event_component_map maps event identifiers to the identifier of the component that allows the user to select
+        # which suggested fixes to apply for that event
         event_component_map: Dict[str, str] = {}
         for e in EVENTS_DATABASE.events.values():
             must_check = False
@@ -757,7 +761,7 @@ class CorePlugin(AbstractPlugin):
 
                 for i, suggestion in enumerate(changes):
                     s_id = f"{sanity_check_identifier}_{i}"
-                    suggestion_data.setdefault(e.identifier, {}).setdefault(sanity_check_identifier, {})[s_id] = \
+                    suggestion_data[e.identifier][sanity_check_identifier][s_id] = \
                         suggestion.data
                     explanations.append((suggestion.explanation, s_id))
 
@@ -766,7 +770,7 @@ class CorePlugin(AbstractPlugin):
                 components.append(
                     SelectorList(
                         identifier=c_id,
-                        title=f"[SANITY CHECK] {e.text_display()[:50]}",
+                        title=f"[SANITY CHECK] {e.text_display()[:HEADLINE_TRUNCATION_CUTOFF]}",
                         options=explanations,
                         defaults=explanations
                     )
@@ -785,7 +789,7 @@ class CorePlugin(AbstractPlugin):
             components += p.on_page_request_generate()
         return components
 
-    def answer_generate_pages(self, html_response_args: Dict, testing_sanity_checks: bool = False):
+    def answer_generate_pages(self, html_response_args: Dict, actually_generate_pages: bool = True):
 
         components = []
 
@@ -802,7 +806,7 @@ class CorePlugin(AbstractPlugin):
                 )
                 SANITY_CHECKS[sanity_check_id].mark(e)
 
-        if not testing_sanity_checks:  # want to avoid actually producing pages when unit testing
+        if actually_generate_pages:  # useful for unit testing
             for p in PLUGINS:
                 components += p.on_page_generate(html_response_args)
         return components
