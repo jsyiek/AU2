@@ -102,7 +102,7 @@ class ScoreManager:
         a player's rating is the timestamp of the end of open season plus that player's score.
         """
         game_end = self.game_end or get_now_dt()
-        deaths = self.deaths[a.identifier]
+        deaths = self.get_death_events(a)
         if deaths and (game_end is None or deaths[-1].datetime < game_end):
             return dt_to_timestamp(deaths[-1].datetime)
         else:

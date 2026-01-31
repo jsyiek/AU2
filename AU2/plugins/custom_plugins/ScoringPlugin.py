@@ -289,10 +289,12 @@ class ScoringPlugin(AbstractPlugin):
         for rank, p in enumerate(full_players):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
+            # note: the link may be broken for may week games... (see https://github.com/jsyiek/AU2/issues/161)
             deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
-                      for e in score_manager.get_death_events(p)]
+                      for e in score_manager.get_death_events(p)
+                      if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)]
             rows.append(stats_row_template(columns).format(
                 NAME=p.real_name,
                 PSEUDONYMS=p.all_pseudonyms(),
@@ -417,7 +419,7 @@ Syntax:
     def _generate_openseason_page(self):
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
-        if open_season_start and open_season_start >= get_now_dt():
+        if not open_season_start or open_season_start > get_now_dt():
             return []
         # also don't generate if formula is invalid
         formula = self.gsdb_get("Formula")

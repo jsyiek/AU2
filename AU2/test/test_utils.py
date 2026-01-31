@@ -6,8 +6,29 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import PersistentFile, Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
+from AU2.html_components.HTMLComponent import HTMLComponent
+from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins.util import random_data
 from AU2.plugins.util.date_utils import get_now_dt
+
+
+def evaluate_components(components: List[HTMLComponent]) -> dict:
+    """
+    Produces the default htmlResponse from the given components
+    WIP: currently only supports SelectorList and HiddenJSON
+    """
+    out = {}
+    for c in components:
+        if isinstance(c, SelectorList):
+            val = [t[1] if isinstance(t, tuple) else t for t in c.defaults]
+            out[c.identifier] = val
+        elif isinstance(c, DatetimeEntry):
+            out[c.identifier] = c.default
+        elif isinstance(c, HiddenJSON):
+            out[c.identifier] = c.default
+    return out
 
 
 def dummy_event():
@@ -183,13 +204,38 @@ class MockGame:
         return self.assassin(names[0]).with_accomplices(*names[1:]).is_involved_in_event(assassins=tuple(others),
                                                             pluginState={"CompetencyPlugin":
                                                                       {"attempts": [p + " identifier" for p in names]}
-                                                                        })
+                                                                        }).then()
+
+
+class ProxyEvent:
+    """
+    Proxy object for an event
+    """
+
+    def __init__(self, mockGame: MockGame, event: str):
+        self.mockGame = mockGame
+        self.event = event
+
+    def model(self) -> Event:
+        return EVENTS_DATABASE.get(self.event)
+
+    def with_report(self, player: str, pseudonym_idx: int, body: str) -> "ProxyEvent":
+        ident = self.mockGame.assassin_model(player).identifier
+        self.model().reports.append((ident, pseudonym_idx, body))
+        return self
+
+    def then(self) -> MockGame:
+        return self.mockGame
+
+    def check_report(self, body: str) -> bool:
+        return any(r[2] == body for r in self.model().reports)
+
 
 class ProxyAssassin:
     """
     Proxy object of one or more assassins to facilitate readable tests
     """
-    def __init__(self, mockGame: "MockGame", *assassins: str):
+    def __init__(self, mockGame: MockGame, *assassins: str):
         self.mockGame = mockGame
         self.assassins = assassins
 
@@ -244,27 +290,28 @@ class ProxyAssassin:
         """
         return self.with_accomplices(*others)
 
-    def kills(self, *victims: str) -> MockGame:
+    def kills(self, *victims: str, headline: str = "") -> ProxyEvent:
         """
         Submits an event to the Events database where this assassin (with accomplice help) kills (an)other(s)
 
         Parameters:
             victims (str...): Victims
+            headline (str): headline for the event
 
         Returns:
-            MockGame: the original mock game from where this assassin was created
+            ProxyEvent: a representation of the event created
         """
-        self.mockGame = self.is_involved_in_event(assassins=victims,
-                                                  kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in
-                                                         victims],
-                                                  pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}})
+        event = self.is_involved_in_event(assassins=victims,
+                                          headline=headline,
+                                          kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in victims],
+                                          pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}})
 
         for v in victims:
-            self.mockGame.has_died(v)
+            event.mockGame.has_died(v)
 
-        return self.mockGame
+        return event
 
-    def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None):
+    def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None) -> ProxyEvent:
         """
         Submits a generic event to the database
 
@@ -277,7 +324,7 @@ class ProxyAssassin:
             pluginState: dict: Plugin State
 
         Returns:
-            MockGame: the original mock game from where this assassin was created
+            ProxyEvent: a representation of the event created
         """
         participants = self.assassins
         if assassins is not None:
@@ -293,4 +340,4 @@ class ProxyAssassin:
         )
         EVENTS_DATABASE.add(e)
 
-        return self.mockGame
+        return ProxyEvent(self.mockGame, e.identifier)
