@@ -276,7 +276,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        player_type = assassin.is_police and "City Watch" or "Player"
+        player_type = assassin.is_city_watch and "City Watch" or "Player"
         hidden = assassin.hidden and "HIDDEN" or ""
         return [
             ("ID", str(assassin._secret_id)),
@@ -405,7 +405,7 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
             Checkbox(self.html_ids["City Watch"], "City Watch? (y/n)",
-                     checked=assassin.is_police,
+                     checked=assassin.is_city_watch,
                      force_default=last_emailed_event >= 0)
         ]
         return html
@@ -424,7 +424,7 @@ class CorePlugin(AbstractPlugin):
         assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
-        assassin.is_police = htmlResponse[self.html_ids["City Watch"]]
+        assassin.is_city_watch = htmlResponse[self.html_ids["City Watch"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):

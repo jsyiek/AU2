@@ -82,7 +82,7 @@ class CompetencyManager:
          2) the assassin is not part of the city watch
          3) the deadline is earlier than the date
         """
-        return self.activated and not a.is_police and self.deadlines[a.identifier] < date
+        return self.activated and not a.is_city_watch and self.deadlines[a.identifier] < date
 
     def get_incos_at(self, date: datetime.datetime):
         """

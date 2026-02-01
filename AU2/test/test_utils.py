@@ -153,7 +153,7 @@ class MockGame:
                 water_status=n + " water status",
                 college=n + " college",
                 notes=n + " notes ",
-                is_police=False
+                is_city_watch=False
             )
             ASSASSINS_DATABASE.add(a)
 

@@ -381,7 +381,7 @@ class CompetencyPlugin(AbstractPlugin):
             email_list: List[Email] = data
             for email in email_list:
                 recipient = email.recipient
-                if recipient.is_police or death_manager.is_dead(recipient):
+                if recipient.is_city_watch or death_manager.is_dead(recipient):
                     continue
                 if competency_manager.is_inco_at(recipient, now):
                     content = "It would seem you've become incompetent. You might wish to change that.\nIn order to " \

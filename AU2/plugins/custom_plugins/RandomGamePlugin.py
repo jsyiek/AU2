@@ -79,7 +79,7 @@ class RandomGamePlugin(AbstractPlugin):
             college=college,
             water_status=random.choice(WATER_STATUSES),
             notes="Sample text.",
-            is_police=False
+            is_city_watch=False
         )
 
     def answer_random_game(self, htmlResponse):

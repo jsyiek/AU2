@@ -136,7 +136,7 @@ class CityWatchPlugin(AbstractPlugin):
         ident = html_response_args[self.html_ids["Assassin"]]
         assassin = ASSASSINS_DATABASE.get(ident)
         new_pseudonym = html_response_args[self.html_ids["Pseudonym"]]
-        new_assassin = assassin.clone(hidden=False, is_police=True, pseudonyms=[new_pseudonym], pseudonym_datetimes={})
+        new_assassin = assassin.clone(hidden=False, is_city_watch=True, pseudonyms=[new_pseudonym], pseudonym_datetimes={})
         ASSASSINS_DATABASE.add(new_assassin)
         # hide the old assassin
         assassin.hidden = True

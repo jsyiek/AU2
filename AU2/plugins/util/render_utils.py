@@ -110,7 +110,7 @@ def default_color_fn(pseudonym: str,
 
     Colour is then assigned by `get_color` using this information.
     """
-    is_police = assassin_model.is_police
+    is_city_watch = assassin_model.is_city_watch
 
     # retrieve info from managers
     is_wanted, dead, incompetent = False, False, False
@@ -122,30 +122,30 @@ def default_color_fn(pseudonym: str,
         elif isinstance(manager, WantedManager):
             is_wanted = manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
 
-    return get_color(pseudonym, dead, incompetent, is_police, is_wanted)
+    return get_color(pseudonym, dead, incompetent, is_city_watch, is_wanted)
 
 
 def get_color(pseudonym: str,
               dead: bool = False,
               incompetent: bool = False,
-              is_police: bool = False,
+              is_city_watch: bool = False,
               is_wanted: bool = False) -> str:
     """Basic colouring rules that can be used by `ColorFn`s."""
     ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
     # colour appropriately
     if is_wanted:
-        if is_police:
+        if is_city_watch:
             return CORRUPT_CITY_WATCH_COLS[ind % len(CORRUPT_CITY_WATCH_COLS)]
         return WANTED_COLS[ind % len(WANTED_COLS)]
     if dead:
-        if is_police:
+        if is_city_watch:
             return DEAD_CITY_WATCH_COLS[ind % len(DEAD_CITY_WATCH_COLS)]
         return DEAD_COLS[ind % len(DEAD_COLS)]
     if incompetent:
         return INCO_COLS[ind % len(INCO_COLS)]
     if pseudonym in HARDCODED_COLORS:
         return HARDCODED_COLORS[pseudonym]
-    if is_police:
+    if is_city_watch:
         return CITY_WATCH_COLS[ind % len(CITY_WATCH_COLS)]
     return HEX_COLS[ind % len(HEX_COLS)]
 

@@ -129,7 +129,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                     killer_searchable,
                     label=killer_model.real_name + (" (City Watch)" if killer_model.is_city_watch else ""),
                     shape=NODE_SHAPE,
-                    color=get_color(killer_model.get_pseudonym(0), is_police=killer_model.is_city_watch),
+                    color=get_color(killer_model.get_pseudonym(0), is_city_watch=killer_model.is_city_watch),
                     title=killer_searchable,
                     value=1 + score_manager.get_conkers(killer_model)
                 )
@@ -139,7 +139,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                     victim_searchable,
                     label=victim_model.real_name + (" (City Watch)" if victim_model.is_city_watch else ""),
                     shape=NODE_SHAPE,
-                    color=get_color(victim_model.get_pseudonym(0), is_police=victim_model.is_city_watch),
+                    color=get_color(victim_model.get_pseudonym(0), is_city_watch=victim_model.is_city_watch),
                     title=victim_searchable,
                     value=1 + score_manager.get_conkers(victim_model)
                 )
@@ -150,7 +150,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                          label=e.datetime.strftime(DATETIME_FORMAT),
                          color=get_color(
                              victim_model.get_pseudonym(e.assassins.get(victim, 0)),
-                             is_police=victim_model.is_city_watch,
+                             is_city_watch=victim_model.is_city_watch,
                              incompetent=competency_manager.is_inco_at(victim_model, e.datetime),
                              is_wanted=wanted_manager.is_player_wanted(victim, e.datetime)
                          ),
