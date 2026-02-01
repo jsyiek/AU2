@@ -248,12 +248,12 @@ class TargetingPlugin(AbstractPlugin):
         random.seed(self.seed)
 
         # collect all targetable assassins
-        players = [a for (a, model) in ASSASSINS_DATABASE.assassins.items() if not model.is_police]
+        players = [a for (a, model) in ASSASSINS_DATABASE.assassins.items() if not model.is_city_watch]
 
         # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
         # last long anyway.
         if len(players) <= 7:
-            response.append(Label("[TARGETING] Refusing to generate a targeting graph (too few non-police assassins)."))
+            response.append(Label("[TARGETING] Refusing to generate a targeting graph (too few full players)."))
             return {}
 
         # FIRST STEP, get initial targets
@@ -353,8 +353,8 @@ class TargetingPlugin(AbstractPlugin):
 
             deaths = [victim for (_, victim) in e.kills]
 
-            # filter out police
-            deaths = [d for d in deaths if not ASSASSINS_DATABASE.get(d).is_police]
+            # filter out city watch
+            deaths = [d for d in deaths if not ASSASSINS_DATABASE.get(d).is_city_watch]
             if not deaths:
                 continue
 

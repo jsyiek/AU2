@@ -174,7 +174,7 @@ class MockGame:
                 water_status=n + " water status",
                 college=n + " college",
                 notes=n + " notes ",
-                is_police=False
+                is_city_watch=False
             )
             ASSASSINS_DATABASE.add(a)
 
@@ -245,20 +245,20 @@ class ProxyAssassin:
     def model(self, name) -> Assassin:
         return ASSASSINS_DATABASE.get(self.__ident(name))
 
-    def are_police(self) -> MockGame:
+    def are_city_watch(self) -> MockGame:
         """
-        Makes these assassins police
+        Makes these assassins members of the city watch
         """
         for a in self.assassins:
-            ASSASSINS_DATABASE.assassins[self.__ident(a)].is_police = True
+            ASSASSINS_DATABASE.assassins[self.__ident(a)].is_city_watch = True
 
         return self.mockGame
 
-    def is_police(self):
+    def is_city_watch(self):
         """
-        Makes this assassin a police
+        Makes this assassin a member of the city watch
         """
-        return self.are_police()
+        return self.are_city_watch()
 
     def are_hidden(self) -> "ProxyAssassin":
         """

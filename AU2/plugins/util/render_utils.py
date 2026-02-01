@@ -65,16 +65,16 @@ INCO_COLS = [
     "#E63FAE", "#D94F9F", "#FF80BF",
 ]
 
-POLICE_COLS = [
+CITY_WATCH_COLS = [
     "#4D54E3", "#7433FF", "#3B6BD4",
     "#0066CC", "#3366B2", "#4159E0",
 ]
 
-DEAD_POLICE_COLS = [
+DEAD_CITY_WATCH_COLS = [
     "#000066"
 ]
 
-CORRUPT_POLICE_COLS = [
+CORRUPT_CITY_WATCH_COLS = [
     "#9999CC"
 ]
 
@@ -130,7 +130,7 @@ def default_color_fn(pseudonym: str,
 
     Colour is then assigned by `get_color` using this information.
     """
-    is_police = assassin_model.is_police
+    is_city_watch = assassin_model.is_city_watch
 
     # retrieve info from managers
     is_wanted, dead, incompetent = False, False, False
@@ -142,31 +142,31 @@ def default_color_fn(pseudonym: str,
         elif isinstance(manager, WantedManager):
             is_wanted = manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
 
-    return get_color(pseudonym, dead, incompetent, is_police, is_wanted)
+    return get_color(pseudonym, dead, incompetent, is_city_watch, is_wanted)
 
 
 def get_color(pseudonym: str,
               dead: bool = False,
               incompetent: bool = False,
-              is_police: bool = False,
+              is_city_watch: bool = False,
               is_wanted: bool = False) -> str:
     """Basic colouring rules that can be used by `ColorFn`s."""
     ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
     # colour appropriately
     if is_wanted:
-        if is_police:
-            return CORRUPT_POLICE_COLS[ind % len(CORRUPT_POLICE_COLS)]
+        if is_city_watch:
+            return CORRUPT_CITY_WATCH_COLS[ind % len(CORRUPT_CITY_WATCH_COLS)]
         return WANTED_COLS[ind % len(WANTED_COLS)]
     if dead:
-        if is_police:
-            return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
+        if is_city_watch:
+            return DEAD_CITY_WATCH_COLS[ind % len(DEAD_CITY_WATCH_COLS)]
         return DEAD_COLS[ind % len(DEAD_COLS)]
     if incompetent:
         return INCO_COLS[ind % len(INCO_COLS)]
     if pseudonym in HARDCODED_COLORS:
         return HARDCODED_COLORS[pseudonym]
-    if is_police:
-        return POLICE_COLS[ind % len(POLICE_COLS)]
+    if is_city_watch:
+        return CITY_WATCH_COLS[ind % len(CITY_WATCH_COLS)]
     return HEX_COLS[ind % len(HEX_COLS)]
 
 

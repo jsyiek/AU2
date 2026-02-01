@@ -67,7 +67,7 @@ GAME_TYPE_PLUGIN_MAP = {
         "MayWeekUtilitiesPlugin": False,
         "PageGeneratorPlugin": True,
         "PlayerImporterPlugin": True,
-        "PolicePlugin": True,
+        "CityWatchPlugin": True,
         "RandomGamePlugin": False,
         "ScoringPlugin": True,
         "TargetingPlugin": True,
@@ -82,7 +82,7 @@ GAME_TYPE_PLUGIN_MAP = {
     #     "MafiaPlugin": False,
     #     "MayWeekUtilitiesPlugin": True,
     #     "PageGeneratorPlugin": True,  # needed to be able to hide events
-    #     "PolicePlugin": False,
+    #     "CityWatchPlugin": False,
     #     "RandomGamePlugin": False,
     #     "ScoringPlugin": False,
     #     "TargetingPlugin": False,
@@ -114,7 +114,7 @@ class CorePlugin(AbstractPlugin):
             "Water Status": self.identifier + "_water_status",
             "College": self.identifier + "_college",
             "Notes": self.identifier + "_notes",
-            "Police": self.identifier + "_police",
+            "City Watch": self.identifier + "_city_watch",
             "Hidden Assassins": self.identifier + "_hidden_assassins",
             "Nuke Database": self.identifier + "_nuke",
             "Secret Number": self.identifier + "_secret_confirm",
@@ -130,7 +130,7 @@ class CorePlugin(AbstractPlugin):
             self.html_ids["Water Status"]: "water_status",
             self.html_ids["College"]: "college",
             self.html_ids["Notes"]: "notes",
-            self.html_ids["Police"]: "is_police"
+            self.html_ids["City Watch"]: "is_city_watch"
         }
 
         self.event_html_ids = {
@@ -278,7 +278,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        player_type = assassin.is_police and "Police" or "Player"
+        player_type = assassin.is_city_watch and "City Watch" or "Player"
         hidden = assassin.hidden and "HIDDEN" or ""
         return [
             ("ID", str(assassin._secret_id)),
@@ -364,7 +364,7 @@ class CorePlugin(AbstractPlugin):
 
     def on_assassin_request_create(self):
         # use this to detect whether the game has started or not, since sending the first email is the point when
-        # targets are "locked in" and adding new non-police players becomes dangerous
+        # targets are "locked in" and adding new full players becomes dangerous
         last_emailed_event = int(
             GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
         )
@@ -378,7 +378,7 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
             LargeTextEntry(self.html_ids["Notes"], "Notes"),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+            Checkbox(self.html_ids["City Watch"], "City Watch? (y/n)",
                      checked=last_emailed_event >= 0,
                      force_default=last_emailed_event >= 0)
         ]
@@ -406,8 +406,8 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)",
-                     checked=assassin.is_police,
+            Checkbox(self.html_ids["City Watch"], "City Watch? (y/n)",
+                     checked=assassin.is_city_watch,
                      force_default=last_emailed_event >= 0)
         ]
         return html
@@ -426,7 +426,7 @@ class CorePlugin(AbstractPlugin):
         assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
-        assassin.is_police = htmlResponse[self.html_ids["Police"]]
+        assassin.is_city_watch = htmlResponse[self.html_ids["City Watch"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):

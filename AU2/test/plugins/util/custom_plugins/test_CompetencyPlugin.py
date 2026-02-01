@@ -149,12 +149,12 @@ class TestCompetencyPlugin:
     @plugin_test
     def test_gigabolt(self):
         """
-        Test that only non-police players with no kills and no attempts will be eliminated.
+        Test that only full players with no kills and no attempts will be eliminated.
         """
         p = some_players(20)
         game = (MockGame().having_assassins(p)
-                .assassin(p[19]).is_police()
-                .assassin(p[18]).is_police()
+                .assassin(p[19]).is_city_watch()
+                .assassin(p[18]).is_city_watch()
                 .assassin(p[0]).kills(p[1]).then()
                 .assassin(p[2]).kills(p[3]).then()
                 .assassin(p[4]).kills(p[5]).then()
