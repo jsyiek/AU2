@@ -11,9 +11,9 @@ from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
 
 class TestScoringPlugin:
 
-    def get_manager(self, mockGame, perma_death: bool = True, filter_police = True) -> ScoreManager:
+    def get_manager(self, mockGame, perma_death: bool = True, filter_city_watch = True) -> ScoreManager:
         m = ScoreManager(assassin_ids=[name + " identifier" for name in mockGame.all_assassins
-                                       if not (filter_police and mockGame.assassin_model(name).is_police)],
+                                       if not (filter_city_watch and mockGame.assassin_model(name).is_city_watch)],
                          perma_death=perma_death)
         for e in sorted(EVENTS_DATABASE.events.values(), key=lambda e: e.datetime):
             m.add_event(e)
@@ -188,7 +188,7 @@ class TestScoringPlugin:
         assert manager.live_assassins == set(idents)
 
     @plugin_test
-    def test_double_death_and_police(self):
+    def test_double_death_and_city_watch(self):
         """
         Kill tree is
                  7 -> 6
@@ -198,7 +198,7 @@ class TestScoringPlugin:
                      /|\
                       |
                  5 -> 2
-        where 3 and 7 are police and 0 killed 1 first.
+        where 3 and 7 are members of the city watch and 0 killed 1 first.
         (this models the situation where a player went wanted then three people killed them in quick succession)
         """
         n = 8
@@ -206,7 +206,7 @@ class TestScoringPlugin:
         game = MockGame().having_assassins(p)
         idents = [name + " identifier" for name in p]
 
-        game.assassin(p[3]).with_accomplices(p[7]).are_police()
+        game.assassin(p[3]).with_accomplices(p[7]).are_city_watch()
         game.assassin(p[1]).kills(p[3]).new_datetime()
         game.assassin(p[0]).kills(p[1]).new_datetime()
         game.assassin(p[2]).kills(p[1]).new_datetime()
@@ -222,7 +222,7 @@ class TestScoringPlugin:
             if i in {0, 4, 5}:
                 assert manager._kills(idents[i]) == 1
             elif i in {3, 7}:
-                continue # we don't care about police kill counts
+                continue  # we don't care about city watch kill counts
             else:
                 assert manager._kills(idents[i]) == 0
 
@@ -233,7 +233,7 @@ class TestScoringPlugin:
             elif i in {4}:
                 assert manager._conkers(idents[i]) == 2
             elif i in {3, 7}:
-                continue # we don't care about police conkers
+                continue  # we don't care about city watch conkers
             else:
                 assert manager._conkers(idents[i]) == 0
 

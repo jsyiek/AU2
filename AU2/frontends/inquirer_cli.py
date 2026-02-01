@@ -748,7 +748,7 @@ def render(html_component, dependency_context={}):
         elif out == "ALL ALIVE":
             return {html_component.identifier: html_component.alive_assassins}
         elif out == "ALL CITY WATCH":
-            return {html_component.identifier: html_component.police_assassins}
+            return {html_component.identifier: html_component.city_watch_assassins}
         elif out == "UPDATES ONLY":
             return {html_component.identifier: ["UPDATES ONLY"]}
         else:

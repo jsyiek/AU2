@@ -6,40 +6,40 @@ from AU2.database.model import Event
 from AU2.html_components.SimpleComponents.Label import Label
 
 DEFAULT_RANKS = [
-    'Bog-standard Constable',  # Default police rank
+    'Bog-standard Constable',  # Default city watch rank
     'Commander of the City Watch',
     'Umpire',
 ]
-DEFAULT_POLICE_RANK = 0
+DEFAULT_CITY_WATCH_RANK = 0
 AUTO_RANK_DEFAULT = True
 MANUAL_RANK_DEFAULT = False
-POLICE_KILLS_RANKUP_DEFAULT = True
+CITY_WATCH_KILLS_RANKUP_DEFAULT = True
 
 
-class PoliceRankManager:
+class CityWatchRankManager:
     """
-    Simple manager for police ranks
+    Simple manager for city watch ranks
     """
 
-    def __init__(self, auto_ranking, police_kill_ranking):
+    def __init__(self, auto_ranking, city_watch_kill_ranking):
         self.assassin_relative_ranks = defaultdict(lambda: 0)
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("CityWatchPlugin", False)
         self.auto_ranking = auto_ranking
-        self.police_kill_ranking = police_kill_ranking
+        self.city_watch_kill_ranking = city_watch_kill_ranking
 
     def add_event(self, e: Event):
         for (aID, rank) in e.pluginState.get("CityWatchPlugin", {}).items():
             self.assassin_relative_ranks[aID] += rank
         if self.auto_ranking:
             for (killer, victim) in e.kills:
-                if not ASSASSINS_DATABASE.get(killer).is_police:
+                if not ASSASSINS_DATABASE.get(killer).is_city_watch:
                     continue
                 if (killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [])
                         or killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_cop", [])):
                     continue
-                if self.police_kill_ranking:
+                if self.city_watch_kill_ranking:
                     self.assassin_relative_ranks[killer] += 1
-                elif not ASSASSINS_DATABASE.get(victim).is_police:
+                elif not ASSASSINS_DATABASE.get(victim).is_city_watch:
                     self.assassin_relative_ranks[killer] += 1
 
     def get_min_rank(self):
@@ -64,14 +64,14 @@ class PoliceRankManager:
     def get_rank_name(self, player_id: str):
         return GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_ranks", DEFAULT_RANKS)[
             self.get_relative_rank(player_id)
-            + int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_POLICE_RANK))
+            + int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_CITY_WATCH_RANK))
         ]
 
     def generate_new_ranks_if_necessary(self):
-        # Code to generate new ranks if police are promoted/demoted more than ever before
+        # Code to generate new ranks if city watch members are promoted/demoted more than ever before
         # This will add them to the database to be renamed by the umpire
         message = []
-        default_rank = int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_POLICE_RANK))
+        default_rank = int(GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_CITY_WATCH_RANK))
         rank_list = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_ranks", DEFAULT_RANKS)
         if self.get_min_rank() < -default_rank:
             current_ranks = rank_list

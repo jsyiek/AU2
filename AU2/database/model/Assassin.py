@@ -26,7 +26,7 @@ class Assassin(PersistentFile):
     is_police: bool
     # we should not delete assassins because that will break any references to that assassin.
     # most significantly, it would mess up the targeting graph.
-    # but it is useful to hide certain assassins in interfaces (e.g. an assassin who has been cloned into police)
+    # but it is useful to hide certain assassins in interfaces (e.g. an assassin who has been cloned into a casual player)
     hidden: bool = False
     # almost everything that is stateful is probably best placed in an event
     # but for a few plugins, it might make sense to place the information directly onto the assassin
@@ -65,7 +65,7 @@ class Assassin(PersistentFile):
     def clone(self, **changes):
         """
         Creates a clone of this assassin with a new identifier and specified changes.
-        This is used for resurrecting an assassin as police.
+        This is used for resurrecting an assassin as a casual player (city watch)..
 
         Args:
             **changes: use keyword arguments to specify attributes of clone where they should differ from the original.

@@ -26,7 +26,7 @@ class PlayerImporterPlugin(AbstractPlugin):
             "GSheets URL": self.identifier + "_gsheet_url"
         }
 
-        self.expected_columns = ["real_name", "pseudonym", "pronouns", "email", "college", "address", "water_status", "notes", "is_police"]
+        self.expected_columns = ["real_name", "pseudonym", "pronouns", "email", "college", "address", "water_status", "notes", "is_city_watch"]
 
         self.exports = [
             Export(
@@ -51,7 +51,7 @@ class PlayerImporterPlugin(AbstractPlugin):
             Label(
                 title=", ".join(self.expected_columns)
             ),
-            Label(title="('is_police' will check if the answer is 'yes' and set police accordingly)"),
+            Label(title="('is_city_watch' will check if the answer is 'yes' and set city watch membership accordingly)"),
             Label(
                 title="NOTE: If you don't do this, the player importer will make a best effort attempt to "
                       "guess what your fields mean"
@@ -89,17 +89,17 @@ class PlayerImporterPlugin(AbstractPlugin):
             if any(f in inp for f in [field, field.replace("_", " ")]):
                 return field
             elif field == "real_name" and "name" in inp \
-                    or field == "is_police" and any(x in inp for x in ('police', 'watch', 'casual')):
+                    or field == "is_city_watch" and any(x in inp for x in ('police', 'watch', 'casual')):
                 return field
 
-    def guess_if_police(self, field) -> bool:
-        possible_police = [
+    def guess_if_city_watch(self, field) -> bool:
+        possible_city_watch = [
             "police",
             "yes",
             "casual",
             "watch",
         ]
-        return any(f in field.lower() for f in possible_police)
+        return any(f in field.lower() for f in possible_city_watch)
 
     def guess_water_status(self, field) -> str:
         field = field.lower()
@@ -134,8 +134,8 @@ class PlayerImporterPlugin(AbstractPlugin):
                     arg = r[i]
                     if e == "pseudonym":
                         params["pseudonyms"] = [arg.strip()]
-                    elif e == "is_police":
-                        params["is_police"] = self.guess_if_police(arg)
+                    elif e == "is_city_watch":
+                        params["is_city_watch"] = self.guess_if_city_watch(arg)
                     elif e == "water_status":
                         params["water_status"] = self.guess_water_status(arg)
                     else:

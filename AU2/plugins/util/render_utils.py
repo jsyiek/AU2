@@ -54,16 +54,16 @@ INCO_COLS = [
     "#E63FAE", "#D94F9F", "#FF80BF",
 ]
 
-POLICE_COLS = [
+CITY_WATCH_COLS = [
     "#4D54E3", "#7433FF", "#3B6BD4",
     "#0066CC", "#3366B2", "#4159E0",
 ]
 
-DEAD_POLICE_COLS = [
+DEAD_CITY_WATCH_COLS = [
     "#000066"
 ]
 
-CORRUPT_POLICE_COLS = [
+CORRUPT_CITY_WATCH_COLS = [
     "#9999CC"
 ]
 
@@ -135,18 +135,18 @@ def get_color(pseudonym: str,
     # colour appropriately
     if is_wanted:
         if is_police:
-            return CORRUPT_POLICE_COLS[ind % len(CORRUPT_POLICE_COLS)]
+            return CORRUPT_CITY_WATCH_COLS[ind % len(CORRUPT_CITY_WATCH_COLS)]
         return WANTED_COLS[ind % len(WANTED_COLS)]
     if dead:
         if is_police:
-            return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
+            return DEAD_CITY_WATCH_COLS[ind % len(DEAD_CITY_WATCH_COLS)]
         return DEAD_COLS[ind % len(DEAD_COLS)]
     if incompetent:
         return INCO_COLS[ind % len(INCO_COLS)]
     if pseudonym in HARDCODED_COLORS:
         return HARDCODED_COLORS[pseudonym]
     if is_police:
-        return POLICE_COLS[ind % len(POLICE_COLS)]
+        return CITY_WATCH_COLS[ind % len(CITY_WATCH_COLS)]
     return HEX_COLS[ind % len(HEX_COLS)]
 
 

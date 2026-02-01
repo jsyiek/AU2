@@ -42,7 +42,7 @@ class CompetencyManager:
         if self.auto_competency:
             for (killer, victim) in e.kills:
                 victim_model = ASSASSINS_DATABASE.get(victim)
-                if victim_model.is_police:
+                if victim_model.is_city_watch:
                     continue
                 self.attempts_since_kill[killer] = 0
                 # Allows overriding auto competency on a case-by-case basis
@@ -58,7 +58,7 @@ class CompetencyManager:
             for assassin_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
                 # Logic for not increasing attempts if player got a player kill in same event.
                 for (killer, victim) in e.kills:
-                    if killer == assassin_id and not ASSASSINS_DATABASE.get(victim).is_police:
+                    if killer == assassin_id and not ASSASSINS_DATABASE.get(victim).is_city_watch:
                         break
                 else:
                     self.attempts_since_kill[assassin_id] += 1
@@ -79,7 +79,7 @@ class CompetencyManager:
         """
         Returns true if:
          1) the CompetencyPlugin is activated
-         2) the assassin is not police
+         2) the assassin is not part of the city watch
          3) the deadline is earlier than the date
         """
         return self.activated and not a.is_police and self.deadlines[a.identifier] < date

@@ -40,7 +40,7 @@ class RandomGamePlugin(AbstractPlugin):
             ),
             IntegerEntry(
                 identifier=self.html_ids["Number Players"],
-                title="[RANDOM GAME] How many players should we create? (Max 500, and Police aren't supported)",
+                title="[RANDOM GAME] How many players should we create? (Max 500, and City Watch aren't supported)",
                 default=280
             ),
             Label(
