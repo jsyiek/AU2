@@ -258,7 +258,7 @@ class CompetencyPlugin(AbstractPlugin):
             title="Select the umpire, since someone needs to kill the selected players",
             identifier=self.html_ids["Umpire"],
             options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_police],
-            selected=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("PolicePlugin_umpires", [""])[0]
+            selected=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [""])[0]
             # Will crash if there are no police to choose from
         ))
         questions.append(DatetimeEntry(
