@@ -1,7 +1,7 @@
 from collections import defaultdict
 import dataclasses
 import functools
-from typing import DefaultDict, Dict, Iterable, List, Optional, Sequence, Set
+from typing import DefaultDict, Dict, List, Optional, Sequence, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -25,7 +25,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, Att
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import render_all_events, get_color, Manager
+from AU2.plugins.util.render_utils import Chapter, generate_news_pages, get_color, Manager
 
 
 HEX_COLS = [
@@ -747,22 +747,13 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # fallback for individual
             return get_color(pseudonym)
 
-        _, mw_weeks = render_all_events(
-            exclude=lambda e: (
-                    # TODO: when a game is not live, move hidden-ness of an event into core?
-                    e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)
-            ),
+        MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News")
+
+        generate_news_pages(
+            headlines_path="mw-head.html",
+            page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
             color_fn=mw_color_fn,
             plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
         )
-        mw_content = "".join("".join(day_news) for _, day_news in sorted(mw_weeks.items()))
-
-        with open(WEBPAGE_WRITE_LOCATION / "mw-news.html", "w+", encoding="utf-8") as F:
-            F.write(
-                MAYWEEK_NEWS_TEMPLATE.format(
-                    CONTENT=mw_content,
-                    YEAR=str(get_now_dt().year)
-                )
-            )
 
         return [Label("[MAY WEEK] Success!")]

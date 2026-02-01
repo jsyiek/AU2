@@ -358,45 +358,49 @@ class TargetingPlugin(AbstractPlugin):
             if not deaths:
                 continue
 
-            # try to fix with triangle elimination
-            # this function has side effects
-            success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
-            if success:
-                continue
+            # process deaths in chunks, to prevent `update_graph` needing to check too many permutations
+            n = 3
+            subdivided_deaths = [deaths[i:i + n] for i in range(0, len(deaths), n)]
+            for deaths in subdivided_deaths:
+                # try to fix with triangle elimination
+                # this function has side effects
+                success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
+                if success:
+                    continue
 
-            success = self.update_graph(
-                response,
-                targeting_graph,
-                targeters_graph,
-                deaths,
-                player_seeds_set,
-                allow_mutual_seed_targets=True
-            )
+                success = self.update_graph(
+                    response,
+                    targeting_graph,
+                    targeters_graph,
+                    deaths,
+                    player_seeds_set,
+                    allow_mutual_seed_targets=True
+                )
 
-            if success:
+                if success:
+                    response.append(
+                        Label("[TARGETING] WARNING: Seeding has been violated due to an unavoidable graph collapse."))
+                    continue
+
+                success = self.update_graph(
+                    response,
+                    targeting_graph,
+                    targeters_graph,
+                    deaths,
+                    player_seeds_set,
+                    allow_mutual_seed_targets=True,
+                    allow_mutual_targets=True
+                )
+
+                if success:
+                    response.append(
+                        Label("[TARGETING] WARNING: Two assassins target each other due to an unavoidable graph collapse."))
+                    continue
+
                 response.append(
-                    Label("[TARGETING] WARNING: Seeding has been violated due to an unavoidable graph collapse."))
-                continue
-
-            success = self.update_graph(
-                response,
-                targeting_graph,
-                targeters_graph,
-                deaths,
-                player_seeds_set,
-                allow_mutual_seed_targets=True,
-                allow_mutual_targets=True
-            )
-
-            if success:
-                response.append(
-                    Label("[TARGETING] WARNING: Two assassins target each other due to an unavoidable graph collapse."))
-                continue
-
-            response.append(
-                Label("[TARGETING] CRITICAL: The targeting graph 3-targets 3-targeting invariant cannot be maintained."
-                      " Targeting has been ABORTED. IT IS TIME TO BEGIN OPEN SEASON."))
-            return {}
+                    Label("[TARGETING] CRITICAL: The targeting graph 3-targets 3-targeting invariant cannot be maintained."
+                          " Targeting has been ABORTED. IT IS TIME TO BEGIN OPEN SEASON."))
+                return {}
 
         return targeting_graph
 
