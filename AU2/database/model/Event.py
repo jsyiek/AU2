@@ -60,4 +60,4 @@ class Event(PersistentFile):
         the internal `identifier`, changes as the Event is updated.
         """
         # TODO: render pseudonym codes?
-        return f"[{self.datetime.strftime('%Y-%m-%d %H:%M %p')}] {self.headline}"
+        return f"[{self.datetime.strftime('%Y-%m-%d %H:%M %p')}] {self.headline.rstrip()}"
