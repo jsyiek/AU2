@@ -1,11 +1,10 @@
-from typing import Any, Callable, List, Tuple, TypeVar, Union
+from typing import Any, Callable, List, Tuple, Type, TypeVar, Union
 
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 
 T = TypeVar("T")
-
 
 class Export:
     """

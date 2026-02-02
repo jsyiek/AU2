@@ -127,9 +127,9 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             if killer not in added_nodes:
                 net.add_node(
                     killer_searchable,
-                    label=killer_model.real_name + (" (Police)" if killer_model.is_police else ""),
+                    label=killer_model.real_name + (" (City Watch)" if killer_model.is_city_watch else ""),
                     shape=NODE_SHAPE,
-                    color=get_color(killer_model.get_pseudonym(0), is_police=killer_model.is_police),
+                    color=get_color(killer_model.get_pseudonym(0), is_city_watch=killer_model.is_city_watch),
                     title=killer_searchable,
                     value=1 + score_manager.get_conkers(killer_model)
                 )
@@ -137,9 +137,9 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             if victim not in added_nodes:
                 net.add_node(
                     victim_searchable,
-                    label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
+                    label=victim_model.real_name + (" (City Watch)" if victim_model.is_city_watch else ""),
                     shape=NODE_SHAPE,
-                    color=get_color(victim_model.get_pseudonym(0), is_police=victim_model.is_police),
+                    color=get_color(victim_model.get_pseudonym(0), is_city_watch=victim_model.is_city_watch),
                     title=victim_searchable,
                     value=1 + score_manager.get_conkers(victim_model)
                 )
@@ -150,7 +150,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                          label=e.datetime.strftime(DATETIME_FORMAT),
                          color=get_color(
                              victim_model.get_pseudonym(e.assassins.get(victim, 0)),
-                             is_police=victim_model.is_police,
+                             is_city_watch=victim_model.is_city_watch,
                              incompetent=competency_manager.is_inco_at(victim_model, e.datetime),
                              is_wanted=wanted_manager.is_player_wanted(victim, e.datetime)
                          ),
@@ -216,7 +216,7 @@ class ScoringPlugin(AbstractPlugin):
             )
         ]
 
-    # plugin state management is copied from PolicePlugin
+    # plugin state management is copied from CityWatchPlugin
     def gsdb_get(self, plugin_state_id: str):
         return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state[plugin_state_id]['id'],
                                                                              self.plugin_state[plugin_state_id][
@@ -276,8 +276,8 @@ class ScoringPlugin(AbstractPlugin):
         openseason_end = get_game_end()
         # use a score manager to count kills, conkers, and attempts
         # don't need to set the formula because we aren't going to fetch scores
-        full_players = ASSASSINS_DATABASE.get_filtered(include=lambda a: not a.is_police,
-                                                       include_hidden=lambda a: not a.is_police)
+        full_players = ASSASSINS_DATABASE.get_filtered(include=lambda a: not a.is_city_watch,
+                                                       include_hidden=lambda a: not a.is_city_watch)
         formula = self.gsdb_get("Formula")
         score_manager = ScoreManager({a.identifier for a in full_players}, formula=formula, game_end=openseason_end)
         events = sorted(EVENTS_DATABASE.events.values(), key=lambda e: e.datetime)
@@ -289,10 +289,12 @@ class ScoringPlugin(AbstractPlugin):
         for rank, p in enumerate(full_players):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
+            # note: the link may be broken for may week games... (see https://github.com/jsyiek/AU2/issues/161)
             deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
-                      for e in score_manager.get_death_events(p)]
+                      for e in score_manager.get_death_events(p)
+                      if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)]
             rows.append(stats_row_template(columns).format(
                 NAME=p.real_name,
                 PSEUDONYMS=p.all_pseudonyms(),
@@ -363,7 +365,7 @@ class ScoringPlugin(AbstractPlugin):
 Parameters:
     a: attempts
     b: bonus points -- awarded manually using Scoring -> Set bonuses
-    k: kills -- excludes kills of police, and of players who had already died when the kill was made
+    k: kills -- excludes kills of the city watch, and of players who had already died when the kill was made
     c: conkers -- a player's conkers score is the number of kills made by the player, plus the sum of \
 the conkers of all players killed by the player, ignoring any kills that do not count towards the kill score \
 as defined above
@@ -424,8 +426,8 @@ Syntax:
         if not self.formula_is_valid(formula):
             return [Label("[WARNING] [SCORING] Invalid scoring formula -- skipping openseason page!")]
 
-        # need to include hidden assassins so that resurrecting as police doesn't stop kills counting
-        score_manager = ScoreManager(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_police,
+        # need to include hidden assassins so that resurrecting as part of the city watch doesn't stop kills counting
+        score_manager = ScoreManager(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_city_watch,
                                                                         include_hidden=True),
                                      formula=formula,
                                      bonuses={

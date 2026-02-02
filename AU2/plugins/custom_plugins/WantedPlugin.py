@@ -15,8 +15,8 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow
 from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
-from AU2.plugins.util.PoliceRankManager import PoliceRankManager, AUTO_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT, \
-    DEFAULT_RANKS, DEFAULT_POLICE_RANK
+from AU2.plugins.util.CityWatchRankManager import CityWatchRankManager, AUTO_RANK_DEFAULT, CITY_WATCH_KILLS_RANKUP_DEFAULT, \
+    DEFAULT_RANKS, DEFAULT_CITY_WATCH_RANK
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import get_now_dt
 
@@ -30,9 +30,9 @@ PLAYER_TABLE_TEMPLATE = """
 </table>
 """
 
-POLICE_TABLE_TEMPLATE = """
+CITY_WATCH_TABLE_TEMPLATE = """
 <p xmlns="">
-    Those that were corrupted by the dark side of the police force....
+    Those that were corrupted by the dark side of the city watch....
 </p>
 <table xmlns="" class="playerlist">
     <tr><th>Rank</th><th>Real Name</th><th>Pseudonym</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Crime</th><th>Redemption Conditions</th><th>Notes</th></tr>
@@ -50,7 +50,7 @@ DEAD_PLAYER_TABLE_TEMPLATE = """
 </table>
 """
 
-DEAD_CORRUPT_POLICE_TABLE_TEMPLATE = """
+DEAD_CORRUPT_CITY_WATCH_TABLE_TEMPLATE = """
 <p xmlns="">
     And these are the names of those who turned to the dark side, and paid the price:
 </p>
@@ -60,9 +60,9 @@ DEAD_CORRUPT_POLICE_TABLE_TEMPLATE = """
 </table>
 """
 PLAYER_TABLE_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{CRIME}</td><td>{REDEMPTION}</td><td>{NOTES}</td></tr>"
-POLICE_TABLE_ROW_TEMPLATE = "<tr><td>{RANK}</td><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{CRIME}</td><td>{REDEMPTION}</td><td>{NOTES}</td></tr>"
+CITY_WATCH_TABLE_ROW_TEMPLATE = "<tr><td>{RANK}</td><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{CRIME}</td><td>{REDEMPTION}</td><td>{NOTES}</td></tr>"
 DEAD_PLAYER_TABLE_ROW_TEMPLATE = """<tr><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{CRIME}</td></tr>"""
-DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE = """<tr><td>{RANK}</td><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{CRIME}</td></tr>"""
+DEAD_CORRUPT_CITY_WATCH_TABLE_ROW_TEMPLATE = """<tr><td>{RANK}</td><td>{REAL_NAME}</td><td>{PSEUDONYMS}</td><td>{CRIME}</td></tr>"""
 
 NO_WANTED_PLAYERS = """<p xmlns="">Nobody is Wanted at the moment. What a bunch of law-abiding assassins.</p>"""
 NO_DEAD_WANTED_PLAYERS = """<p xmlns="">No Wanted players have been killed... yet.</p>"""
@@ -163,27 +163,27 @@ class WantedPlugin(AbstractPlugin):
         # (umpires messing with event timings could affect the canon timeline!)
         events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
 
-        police_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("PolicePlugin", False)
+        city_watch_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("CityWatchPlugin", False)
 
         wanted_manager = WantedManager()
-        if police_ranks_enabled:
-            police_rank_manager = PoliceRankManager(
-                auto_ranking=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get(
-                    "PolicePlugin_auto_rank", AUTO_RANK_DEFAULT),
-                police_kill_ranking=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get(
-                    "PolicePlugin_police_kills_rankup", POLICE_KILLS_RANKUP_DEFAULT)
+        if city_watch_ranks_enabled:
+            city_watch_rank_manager = CityWatchRankManager(
+                auto_ranking=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get(
+                    "CityWatchPlugin_auto_rank", AUTO_RANK_DEFAULT),
+                city_watch_kill_ranking=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get(
+                    "CityWatchPlugin_city_watch_kills_rankup", CITY_WATCH_KILLS_RANKUP_DEFAULT)
             )
             for e in events:
-                police_rank_manager.add_event(e)
-            messages += police_rank_manager.generate_new_ranks_if_necessary()
+                city_watch_rank_manager.add_event(e)
+            messages += city_watch_rank_manager.generate_new_ranks_if_necessary()
 
         for e in events:
             wanted_manager.add_event(e)
 
-        wanted_players = wanted_manager.get_live_wanted_players(police=False)
-        wanted_police = wanted_manager.get_live_wanted_players(police=True)
-        wanted_player_deaths = wanted_manager.get_wanted_player_deaths(police=False)
-        wanted_police_deaths = wanted_manager.get_wanted_player_deaths(police=True)
+        wanted_players = wanted_manager.get_live_wanted_players(city_watch=False)
+        wanted_city_watch = wanted_manager.get_live_wanted_players(city_watch=True)
+        wanted_player_deaths = wanted_manager.get_wanted_player_deaths(city_watch=False)
+        wanted_city_watch_deaths = wanted_manager.get_wanted_player_deaths(city_watch=True)
 
         tables = []
         if wanted_players:
@@ -205,33 +205,33 @@ class WantedPlugin(AbstractPlugin):
             tables.append(
                 PLAYER_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if wanted_police:
+        if wanted_city_watch:
             rows = []
             # TODO: These look like they can be deleted? Pycharm identifies default_rank and ranks as unread vars
-            if police_ranks_enabled:
+            if city_watch_ranks_enabled:
                 default_rank = GENERIC_STATE_DATABASE.arb_state.get(
-                    "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
-                ranks = GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
-            for player_id in wanted_police:
+                    "CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_CITY_WATCH_RANK)
+                ranks = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_ranks", DEFAULT_RANKS)
+            for player_id in wanted_city_watch:
                 player = ASSASSINS_DATABASE.get(player_id)
-                rank = "Police"
-                if police_ranks_enabled:
-                    rank = police_rank_manager.get_rank_name(player_id)
+                rank = "City Watch"
+                if city_watch_ranks_enabled:
+                    rank = city_watch_rank_manager.get_rank_name(player_id)
                 rows.append(
-                    POLICE_TABLE_ROW_TEMPLATE.format(
+                    CITY_WATCH_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
                         REAL_NAME=escape(player.real_name),
                         PSEUDONYMS=player.all_pseudonyms(),
                         ADDRESS=escape(player.address),
                         COLLEGE=escape(player.college),
                         WATER_STATUS=escape(player.water_status),
-                        CRIME=escape(wanted_police[player_id]['crime']),
-                        REDEMPTION=escape(wanted_police[player_id]['redemption']),
+                        CRIME=escape(wanted_city_watch[player_id]['crime']),
+                        REDEMPTION=escape(wanted_city_watch[player_id]['redemption']),
                         NOTES=escape(player.notes)
                     )
                 )
             tables.append(
-                POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
+                CITY_WATCH_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
         if wanted_player_deaths:
             rows = []
@@ -247,20 +247,20 @@ class WantedPlugin(AbstractPlugin):
             tables.append(
                 DEAD_PLAYER_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if wanted_police_deaths:
+        if wanted_city_watch_deaths:
             rows = []
             # TODO: These look like they can be deleted? Pycharm identifies default_rank and ranks as unread vars
-            if police_ranks_enabled:
+            if city_watch_ranks_enabled:
                 default_rank = GENERIC_STATE_DATABASE.arb_state.get(
-                    "PolicePlugin", {}).get("PolicePlugin_default_rank", DEFAULT_POLICE_RANK)
-                ranks = GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_ranks", DEFAULT_RANKS)
-            for wanted_death_event in wanted_police_deaths:
+                    "CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_CITY_WATCH_RANK)
+                ranks = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_ranks", DEFAULT_RANKS)
+            for wanted_death_event in wanted_city_watch_deaths:
                 player = ASSASSINS_DATABASE.get(wanted_death_event['player_id'])
-                rank = "Police"
-                if police_ranks_enabled:
-                    rank = police_rank_manager.get_rank_name(wanted_death_event['player_id'])
+                rank = "City Watch"
+                if city_watch_ranks_enabled:
+                    rank = city_watch_rank_manager.get_rank_name(wanted_death_event['player_id'])
                 rows.append(
-                    DEAD_CORRUPT_POLICE_TABLE_ROW_TEMPLATE.format(
+                    DEAD_CORRUPT_CITY_WATCH_TABLE_ROW_TEMPLATE.format(
                         RANK=rank,
                         REAL_NAME=escape(player.real_name),
                         PSEUDONYMS=player.all_pseudonyms(),
@@ -268,12 +268,12 @@ class WantedPlugin(AbstractPlugin):
                     )
                 )
             tables.append(
-                DEAD_CORRUPT_POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
+                DEAD_CORRUPT_CITY_WATCH_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
 
         if not tables:
             tables.append(NO_WANTED_PLAYERS)
-        elif not (wanted_police_deaths or wanted_player_deaths):
+        elif not (wanted_city_watch_deaths or wanted_player_deaths):
             tables.append(NO_DEAD_WANTED_PLAYERS)
 
         with open(os.path.join(WEBPAGE_WRITE_LOCATION, self.FILENAME), "w+", encoding="utf-8", errors="ignore") as F:
