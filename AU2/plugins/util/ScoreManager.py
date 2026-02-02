@@ -30,7 +30,7 @@ class ScoreManager:
         self._score.cache_clear()
         self.death_manager.add_event(e)
         for (killer, victim) in e.kills:
-            # in regular games, live_assassins will initially only include non-police,
+            # in regular games, live_assassins will initially only include full players,
             # and dead players will be pruned as events are added
             if victim not in self.live_assassins:
                 continue
