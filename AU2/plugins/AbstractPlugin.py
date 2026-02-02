@@ -1,6 +1,6 @@
-from typing import Any, Callable, List, Tuple, TypeVar, Union
+from typing import Any, Callable, List, Tuple, Type, TypeVar, Union
 
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.LocalConfigDatabase import LOCAL_CONFIG_DATABASE
 from AU2.html_components import HTMLComponent
@@ -249,3 +249,29 @@ class AbstractPlugin:
         together.
         """
         return []
+
+    def assassin_property(self, identifier: str, default: T, store_default: bool = True) -> property:
+        """
+        Creates a property corresponding to a value stored in the plugin_state of an assassin.
+
+        Args:
+            identifier (str): identifier under which to store the property
+            default: the default value of the property
+            store_default (bool): whether to store the default value in the database. Necessary for mutable default
+                values.
+        Returns:
+            property: a property whose getter and setter functions read and write from Assassin.plugin_state.
+                Needs to be assigned to a CLASS attribute of Assassin to work!
+        """
+
+        if store_default:
+            def getter(assassin: Assassin) -> T:
+                return assassin.plugin_state.setdefault(self.identifier, {}).setdefault(identifier, default)
+        else:
+            def getter(assassin: Assassin) -> T:
+                return assassin.plugin_state.get(self.identifier, {}).get(identifier, default)
+
+        def setter(assassin: Assassin, val: T):
+            assassin.plugin_state.setdefault(self.identifier, {})[identifier] = val
+
+        return property(getter, setter)

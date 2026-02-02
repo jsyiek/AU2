@@ -306,9 +306,9 @@ class SRCFPlugin(AbstractPlugin):
 
             # note: hidden assassins will be excluded
             alive_assassins = ASSASSINS_DATABASE.get_identifiers(include=(
-                lambda a: a.is_police or not death_manager.is_dead(a)
+                lambda a: a.is_city_watch or not death_manager.is_dead(a)
             ))
-            police_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_police)
+            city_watch_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_city_watch)
 
             return [
                 Checkbox(
@@ -333,7 +333,7 @@ class SRCFPlugin(AbstractPlugin):
                     # note: hidden assassins will be excluded
                     assassins=ASSASSINS_DATABASE.get_identifiers(),
                     alive_assassins=alive_assassins,
-                    police_assassins=police_assassins
+                    city_watch_assassins=city_watch_assassins
                 )
             ]
         return []
