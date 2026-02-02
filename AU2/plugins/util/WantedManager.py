@@ -16,7 +16,7 @@ class WantedManager:
     def __init__(self):
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("WantedPlugin", False)
         # Relevent events are dicts, either {event_time: datetime.datetime, wanted_duration: days, crime: str, redemption: str},
-        # or {event_time}, which represents a death at event_time. This allows for multiple deaths (for police or may week)
+        # or {event_time}, which represents a death at event_time. This allows for multiple deaths (for city watch or may week)
         self.wanted_events: Dict[str, List[Dict]] = {}
 
     def add_event(self, e: Event):
@@ -31,10 +31,10 @@ class WantedManager:
             self.wanted_events.setdefault(victim, [])
             self.wanted_events[victim].append({'event_time': e.datetime})
 
-    def get_live_wanted_players(self, police=False):
+    def get_live_wanted_players(self, city_watch=False):
         players = {}
         for player_id in self.wanted_events:
-            if ASSASSINS_DATABASE.get(player_id).is_police != police:
+            if ASSASSINS_DATABASE.get(player_id).is_city_watch != city_watch:
                 continue
             if self.is_player_wanted(player_id):
                 last_event = self.wanted_events[player_id][-1]
@@ -54,10 +54,10 @@ class WantedManager:
         if last_event['event_time'] + last_event['wanted_duration'] > time:
             return True
 
-    def get_wanted_player_deaths(self, police=False):
+    def get_wanted_player_deaths(self, city_watch=False):
         wanted_deaths = []
         for player_id in self.wanted_events:
-            if ASSASSINS_DATABASE.get(player_id).is_police != police:
+            if ASSASSINS_DATABASE.get(player_id).is_city_watch != city_watch:
                 continue
             for idx, wanted_event in enumerate(self.wanted_events[player_id]):
                 # ignore if not a death event, or it's a death before any wanted events
