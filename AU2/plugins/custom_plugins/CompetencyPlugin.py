@@ -2,7 +2,8 @@ import dataclasses
 import datetime
 import enum
 import os
-from typing import List, Any, Dict, Optional, Set
+
+from typing import Any, Dict, List, Optional, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -78,7 +79,7 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 
 class PlayerStatus(enum.Enum):
     COMPETENT = enum.auto()
-    POLICE = enum.auto()
+    CITY_WATCH = enum.auto()
     INCOMPETENT = enum.auto()
     GIGAINCOMPETENT = enum.auto()
     DEAD = enum.auto()
@@ -140,8 +141,8 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
         is_dead = death_manager.is_dead(a)
 
         # Ordering of the below is important - don't reorder!
-        if a.is_police:
-            status = PlayerStatus.POLICE
+        if a.is_city_watch:
+            status = PlayerStatus.CITY_WATCH
         elif is_dead:
             status = PlayerStatus.DEAD
         elif is_gigainco:
@@ -188,6 +189,8 @@ class CompetencyPlugin(AbstractPlugin):
             "ATTEMPTS": "attempts",
             "CURRENT DEFAULT": "current_default"
         }
+
+        Assassin.__last_emailed_competency = self.assassin_property("last_emailed_competency", None, store_default=False)
 
         self.exports = [
             Export(
@@ -246,7 +249,7 @@ class CompetencyPlugin(AbstractPlugin):
 
         death_manager = DeathManager()
         active_players = get_active_players(death_manager)
-        available_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: not (a.is_police or death_manager.is_dead(a)))
+        available_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: not (a.is_city_watch or death_manager.is_dead(a)))
         questions.append(SelectorList(
             title="Select assassins to thunderbolt",
             identifier=self.html_ids["Gigabolt"],
@@ -256,9 +259,9 @@ class CompetencyPlugin(AbstractPlugin):
         questions.append(InputWithDropDown(
             title="Select the umpire, since someone needs to kill the selected players",
             identifier=self.html_ids["Umpire"],
-            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_police],
-            selected=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_umpires", [""])[0]
-            # Will crash if there are no police to choose from
+            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_city_watch],
+            selected=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [""])[0]
+            # Will crash if there are no city watch to choose from
         ))
         questions.append(DatetimeEntry(
             identifier=self.html_ids["Datetime"],
@@ -380,7 +383,7 @@ class CompetencyPlugin(AbstractPlugin):
             email_list: List[Email] = data
             for email in email_list:
                 recipient = email.recipient
-                if recipient.is_police:
+                if recipient.is_city_watch or death_manager.is_dead(recipient):
                     continue
                 if competency_manager.is_inco_at(recipient, now):
                     content = "It would seem you've become incompetent. You might wish to change that.\nIn order to " \
@@ -392,8 +395,15 @@ class CompetencyPlugin(AbstractPlugin):
                 email.add_content(
                     self.identifier,
                     content=content,
-                    require_send=False
+                    require_send=recipient.__last_emailed_competency != competency_manager.deadlines[recipient.identifier]
                 )
+
+                # only record emailed competency if emails will actually be sent
+                # the component is named confusingly. here, True = *do* send emails!
+                # TODO: would be good to be able to do this *after* emails sent...
+                if htmlResponse.get("SRCFPlugin_dry_run", True):
+                    recipient.__last_emailed_competency = competency_manager.deadlines[recipient.identifier]
+
         return []
 
     def on_event_create_or_update(self, e: Event, html_response: HTMLResponse) -> List[HTMLComponent]:
@@ -413,16 +423,16 @@ class CompetencyPlugin(AbstractPlugin):
         return [Label("[COMPETENCY] Success!")]
 
     def on_event_request_create_or_update(self, e: Optional[Event], html_response: HTMLResponse) -> List[HTMLComponent]:
-        NON_POLICE_COMPONENT_ID = "CompetencyPlugin_assassin_pseudonym"
-        # filter to non-police participants
+        FULL_PLAYER_COMPONENT_ID = "CompetencyPlugin_assassin_pseudonym"
+        # filter to full player participants
         # for now keeping the attempts/competency UI intact,
         # so we do this by replacing the component that they depend on with one containing filtered assassins
         questions = [Dependency(
-            dependentOn=NON_POLICE_COMPONENT_ID,
+            dependentOn=FULL_PLAYER_COMPONENT_ID,
             htmlComponents=[
-                HiddenJSON(NON_POLICE_COMPONENT_ID,
+                HiddenJSON(FULL_PLAYER_COMPONENT_ID,
                            {k: v for k, v in html_response["CorePlugin_assassin_pseudonym"].items()
-                            if not ASSASSINS_DATABASE.get(k).is_police}),
+                            if not ASSASSINS_DATABASE.get(k).is_city_watch}),
             ]
         )]
         track_attempts = GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["ATTEMPT TRACKING"], True)
@@ -437,10 +447,10 @@ class CompetencyPlugin(AbstractPlugin):
                 return ms
             questions.append(
                 Dependency(
-                    dependentOn=NON_POLICE_COMPONENT_ID,
+                    dependentOn=FULL_PLAYER_COMPONENT_ID,
                     htmlComponents=[
                         AssassinDependentIntegerEntry(
-                            pseudonym_list_identifier=NON_POLICE_COMPONENT_ID,
+                            pseudonym_list_identifier=FULL_PLAYER_COMPONENT_ID,
                             identifier=self.html_ids["Attempts"],
                             title="Add attempts/assists",
                             default=list_to_multiset(
@@ -456,10 +466,10 @@ class CompetencyPlugin(AbstractPlugin):
         # Allow competency editing on event update even if full auto competency enabled.
         if e or mode != "Full Auto":
             questions.append(Dependency(
-                dependentOn=NON_POLICE_COMPONENT_ID,
+                dependentOn=FULL_PLAYER_COMPONENT_ID,
                 htmlComponents=[
                     AssassinDependentIntegerEntry(
-                        pseudonym_list_identifier=NON_POLICE_COMPONENT_ID,
+                        pseudonym_list_identifier=FULL_PLAYER_COMPONENT_ID,
                         identifier=self.html_ids["Competency"],
                         title="Manually extend competency?" if mode != "Manual" else "Extend competency?",
                         default=(
@@ -538,7 +548,7 @@ class CompetencyPlugin(AbstractPlugin):
         # dead incos != incos who are currently dead,
         # but rather players who died while inco.
         # note that `dead_incos` includes hidden assassins,
-        # otherwise a player would disappear from the list of corpses when resurrected as police
+        # otherwise a player would disappear from the list of corpses when resurrected as part of the city watch
         dead_incos = competency_manager.inco_corpses
         alive_incos: List[Assassin] = [i for i in competency_manager.get_incos_at(limit)
                                        if not i.hidden
