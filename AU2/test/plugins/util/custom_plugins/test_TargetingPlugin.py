@@ -1,3 +1,5 @@
+import time
+
 from AU2.plugins.custom_plugins.TargetingPlugin import TargetingPlugin
 from AU2.test.test_utils import plugin_test, some_players, MockGame
 
@@ -32,9 +34,9 @@ class TestTargetingPlugin:
         targets = plugin.compute_targets([])
         assert valid_targets(num_players, targets)
 
-        game.assassin(p[0]).kills(p[1]) \
-            .assassin(p[2]).kills(p[3]) \
-            .assassin(p[4]).kills(p[5]) \
+        game.assassin(p[0]).kills(p[1]).then() \
+            .assassin(p[2]).kills(p[3]).then() \
+            .assassin(p[4]).kills(p[5]).then() \
             .assassin(p[6]).kills(p[7])
 
         targets = plugin.compute_targets([])
@@ -81,19 +83,19 @@ class TestTargetingPlugin:
         assert valid_targets(num_players - 185, targets)
 
     @plugin_test
-    def test_ignores_police(self):
+    def test_ignores_city_watch(self):
         num_players = 250
         p = some_players(num_players)
         game = MockGame().having_assassins(p)
 
-        game.assassin(p[0]).and_these(p[1], p[20], p[45], p[135]).are_police() \
-            .assassin(p[20]).with_accomplices(p[2], p[3]).kills(p[180]) \
+        game.assassin(p[0]).and_these(p[1], p[20], p[45], p[135]).are_city_watch() \
+            .assassin(p[20]).with_accomplices(p[2], p[3]).kills(p[180]).then() \
             .assassin(p[25]).kills(p[20])
 
         plugin = TargetingPlugin()
         targets = plugin.compute_targets([])
 
-        # 5 police, 1 player dead
+        # 5 city watch, 1 full player dead
         assert valid_targets(num_players - 5 - 1, targets)
 
     @plugin_test
@@ -108,3 +110,22 @@ class TestTargetingPlugin:
         plugin.compute_targets([])
 
         # if doesn't crash, test passes
+
+    @plugin_test
+    def test_many_kills_in_event(self):
+        num_players = 250
+        p = some_players(num_players)
+        game = MockGame().having_assassins(p)
+
+        kills = 5
+        game.assassin(p[0]).kills(*p[1:(1+kills)])
+
+        plugin = TargetingPlugin()
+        start = time.perf_counter()
+        targets = plugin.compute_targets([])
+        perf = time.perf_counter() - start
+
+        assert valid_targets(num_players - kills, targets)
+
+        # test passes only if calculation took a reasonable amount of time
+        assert perf < 0.05

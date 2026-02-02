@@ -1,6 +1,7 @@
 import glob
 import os.path
 
+from collections import defaultdict
 from typing import Any, Callable, Dict, List, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
@@ -21,6 +22,7 @@ from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
@@ -32,7 +34,7 @@ from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
     AttributePairTableRow
 from AU2.plugins.AvailablePlugins import __PluginMap
-from AU2.plugins.constants import COLLEGES, WATER_STATUSES
+from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 from AU2.plugins.util.date_utils import get_now_dt
@@ -65,7 +67,7 @@ GAME_TYPE_PLUGIN_MAP = {
         "MayWeekUtilitiesPlugin": False,
         "PageGeneratorPlugin": True,
         "PlayerImporterPlugin": True,
-        "PolicePlugin": True,
+        "CityWatchPlugin": True,
         "RandomGamePlugin": False,
         "ScoringPlugin": True,
         "TargetingPlugin": True,
@@ -80,7 +82,7 @@ GAME_TYPE_PLUGIN_MAP = {
     #     "MafiaPlugin": False,
     #     "MayWeekUtilitiesPlugin": True,
     #     "PageGeneratorPlugin": True,  # needed to be able to hide events
-    #     "PolicePlugin": False,
+    #     "CityWatchPlugin": False,
     #     "RandomGamePlugin": False,
     #     "ScoringPlugin": False,
     #     "TargetingPlugin": False,
@@ -112,7 +114,7 @@ class CorePlugin(AbstractPlugin):
             "Water Status": self.identifier + "_water_status",
             "College": self.identifier + "_college",
             "Notes": self.identifier + "_notes",
-            "Police": self.identifier + "_police",
+            "City Watch": self.identifier + "_city_watch",
             "Hidden Assassins": self.identifier + "_hidden_assassins",
             "Nuke Database": self.identifier + "_nuke",
             "Secret Number": self.identifier + "_secret_confirm",
@@ -128,7 +130,7 @@ class CorePlugin(AbstractPlugin):
             self.html_ids["Water Status"]: "water_status",
             self.html_ids["College"]: "college",
             self.html_ids["Notes"]: "notes",
-            self.html_ids["Police"]: "is_police"
+            self.html_ids["City Watch"]: "is_city_watch"
         }
 
         self.event_html_ids = {
@@ -278,7 +280,7 @@ class CorePlugin(AbstractPlugin):
     def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
         out = {}
         for assassin in assassins:
-            player_type = assassin.is_police and "Police" or "Player"
+            player_type = assassin.is_city_watch and "City Watch" or "Full Player"
             hidden = assassin.hidden and "HIDDEN" or ""
             out[assassin.identifier] = [
                 ("ID", str(assassin._secret_id)),
@@ -375,7 +377,7 @@ class CorePlugin(AbstractPlugin):
 
     def on_assassin_request_create(self):
         # use this to detect whether the game has started or not, since sending the first email is the point when
-        # targets are "locked in" and adding new non-police players becomes dangerous
+        # targets are "locked in" and adding new full players becomes dangerous
         last_emailed_event = int(
             GENERIC_STATE_DATABASE.arb_state.get("TargetingPlugin", {}).get("last_emailed_event", -1)
         )
@@ -389,7 +391,7 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES),
             LargeTextEntry(self.html_ids["Notes"], "Notes"),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)",
+            Checkbox(self.html_ids["City Watch"], "City Watch? (y/n)",
                      checked=last_emailed_event >= 0,
                      force_default=last_emailed_event >= 0)
         ]
@@ -417,8 +419,8 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(self.html_ids["Water Status"], "Water Status", WATER_STATUSES, selected=assassin.water_status),
             InputWithDropDown(self.html_ids["College"], "College", COLLEGES, selected=assassin.college),
             LargeTextEntry(self.html_ids["Notes"], "Notes", default=assassin.notes),
-            Checkbox(self.html_ids["Police"], "Police? (y/n)",
-                     checked=assassin.is_police,
+            Checkbox(self.html_ids["City Watch"], "City Watch? (y/n)",
+                     checked=assassin.is_city_watch,
                      force_default=last_emailed_event >= 0)
         ]
         return html
@@ -437,7 +439,7 @@ class CorePlugin(AbstractPlugin):
         assassin.water_status = htmlResponse[self.html_ids["Water Status"]]
         assassin.college = htmlResponse[self.html_ids["College"]]
         assassin.notes = htmlResponse[self.html_ids["Notes"]]
-        assassin.is_police = htmlResponse[self.html_ids["Police"]]
+        assassin.is_city_watch = htmlResponse[self.html_ids["City Watch"]]
         return [Label("[CORE] Success!")]
 
     def on_event_request_create(self):
@@ -700,7 +702,7 @@ class CorePlugin(AbstractPlugin):
     def gather_events(self) -> List[Tuple[str, str]]:
         # headline is truncated because `inquirer` doesn't deal with overlong options well
         return [
-                (f"[{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline[0:25].rstrip()}", identifier)
+                (event.text_display()[:HEADLINE_TRUNCATION_CUTOFF], identifier)
                 for identifier, event in sorted(EVENTS_DATABASE.events.items(), key=lambda x: x[1].datetime, reverse=True)
         ]
 
@@ -755,9 +757,13 @@ class CorePlugin(AbstractPlugin):
     def ask_generate_pages(self):
         components = []
         event_count = 0
+        # suggestion_data is indexed first by event identifier, then sanitycheck identifier, then suggestion identifier
+        suggestion_data = defaultdict(lambda: defaultdict(dict))
+        # event_component_map maps event identifiers to the identifier of the component that allows the user to select
+        # which suggested fixes to apply for that event
+        event_component_map: Dict[str, str] = {}
         for e in EVENTS_DATABASE.events.values():
             must_check = False
-            sanity_check_count = 0
             explanations = []
             for sanity_check_identifier, sanity_check in SANITY_CHECKS.items():
                 if sanity_check.has_marked(e):
@@ -765,91 +771,57 @@ class CorePlugin(AbstractPlugin):
                 changes = sanity_check.suggest_event_fixes(e)
                 if not changes:
                     continue
-                if not must_check:
-                    must_check = True
-                    components.append(
-                        HiddenTextbox(
-                            identifier=f"SanityCheck_{event_count}",
-                            default=e.identifier
-                        )
-                    )
-
-                components.append(
-                    HiddenTextbox(
-                        identifier=f"SanityCheck_{event_count}_{sanity_check_count}",
-                        default=sanity_check_identifier
-                    )
-                )
 
                 for i, suggestion in enumerate(changes):
-                    components.append(
-                        HiddenTextbox(
-                            identifier=f"SanityCheck_{event_count}_{sanity_check_count}_{i}_identifier",
-                            default=suggestion.identifier
-                        )
-                    )
-                    components.append(
-                        HiddenTextbox(
-                            identifier=f"SanityCheck_{event_count}_{sanity_check_count}_{i}_explanation",
-                            default=suggestion.explanation
-                        )
-                    )
-                    explanations.append(suggestion.explanation)
-
-                sanity_check_count += 1
+                    s_id = f"{sanity_check_identifier}_{i}"
+                    suggestion_data[e.identifier][sanity_check_identifier][s_id] = \
+                        suggestion.data
+                    explanations.append((suggestion.explanation, s_id))
 
             if explanations:
+                c_id = f"SanityCheck_{event_count}_explanations"
                 components.append(
                     SelectorList(
-                        identifier=f"SanityCheck_{event_count}_explanations",
-                        title=f"[SANITY CHECK] {e.identifier}",
+                        identifier=c_id,
+                        title=f"[SANITY CHECK] {e.text_display()[:HEADLINE_TRUNCATION_CUTOFF]}",
                         options=explanations,
                         defaults=explanations
                     )
                 )
+                event_component_map[e.identifier] = c_id
             if must_check:
                 event_count += 1
 
         if components:
             components.insert(0, Label("[SANITY CHECK] Potential errors detected. Select changes to make."))
 
+        components.append(HiddenJSON("SanityCheck_suggestion_data", suggestion_data))
+        components.append(HiddenJSON("SanityCheck_event_component_map", event_component_map))
+
         for p in PLUGINS:
             components += p.on_page_request_generate()
         return components
 
-    def answer_generate_pages(self, html_response_args: Dict):
+    def answer_generate_pages(self, html_response_args: Dict, actually_generate_pages: bool = True):
 
         components = []
 
-        events_count = 0
-        while f"SanityCheck_{events_count}" in html_response_args:
-            event_id = html_response_args[f"SanityCheck_{events_count}"]
-            for sanity_check in SANITY_CHECKS.values():
-                sanity_check.mark(EVENTS_DATABASE.events[event_id])
-            sanity_check_count = 0
-            selected_changes = html_response_args[f"SanityCheck_{events_count}_explanations"]
-            while f"SanityCheck_{events_count}_{sanity_check_count}" in html_response_args:
-                sanity_check_str = f"SanityCheck_{events_count}_{sanity_check_count}"
-                sanity_check_id = html_response_args[sanity_check_str]
-                suggestion_count = 0
-                requested_ids = []
-                while f"{sanity_check_str}_{suggestion_count}_identifier" in html_response_args:
-                    base = f"{sanity_check_str}_{suggestion_count}"
-                    suggestion_id = html_response_args[f"{base}_identifier"]
-                    explanation = html_response_args[f"{base}_explanation"]
-                    if explanation in selected_changes:
-                        requested_ids.append(suggestion_id)
-                    suggestion_count += 1
-                if requested_ids:
-                    components += SANITY_CHECKS[sanity_check_id].fix_event(
-                        EVENTS_DATABASE.events[event_id],
-                        requested_ids
-                    )
-                sanity_check_count += 1
-            events_count += 1
+        event_component_map = html_response_args["SanityCheck_event_component_map"]
+        suggestion_data = html_response_args["SanityCheck_suggestion_data"]
 
-        for p in PLUGINS:
-            components += p.on_page_generate(html_response_args)
+        for event_id, component_id in event_component_map.items():
+            e = EVENTS_DATABASE.get(event_id)
+            selected = set(html_response_args[component_id])
+            for sanity_check_id, sanity_check_suggestion_data in suggestion_data.get(event_id, {}).items():
+                components += SANITY_CHECKS[sanity_check_id].fix_event(
+                    e,
+                    [data for ident, data in sanity_check_suggestion_data.items() if ident in selected]
+                )
+                SANITY_CHECKS[sanity_check_id].mark(e)
+
+        if actually_generate_pages:  # useful for unit testing
+            for p in PLUGINS:
+                components += p.on_page_generate(html_response_args)
         return components
 
     def ask_custom_hook(self, hook: str) -> List[HTMLComponent]:

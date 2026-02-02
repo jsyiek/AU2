@@ -1,5 +1,5 @@
 import dataclasses
-from typing import List
+from typing import Any, List
 
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
@@ -15,8 +15,9 @@ class Suggestion:
     # Keep this short.
     explanation: str
 
-    # Identifier that uniquely identifies the change to the SanityCheck.
-    identifier: str
+    # Data determining the actual effect of the suggestion (structure depends on the SanityCheck which produced it).
+    # Should be JSON-serialisable.
+    data: Any
 
 
 class SanityCheck:
@@ -53,14 +54,15 @@ class SanityCheck:
         """
         raise NotImplementedError()
 
-    def fix_event(self, e: Event, suggestion_ids: List[str]) -> List[HTMLComponent]:
+    def fix_event(self, e: Event, suggestion_data: List[Any]) -> List[HTMLComponent]:
         """
         After a user has confirmed one or more changes are wanted, this function
         executes the changes
 
         Arguments:
             e: Event to fix
-            suggestion_ids: List of suggestion identifiers that should be implemented
+            suggestion_data: List of data that specifies which changes should be made. The type and structure of the
+                data depends on the specific sanity check.
 
         Returns:
             List of HTML components to display to user.
