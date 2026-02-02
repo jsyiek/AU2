@@ -188,7 +188,7 @@ class AbstractPlugin:
 
                 -2: May week player list
                 -1: Bounties (either plugin)
-                0: Police
+                0: City Watch
                 1: Wanted
                 2: Incos
                 3: Open Season
