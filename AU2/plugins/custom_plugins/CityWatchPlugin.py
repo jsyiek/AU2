@@ -17,15 +17,15 @@ from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTex
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.CityWatchRankManager import DEFAULT_RANKS, CityWatchRankManager, DEFAULT_CITY_WATCH_RANK, AUTO_RANK_DEFAULT, \
+    MANUAL_RANK_DEFAULT, CITY_WATCH_KILLS_RANKUP_DEFAULT
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.PoliceRankManager import DEFAULT_RANKS, PoliceRankManager, DEFAULT_POLICE_RANK, AUTO_RANK_DEFAULT, \
-    MANUAL_RANK_DEFAULT, POLICE_KILLS_RANKUP_DEFAULT
 from AU2.plugins.util.date_utils import get_now_dt, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.render_utils import event_url
 
-POLICE_TABLE_TEMPLATE = """
+CITY_WATCH_TABLE_TEMPLATE = """
 <p xmlns="">
-    Here is a list of members of our loyal police, charged with protecting Cambridge from murderers of innocents and people that annoy the all powerful Umpire:
+    Here is a list of members of our loyal city watch, charged with protecting Cambridge from murderers of innocents and people that annoy the all powerful Umpire:
 </p>
 <table xmlns="" class="playerlist">
   <tr><th>Rank</th><th>Pseudonym</th><th>Real Name</th><th>Email Address</th><th>College</th><th>Notes</th><th>Deaths</th></tr>
@@ -33,22 +33,22 @@ POLICE_TABLE_TEMPLATE = """
 </table>
 """
 
-POLICE_TABLE_ROW_TEMPLATE = """
+CITY_WATCH_TABLE_ROW_TEMPLATE = """
 <tr><td>{RANK}</td><td>{PSEUDONYM}</td><td>{NAME}</td><td>{EMAIL}</td><td>{COLLEGE}</td><td>{NOTES}</td><td>{DEATHS}</td></tr>
 """
 
-NO_POLICE = """<p xmlns="">The police force is suspiciously understaffed at the moment</p>"""
+NO_CITY_WATCH = """<p xmlns="">The city watch is suspiciously understaffed at the moment.</p>"""
 
 
-POLICE_PAGE_TEMPLATE: str
-with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "police.html"), "r", encoding="utf-8", errors="ignore") as F:
-    POLICE_PAGE_TEMPLATE = F.read()
+CITY_WATCH_PAGE_TEMPLATE: str
+with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "citywatch.html"), "r", encoding="utf-8", errors="ignore") as F:
+    CITY_WATCH_PAGE_TEMPLATE = F.read()
 
 
 @registered_plugin
-class PolicePlugin(AbstractPlugin):
+class CityWatchPlugin(AbstractPlugin):
     def __init__(self):
-        super().__init__("PolicePlugin")
+        super().__init__("CityWatchPlugin")
 
         self.html_ids = {
             "Ranks": self.identifier + "_ranks",
@@ -62,40 +62,40 @@ class PolicePlugin(AbstractPlugin):
 
         self.plugin_state = {
             "Ranks": {'id': self.identifier + "_ranks", 'default': DEFAULT_RANKS},  # List
-            "Default Rank": {'id': self.identifier + "_default_rank", 'default': DEFAULT_POLICE_RANK},  # Int
+            "Default Rank": {'id': self.identifier + "_default_rank", 'default': DEFAULT_CITY_WATCH_RANK},  # Int
             "Auto Rank": {'id': self.identifier + "_auto_rank", 'default': AUTO_RANK_DEFAULT},  # Bool
             "Manual Rank": {'id': self.identifier + "_manual_rank", 'default': MANUAL_RANK_DEFAULT},  # Bool
-            "Police Kills Rankup": {'id': self.identifier + "_police_kills_rankup", 'default': POLICE_KILLS_RANKUP_DEFAULT},  # Bool
+            "City Watch Kills Rankup": {'id': self.identifier + "_city_watch_kills_rankup", 'default': CITY_WATCH_KILLS_RANKUP_DEFAULT},  # Bool
             "Umpires": {'id': self.identifier + "_umpires", 'default': []},
-            "Chief of Police": {'id': self.identifier + "_cop", 'default': []},
+            "Commander of the City Watch": {'id': self.identifier + "_cop", 'default': []},
         }
 
         self.exports = [
             Export(
-                "police_plugin_assassin_to_police",
-                "Assassin -> Resurrect as Police",
-                self.ask_resurrect_as_police,
-                self.answer_resurrect_as_police,
-                (self.gather_dead_non_police,)
+                "city_watch_plugin_assassin_to_city_watch",
+                "Assassin -> Resurrect as City Watch",
+                self.ask_resurrect_as_city_watch,
+                self.answer_resurrect_as_city_watch,
+                (self.gather_dead_full_players,)
             ),
         ]
 
         self.config_exports = [
             ConfigExport(
-                identifier="police_plugin_set_ranks",
-                display_name="Police -> Set Ranks",
+                identifier="city_watch_plugin_set_ranks",
+                display_name="City Watch -> Set Ranks",
                 ask=self.ask_set_ranks,
                 answer=self.answer_set_ranks
             ),
             ConfigExport(
-                identifier="police_plugin_select_options",
-                display_name="Police -> Select Ranking options",
+                identifier="city_watch_plugin_select_options",
+                display_name="City Watch -> Select Ranking options",
                 ask=self.ask_select_options,
                 answer=self.answer_select_options
             ),
             ConfigExport(
-                identifier="police_plugin_set_special_ranks",
-                display_name="Police -> Set Umpire/CoP",
+                identifier="city_watch_plugin_set_special_ranks",
+                display_name="City Watch -> Set Umpire(s)/Commander(s) of the Watch",
                 ask=self.ask_set_special_ranks,
                 answer=self.answer_set_special_ranks
             )
@@ -119,51 +119,51 @@ class PolicePlugin(AbstractPlugin):
             *self.answer_set_special_ranks(htmlResponse),
         ]
 
-    def gather_dead_non_police(self) -> List[str]:
+    def gather_dead_full_players(self) -> List[str]:
         death_manager = DeathManager()
         for e in EVENTS_DATABASE.events.values():
             death_manager.add_event(e)
-        return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_police))
+        return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_city_watch))
 
-    def ask_resurrect_as_police(self, ident: str):
+    def ask_resurrect_as_city_watch(self, ident: str):
         components = [HiddenTextbox(identifier=self.html_ids["Assassin"], default=ident),
                       NamedSmallTextbox(identifier=self.html_ids["Pseudonym"], title="New initial pseudonym")]
         return components
 
     # TODO: make resurrection a hook, so that plugins can decide what to do with plugin data stored in assassins
     #       current behaviour is to copy it over.
-    def answer_resurrect_as_police(self, html_response_args: Dict):
+    def answer_resurrect_as_city_watch(self, html_response_args: Dict):
         ident = html_response_args[self.html_ids["Assassin"]]
         assassin = ASSASSINS_DATABASE.get(ident)
         new_pseudonym = html_response_args[self.html_ids["Pseudonym"]]
-        new_assassin = assassin.clone(hidden=False, is_police=True, pseudonyms=[new_pseudonym], pseudonym_datetimes={})
+        new_assassin = assassin.clone(hidden=False, is_city_watch=True, pseudonyms=[new_pseudonym], pseudonym_datetimes={})
         ASSASSINS_DATABASE.add(new_assassin)
         # hide the old assassin
         assassin.hidden = True
-        return [Label(f"[POLICE] Resurrected {ident} as {new_assassin.identifier}.")]
+        return [Label(f"[CITY WATCH] Resurrected {ident} as {new_assassin.identifier}.")]
 
     def ask_set_special_ranks(self):
-        all_police = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_police]
+        all_city_watch = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_city_watch]
         return [
             Label("This only affects the displayed rank on the website"),
             SelectorList(
-                title="Select Police who are Umpires",
+                title="Select the Umpire(s)",
                 identifier=self.html_ids["Umpires"],
-                options=all_police,
+                options=all_city_watch,
                 defaults=self.gsdb_get("Umpires")
             ),
             SelectorList(
-                title="Select Police to be Chief of Police",
+                title="Select the Commander(s) of the Watch",
                 identifier=self.html_ids["CoP"],
-                options=all_police,
-                defaults=self.gsdb_get("Chief of Police")
+                options=all_city_watch,
+                defaults=self.gsdb_get("Commander of the City Watch")
             )
         ]
 
     def answer_set_special_ranks(self, htmlResponse):
         self.gsdb_set("Umpires", htmlResponse[self.html_ids["Umpires"]])
-        self.gsdb_set("Chief of Police", htmlResponse[self.html_ids["CoP"]])
-        return [Label("[POLICE] Successfully set Umpire(s) and Chief(s) of Police")]
+        self.gsdb_set("Commander of the City Watch", htmlResponse[self.html_ids["CoP"]])
+        return [Label("[CITY WATCH] Successfully set Umpire(s) and Commander(s) of the Watch")]
 
     def ask_set_ranks(self):
         question = []
@@ -173,7 +173,7 @@ class PolicePlugin(AbstractPlugin):
             question.append(Label("Default Rank in database broken, and has been reset to 0"))
         default_text[int(self.gsdb_get("Default Rank"))] += "=default"
         default_text.insert(0, "# Add named ranks, rename old/autogenerated ranks, and set default rank."
-                               "\n# The final and penultimate ranks are reserved for Umpire and Chief of Police."
+                               "\n# The final and penultimate ranks are reserved for Umpire and Commander of the City Watch."
                                "\n# Lines beginning with # are ignored.")
         question.append(LargeTextEntry(
                 title="Rename Ranks",
@@ -187,7 +187,7 @@ class PolicePlugin(AbstractPlugin):
         answer = (i.strip() for i in answer)
         answer = [i for i in answer if i and not i.startswith('#')]
         if len(answer) < 3:
-            return [Label("[POLICE] Rename failed - Must have enough ranks")]
+            return [Label("[CITY WATCH] Rename failed - Must have enough ranks")]
 
         default_counter = 0
         for idx, ele in enumerate(answer):
@@ -198,16 +198,16 @@ class PolicePlugin(AbstractPlugin):
         if default_counter == 0:
             default = 0
         elif default_counter > 1:
-            return [Label("[POLICE] Rename failed - Too many defaults given")]
+            return [Label("[CITY WATCH] Rename failed - Too many defaults given")]
         elif default > (len(answer)-3):
-            return [Label("[POLICE] Rename failed - Umpire/CoP can't be default")]
+            return [Label("[CITY WATCH] Rename failed - Umpire/Commander of the Watch can't be default rank")]
 
         self.gsdb_set("Ranks", answer)
         self.gsdb_set("Default Rank", default)
-        return [Label("[POLICE] Success!")]
+        return [Label("[CITY WATCH] Success!")]
 
     def ask_select_options(self):
-        toggles = ["Manual Rank", "Auto Rank", "Police Kills Rankup"]
+        toggles = ["Manual Rank", "Auto Rank", "City Watch Kills Rankup"]
         return [
             SelectorList(
                 title="Select ranking options",
@@ -219,13 +219,13 @@ class PolicePlugin(AbstractPlugin):
 
     def answer_select_options(self, htmlResponse):
         answer = htmlResponse[self.html_ids["Options"]]
-        toggles = ["Manual Rank", "Auto Rank", "Police Kills Rankup"]
+        toggles = ["Manual Rank", "Auto Rank", "City Watch Kills Rankup"]
         for i in toggles:
             self.gsdb_set(i, i in answer)
-        return [Label("[POLICE] Success!")]
+        return [Label("[CITY WATCH] Success!")]
 
     def on_event_request_create(self) -> List[HTMLComponent]:
-        # TODO Make a selector with police filtering
+        # TODO Make a selector with city watch filtering
         if not self.gsdb_get("Manual Rank"):
             return []
         return [
@@ -235,7 +235,7 @@ class PolicePlugin(AbstractPlugin):
                     AssassinDependentIntegerEntry(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["Relative Rank"],
-                        title="Select Police to adjust rank (relative to current rank)",
+                        title="Select players to adjust City Watch rank (relative to current rank)",
                         default={}
                     )
                 ]
@@ -244,14 +244,14 @@ class PolicePlugin(AbstractPlugin):
 
     def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
-            return [Label("[POLICE] Didn't need to do anything")]
+            return [Label("[CITY WATCH] Didn't need to do anything")]
 
         for player_id, relative_rank in htmlResponse[self.html_ids["Relative Rank"]].items():
             e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
-        return [Label("[POLICE] Success!")]
+        return [Label("[CITY WATCH] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
-        # TODO Make a selector with police filtering
+        # TODO Make a selector with city watch filtering
         if not self.gsdb_get("Manual Rank"):
             return []
         return [
@@ -261,7 +261,7 @@ class PolicePlugin(AbstractPlugin):
                     AssassinDependentIntegerEntry(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["Relative Rank"],
-                        title="Select Police to adjust rank (relative to current rank)",
+                        title="Select players to adjust City Watch rank (relative to current rank)",
                         default=e.pluginState.get(self.identifier, {})
                     )
                 ]
@@ -270,38 +270,38 @@ class PolicePlugin(AbstractPlugin):
 
     def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
-            return [Label("[POLICE] Didn't need to do anything")]
+            return [Label("[CITY WATCH] Didn't need to do anything")]
 
         for player_id, relative_rank in htmlResponse[self.html_ids["Relative Rank"]].items():
             e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
-        return [Label("[POLICE] Success!")]
+        return [Label("[CITY WATCH] Success!")]
 
     def on_page_generate(self, _) -> List[HTMLComponent]:
         message = []
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
 
-        police_rank_manager = PoliceRankManager(auto_ranking=self.gsdb_get("Auto Rank"), police_kill_ranking=self.gsdb_get("Police Kills Rankup"))
+        city_watch_rank_manager = CityWatchRankManager(auto_ranking=self.gsdb_get("Auto Rank"), city_watch_kill_ranking=self.gsdb_get("City Watch Kills Rankup"))
         death_manager = DeathManager()
         for e in events:
-            police_rank_manager.add_event(e)
+            city_watch_rank_manager.add_event(e)
             death_manager.add_event(e)
 
-        message += police_rank_manager.generate_new_ranks_if_necessary()
+        message += city_watch_rank_manager.generate_new_ranks_if_necessary()
 
-        # note: police who are hidden using `Assassin -> Hide` will not be included
-        police: List[Assassin] = ASSASSINS_DATABASE.get_filtered(include=lambda a: a.is_police)
+        # note: city watch who are hidden using `Assassin -> Hide` will not be included
+        city_watch: List[Assassin] = ASSASSINS_DATABASE.get_filtered(include=lambda a: a.is_city_watch)
 
         tables = []
-        if police:
-            police.sort(key=lambda a: (-int(police_rank_manager.get_relative_rank(a.identifier)), a.real_name))
+        if city_watch:
+            city_watch.sort(key=lambda a: (-int(city_watch_rank_manager.get_relative_rank(a.identifier)), a.real_name))
             rows = []
-            for a in police:
+            for a in city_watch:
                 deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                           for e in death_manager.get_death_events(a)]
                 rows.append(
-                    POLICE_TABLE_ROW_TEMPLATE.format(
-                        RANK=police_rank_manager.get_rank_name(a.identifier),
+                    CITY_WATCH_TABLE_ROW_TEMPLATE.format(
+                        RANK=city_watch_rank_manager.get_rank_name(a.identifier),
                         PSEUDONYM=a.all_pseudonyms(),
                         NAME=a.real_name,
                         EMAIL=a.email,
@@ -311,17 +311,17 @@ class PolicePlugin(AbstractPlugin):
                     )
                 )
             tables.append(
-                POLICE_TABLE_TEMPLATE.format(ROWS="".join(rows))
+                CITY_WATCH_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
         else:
-            tables.append(NO_POLICE)
+            tables.append(NO_CITY_WATCH)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "police.html"), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "citywatch.html"), "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
-                POLICE_PAGE_TEMPLATE.format(
+                CITY_WATCH_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
                     YEAR=get_now_dt().year
                 )
             )
-        message.append(Label("[POLICE] Success!"))
+        message.append(Label("[CITY WATCH] Success!"))
         return message

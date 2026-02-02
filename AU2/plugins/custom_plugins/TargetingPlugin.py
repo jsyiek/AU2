@@ -153,7 +153,9 @@ class TargetingPlugin(AbstractPlugin):
                     require_send=targets_changed
                 )
 
-            if EVENTS_DATABASE.events:
+            # only record the event up to which targets were emailed if emails will actually be sent
+            # the component is named confusingly. here, True = *do* send emails!
+            if EVENTS_DATABASE.events and htmlResponse.get("SRCFPlugin_dry_run", True):
                 max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
             return response
@@ -246,12 +248,12 @@ class TargetingPlugin(AbstractPlugin):
         random.seed(self.seed)
 
         # collect all targetable assassins
-        players = [a for (a, model) in ASSASSINS_DATABASE.assassins.items() if not model.is_police]
+        players = [a for (a, model) in ASSASSINS_DATABASE.assassins.items() if not model.is_city_watch]
 
         # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
         # last long anyway.
         if len(players) <= 7:
-            response.append(Label("[TARGETING] Refusing to generate a targeting graph (too few non-police assassins)."))
+            response.append(Label("[TARGETING] Refusing to generate a targeting graph (too few full players)."))
             return {}
 
         # FIRST STEP, get initial targets
@@ -351,50 +353,54 @@ class TargetingPlugin(AbstractPlugin):
 
             deaths = [victim for (_, victim) in e.kills]
 
-            # filter out police
-            deaths = [d for d in deaths if not ASSASSINS_DATABASE.get(d).is_police]
+            # filter out city watch
+            deaths = [d for d in deaths if not ASSASSINS_DATABASE.get(d).is_city_watch]
             if not deaths:
                 continue
 
-            # try to fix with triangle elimination
-            # this function has side effects
-            success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
-            if success:
-                continue
+            # process deaths in chunks, to prevent `update_graph` needing to check too many permutations
+            n = 3
+            subdivided_deaths = [deaths[i:i + n] for i in range(0, len(deaths), n)]
+            for deaths in subdivided_deaths:
+                # try to fix with triangle elimination
+                # this function has side effects
+                success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
+                if success:
+                    continue
 
-            success = self.update_graph(
-                response,
-                targeting_graph,
-                targeters_graph,
-                deaths,
-                player_seeds_set,
-                allow_mutual_seed_targets=True
-            )
+                success = self.update_graph(
+                    response,
+                    targeting_graph,
+                    targeters_graph,
+                    deaths,
+                    player_seeds_set,
+                    allow_mutual_seed_targets=True
+                )
 
-            if success:
+                if success:
+                    response.append(
+                        Label("[TARGETING] WARNING: Seeding has been violated due to an unavoidable graph collapse."))
+                    continue
+
+                success = self.update_graph(
+                    response,
+                    targeting_graph,
+                    targeters_graph,
+                    deaths,
+                    player_seeds_set,
+                    allow_mutual_seed_targets=True,
+                    allow_mutual_targets=True
+                )
+
+                if success:
+                    response.append(
+                        Label("[TARGETING] WARNING: Two assassins target each other due to an unavoidable graph collapse."))
+                    continue
+
                 response.append(
-                    Label("[TARGETING] WARNING: Seeding has been violated due to an unavoidable graph collapse."))
-                continue
-
-            success = self.update_graph(
-                response,
-                targeting_graph,
-                targeters_graph,
-                deaths,
-                player_seeds_set,
-                allow_mutual_seed_targets=True,
-                allow_mutual_targets=True
-            )
-
-            if success:
-                response.append(
-                    Label("[TARGETING] WARNING: Two assassins target each other due to an unavoidable graph collapse."))
-                continue
-
-            response.append(
-                Label("[TARGETING] CRITICAL: The targeting graph 3-targets 3-targeting invariant cannot be maintained."
-                      " Targeting has been ABORTED. IT IS TIME TO BEGIN OPEN SEASON."))
-            return {}
+                    Label("[TARGETING] CRITICAL: The targeting graph 3-targets 3-targeting invariant cannot be maintained."
+                          " Targeting has been ABORTED. IT IS TIME TO BEGIN OPEN SEASON."))
+                return {}
 
         return targeting_graph
 
