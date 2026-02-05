@@ -173,7 +173,7 @@ class TargetingPlugin(AbstractPlugin):
             SelectorList(
                 identifier=self.html_ids["Seeds"],
                 title="Choose which assassins should be seeded",
-                options=sorted(list(ASSASSINS_DATABASE.assassins)),
+                options=sorted(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_city_watch, include_hidden=True)),
                 defaults=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
             )
         ]
