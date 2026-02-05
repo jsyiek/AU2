@@ -262,7 +262,8 @@ class TargetingPlugin(AbstractPlugin):
         claimed_combos = set()
 
         # We must respect any seeding constraints.
-        player_seeds = [p for p in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])]
+        player_seeds = [p for p in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
+                        if not ASSASSINS_DATABASE.get(p).is_city_watch]
 
         use_seeds_for_updates_only = GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(
             "use_seeds_for_updates_only", False)
