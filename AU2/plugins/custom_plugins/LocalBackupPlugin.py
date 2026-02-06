@@ -54,7 +54,7 @@ class LocalBackupPlugin(AbstractPlugin):
         ]
 
     def answer_backup(self, htmlResponse) -> List[HTMLComponent]:
-        backup_path = self.BACKUP_LOCATION / htmlResponse[self.html_ids["Backup Name"]])
+        backup_path = self.BACKUP_LOCATION / htmlResponse[self.html_ids["Backup Name"]]
         os.mkdir(backup_path)
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):

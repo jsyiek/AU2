@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -16,6 +16,8 @@ class GenericStateDatabase(PersistentFile):
     Not much should go here, but you may find the utility methods useful.
     """
     uniqueId: int = 0  # see get_unique_str
+
+    last_uploaded: Optional[int] = None
 
     # map from plugin identifier to whether it is enabled
     plugin_map: Dict[str, bool] = field(default_factory=dict)

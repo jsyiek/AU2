@@ -213,17 +213,6 @@ class SRCFPlugin(AbstractPlugin):
             )
         ]
 
-        # this is a property of the GSD so that it can be used for both the local and remote databases
-        @property
-        def gsd__last_upload(gsd: GenericStateDatabase) -> Optional[int]:
-            return gsd.arb_int_state.get("LAST_UPLOADED")
-
-        @gsd__last_upload.setter
-        def gsd__last_upload(gsd: GenericStateDatabase, val: int):
-            gsd.arb_int_state["LAST_UPLOADED"] = val
-
-        GenericStateDatabase.__last_uploaded = gsd__last_upload
-
     def ask_enable_raw_page_editor(self):
         def say(x, end="\n"):
             print(x, end=end)
@@ -665,7 +654,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         old_gsb = GenericStateDatabase.load()
         # ensure that timestamp is saved in the database being uploaded...
-        GENERIC_STATE_DATABASE.__last_uploaded = self._get_remote_time()
+        GENERIC_STATE_DATABASE.last_uploaded = self._get_remote_time()
         GENERIC_STATE_DATABASE.save()
         # also save any other changes made during the upload process
         # (e.g. in PR #170 last emailed competencies are stored in the AssassinsDatabase)
@@ -687,7 +676,7 @@ class SRCFPlugin(AbstractPlugin):
             old_ad.save()
             old_ed.save()
             # also revert timestamp in memory in case the exception is caught again
-            GENERIC_STATE_DATABASE.__last_uploaded = old_gsb.__last_uploaded
+            GENERIC_STATE_DATABASE.last_uploaded = old_gsb.last_uploaded
             raise
 
     def _lock(self, sftp: paramiko.SFTPClient):
@@ -834,8 +823,8 @@ class SRCFPlugin(AbstractPlugin):
             remote_gsd = GenericStateDatabase.from_json(dump)
             os.remove(localpath)
 
-            local_last_upload = GENERIC_STATE_DATABASE.__last_uploaded
-            remote_last_upload = remote_gsd.__last_uploaded
+            local_last_upload = GENERIC_STATE_DATABASE.last_uploaded
+            remote_last_upload = remote_gsd.last_uploaded
             if local_last_upload is None and remote_last_upload is not None:
                 print("[SRCF Plugin] Your databases appear to be from A NEW GAME.")
                 self._choose_upload_or_download(sftp)
