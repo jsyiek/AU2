@@ -43,13 +43,13 @@ class Export:
 
 DEFAULT_DCE_EXPLANATION = "This config option is dangerous to modify after a game has started."
 
+
 class ConfigExport(Export):
     """
     Represents a callback for a configuration parameter.
     """
 
-    def __init__(self, identifier: str, display_name: str, ask, answer,
-                 explanation: str = DEFAULT_DCE_EXPLANATION):
+    def __init__(self, identifier: str, display_name: str, ask, answer):
         """
         Unlike Export, this bans the options function as there are only two stages to Config.
 
@@ -59,7 +59,6 @@ class ConfigExport(Export):
         :param answer: function that takes a dictionary of arg -> str and actions the output
 
         """
-        self.explanation = explanation
         super().__init__(
             identifier,
             display_name,
@@ -67,11 +66,17 @@ class ConfigExport(Export):
             answer
         )
 
+
 class DangerousConfigExport(ConfigExport):
     """
     Represents a config export which shouldn't be changed while a game is in progress
     This is signalled to the user by colouring the option red
     """
+    def __init__(self, identifier: str, display_name: str, ask, answer,
+                 danger_explanation: Callable[[], str] = lambda: DEFAULT_DCE_EXPLANATION):
+        self.danger_explanation = danger_explanation
+        super().__init__(identifier, display_name, ask, answer)
+
 
 class HookedExport:
     """

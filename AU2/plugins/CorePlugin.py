@@ -251,7 +251,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
         self.config_exports = [
-            DangerousConfigExport(
+            ConfigExport(
                 "core_plugin_set_game_start",
                 "CorePlugin -> Set game start",
                 self.ask_set_game_start,
