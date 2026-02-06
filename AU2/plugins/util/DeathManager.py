@@ -11,7 +11,7 @@ class DeathManager:
     def add_event(self, e: Event):
         event_deaths = set()
         for (killer, victim) in e.kills:
-            if not victim in event_deaths:
+            if victim not in event_deaths:
                 self.deaths[victim].append(e)
                 event_deaths.add(victim)
 
