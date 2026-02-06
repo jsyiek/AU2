@@ -1,6 +1,5 @@
 import os
 import pathlib
-import datetime
 from typing import List, Optional, Tuple, Any, Dict, Iterable
 
 from AU2 import ROOT_DIR
@@ -17,7 +16,7 @@ from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.render_utils import get_color, render_headline_and_reports, event_url
@@ -25,7 +24,7 @@ from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
+from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 
 OPENSEASON_TABLE_TEMPLATE = """
@@ -38,6 +37,8 @@ OPENSEASON_TABLE_TEMPLATE = """
 OPENSEASON_ROW_TEMPLATE = """
 <tr><td>{NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td><td>{POINTS:g}</tr>
 """
+
+OPENSEASON_NAVBAR_ENTRY = NavbarEntry("openseason.html", "Open Season", 3)
 
 OPENSEASON_PAGE_TEMPLATE: str
 OPENSEASON_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "openseason.html"
@@ -76,6 +77,8 @@ STATS_ORDERING_KEYS = {
     "By Death (AU1 style)": lambda score_manager, a: (-score_manager.get_rating(a), -score_manager.get_score(a)),
     "By Kills (London style)": lambda score_manager, a: (-score_manager.get_kills(a), -score_manager.get_conkers(a)),
 }
+
+STATS_NAVBAR_ENTRY = NavbarEntry("stats.html", "Player Stats", 4)
 
 STATS_PAGE_TEMPLATE: str
 STATS_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "stats.html"
@@ -127,9 +130,9 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             if killer not in added_nodes:
                 net.add_node(
                     killer_searchable,
-                    label=killer_model.real_name + (" (Police)" if killer_model.is_police else ""),
+                    label=killer_model.real_name + (" (City Watch)" if killer_model.is_city_watch else ""),
                     shape=NODE_SHAPE,
-                    color=get_color(killer_model.get_pseudonym(0), is_police=killer_model.is_police),
+                    color=get_color(killer_model.get_pseudonym(0), is_city_watch=killer_model.is_city_watch),
                     title=killer_searchable,
                     value=1 + score_manager.get_conkers(killer_model)
                 )
@@ -137,9 +140,9 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
             if victim not in added_nodes:
                 net.add_node(
                     victim_searchable,
-                    label=victim_model.real_name + (" (Police)" if victim_model.is_police else ""),
+                    label=victim_model.real_name + (" (City Watch)" if victim_model.is_city_watch else ""),
                     shape=NODE_SHAPE,
-                    color=get_color(victim_model.get_pseudonym(0), is_police=victim_model.is_police),
+                    color=get_color(victim_model.get_pseudonym(0), is_city_watch=victim_model.is_city_watch),
                     title=victim_searchable,
                     value=1 + score_manager.get_conkers(victim_model)
                 )
@@ -150,7 +153,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                          label=e.datetime.strftime(DATETIME_FORMAT),
                          color=get_color(
                              victim_model.get_pseudonym(e.assassins.get(victim, 0)),
-                             is_police=victim_model.is_police,
+                             is_city_watch=victim_model.is_city_watch,
                              incompetent=competency_manager.is_inco_at(victim_model, e.datetime),
                              is_wanted=wanted_manager.is_player_wanted(victim, e.datetime)
                          ),
@@ -216,7 +219,7 @@ class ScoringPlugin(AbstractPlugin):
             )
         ]
 
-    # plugin state management is copied from PolicePlugin
+    # plugin state management is copied from CityWatchPlugin
     def gsdb_get(self, plugin_state_id: str):
         return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state[plugin_state_id]['id'],
                                                                              self.plugin_state[plugin_state_id][
@@ -271,13 +274,14 @@ class ScoringPlugin(AbstractPlugin):
     def _generate_stats_page(self,
                              columns: List[str],
                              generate_killtree: bool,
-                             stats_order: str) -> List[HTMLComponent]:
+                             stats_order: str,
+                             navbar_entries: List[NavbarEntry]) -> List[HTMLComponent]:
         components = []
         openseason_end = get_game_end()
         # use a score manager to count kills, conkers, and attempts
         # don't need to set the formula because we aren't going to fetch scores
-        full_players = ASSASSINS_DATABASE.get_filtered(include=lambda a: not a.is_police,
-                                                       include_hidden=lambda a: not a.is_police)
+        full_players = ASSASSINS_DATABASE.get_filtered(include=lambda a: not a.is_city_watch,
+                                                       include_hidden=lambda a: not a.is_city_watch)
         formula = self.gsdb_get("Formula")
         score_manager = ScoreManager({a.identifier for a in full_players}, formula=formula, game_end=openseason_end)
         events = sorted(EVENTS_DATABASE.events.values(), key=lambda e: e.datetime)
@@ -289,10 +293,12 @@ class ScoringPlugin(AbstractPlugin):
         for rank, p in enumerate(full_players):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
-            deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
+            # note: the link may be broken for may week games... (see https://github.com/jsyiek/AU2/issues/161)
+            deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
-                      for e in score_manager.get_death_events(p)]
+                      for e in score_manager.get_death_events(p)
+                      if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)]
             rows.append(stats_row_template(columns).format(
                 NAME=p.real_name,
                 PSEUDONYMS=p.all_pseudonyms(),
@@ -326,7 +332,9 @@ class ScoringPlugin(AbstractPlugin):
                 killtree_embed = KILLTREE_EMBED
                 components.append(Label("[SCORING] Generated killtree page."))
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "stats.html"), "w+", encoding="utf-8") as F:
+        navbar_entries.append(STATS_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / STATS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 STATS_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,
@@ -363,7 +371,7 @@ class ScoringPlugin(AbstractPlugin):
 Parameters:
     a: attempts
     b: bonus points -- awarded manually using Scoring -> Set bonuses
-    k: kills -- excludes kills of police, and of players who had already died when the kill was made
+    k: kills -- excludes kills of the city watch, and of players who had already died when the kill was made
     c: conkers -- a player's conkers score is the number of kills made by the player, plus the sum of \
 the conkers of all players killed by the player, ignoring any kills that do not count towards the kill score \
 as defined above
@@ -414,18 +422,18 @@ Syntax:
         except Exception:
             return False
 
-    def _generate_openseason_page(self):
+    def _generate_openseason_page(self, navbar_entries: List[NavbarEntry]):
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
-        if open_season_start and open_season_start >= get_now_dt():
+        if not open_season_start or open_season_start >= get_now_dt():
             return []
         # also don't generate if formula is invalid
         formula = self.gsdb_get("Formula")
         if not self.formula_is_valid(formula):
             return [Label("[WARNING] [SCORING] Invalid scoring formula -- skipping openseason page!")]
 
-        # need to include hidden assassins so that resurrecting as police doesn't stop kills counting
-        score_manager = ScoreManager(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_police,
+        # need to include hidden assassins so that resurrecting as part of the city watch doesn't stop kills counting
+        score_manager = ScoreManager(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_city_watch,
                                                                         include_hidden=True),
                                      formula=formula,
                                      bonuses={
@@ -462,7 +470,9 @@ Syntax:
                 )
             table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "openseason.html"), "w+", encoding="utf-8") as F:
+        navbar_entries.append(OPENSEASON_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / OPENSEASON_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 OPENSEASON_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,
@@ -499,9 +509,9 @@ Syntax:
             ])
         return components
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         components = []
-        components.extend(self._generate_openseason_page())
+        components.extend(self._generate_openseason_page(navbar_entries))
         if htmlResponse.get(self.html_ids["Generate Stats Page?"], "False") == "True":
             # this is silly but needed to fix a bug where columns end up in the wrong order
             columns: List[str] = [c for c in STATS_COLUMN_TEMPLATES if
@@ -511,6 +521,6 @@ Syntax:
             self.gsdb_set("Visualise Kills?", generate_killtree)
             stats_order = htmlResponse[self.html_ids["Stats Order"]]
             self.gsdb_set("Stats Order", stats_order)
-            components.extend(self._generate_stats_page(columns, generate_killtree, stats_order))
+            components.extend(self._generate_stats_page(columns, generate_killtree, stats_order, navbar_entries))
 
         return components

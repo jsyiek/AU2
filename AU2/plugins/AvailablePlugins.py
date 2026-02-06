@@ -21,7 +21,7 @@ class __PluginMap:
     def __getitem__(self, item: str):
         """
         If there is a particular plugin you want and you know the ID, you can do
-        `pluginMap["police"]`
+        `pluginMap["CorePlugin"]`
         """
         return self.plugins[item]
 
