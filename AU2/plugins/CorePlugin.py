@@ -32,12 +32,13 @@ from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTex
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
-    AttributePairTableRow
+    AttributePairTableRow, NavbarEntry
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.render_utils import generate_navbar
 
 AVAILABLE_PLUGINS = {}
 
@@ -808,8 +809,13 @@ class CorePlugin(AbstractPlugin):
                 SANITY_CHECKS[sanity_check_id].mark(e)
 
         if actually_generate_pages:  # useful for unit testing
+            navbar_entries = []
             for p in PLUGINS:
-                components += p.on_page_generate(html_response_args)
+                components += p.on_page_generate(html_response_args, navbar_entries)
+
+            generate_navbar(navbar_entries, "page-list.html")
+            components += [Label("[CORE] Successfully generated page list!")]
+
         return components
 
     def ask_custom_hook(self, hook: str) -> List[HTMLComponent]:
