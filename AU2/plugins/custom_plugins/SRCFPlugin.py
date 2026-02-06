@@ -688,7 +688,7 @@ class SRCFPlugin(AbstractPlugin):
             old_ed.save()
             # also revert timestamp in memory in case the exception is caught again
             GENERIC_STATE_DATABASE.__last_uploaded = old_gsb.__last_uploaded
-            raise e
+            raise
 
     def _lock(self, sftp: paramiko.SFTPClient):
         """
