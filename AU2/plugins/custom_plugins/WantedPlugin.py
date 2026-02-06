@@ -39,20 +39,21 @@ CITY_WATCH_TABLE_TEMPLATE = """
 </table>
 """
 
-DEAD_PLAYER_TABLE_TEMPLATE = """
+DEAD_WANTED_INTRO_TEXT = """
 <p xmlns="">
-    Inevitably, this happens....
+    Here are the names of those that paid the price for their crimes...
 </p>
+"""
+
+DEAD_PLAYER_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
     <tr><th>Name</th><th>Pseudonym</th><th>Crime</th></tr>
     {ROWS}
 </table>
+<p></p>
 """
 
 DEAD_CORRUPT_CITY_WATCH_TABLE_TEMPLATE = """
-<p xmlns="">
-    And these are the names of those who turned to the dark side, and paid the price:
-</p>
 <table xmlns="" class="playerlist">
   <tr><th>Rank</th><th>Name</th><th>Pseudonym</th><th>Crime</th></tr>
   {ROWS}
@@ -230,6 +231,8 @@ class WantedPlugin(AbstractPlugin):
             tables.append(
                 CITY_WATCH_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
+        if wanted_player_deaths or wanted_player_deaths:
+            tables.append(DEAD_WANTED_INTRO_TEXT)
         if wanted_player_deaths:
             rows = []
             for wanted_death_event in wanted_player_deaths:
@@ -246,11 +249,6 @@ class WantedPlugin(AbstractPlugin):
             )
         if wanted_city_watch_deaths:
             rows = []
-            # TODO: These look like they can be deleted? Pycharm identifies default_rank and ranks as unread vars
-            if city_watch_ranks_enabled:
-                default_rank = GENERIC_STATE_DATABASE.arb_state.get(
-                    "CityWatchPlugin", {}).get("CityWatchPlugin_default_rank", DEFAULT_CITY_WATCH_RANK)
-                ranks = GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_ranks", DEFAULT_RANKS)
             for wanted_death_event in wanted_city_watch_deaths:
                 player = ASSASSINS_DATABASE.get(wanted_death_event['player_id'])
                 rank = "City Watch"
