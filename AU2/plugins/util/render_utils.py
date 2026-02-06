@@ -94,7 +94,7 @@ HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
 LIST_ITEM_TEMPLATE = """<li><a href="{URL}">{DISPLAY}</a></li>\n"""
 
-FORMAT_SPECIFIER_REGEX = r"\[[D,P,N]([0-9]+)(?:_([0-9]+))?\]"
+FORMAT_SPECIFIER_REGEX = r"\[[P,D,L,N,V]([0-9]+)(?:_([0-9]+))?\]"
 
 Chapter = NamedTuple("Chapter", (("title", str), ("nav_entry", NavbarEntry)))
 
@@ -231,10 +231,11 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
     for i in range(len(assassin.pseudonyms)):
         string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
-    string = string.replace(f"[D{id_}]",
-                            " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
-    string = string.replace(
-        f"[N{id_}]",
+    string = string.replace(f"[V{id_}]", f"[L{id_}] ([N{id_}])")
+    list_of_pseudonyms = " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt))
+    string = string.replace(f"[L{id_}]", list_of_pseudonyms)
+    string = string.replace(f"[D{id_}]", list_of_pseudonyms)  # for backwards-compatibility; may remove in future
+    string = string.replace(f"[N{id_}]",
         PSEUDONYM_TEMPLATE.format(
             COLOR=adjust_brightness(color, get_real_name_brightness()),
             PSEUDONYM=soft_escape(assassin.real_name)
