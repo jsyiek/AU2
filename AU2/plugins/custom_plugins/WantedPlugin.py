@@ -6,7 +6,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
@@ -14,6 +14,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow
 from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.custom_plugins.SRCFPlugin import Email
 from AU2.plugins.util.CityWatchRankManager import CityWatchRankManager, AUTO_RANK_DEFAULT, CITY_WATCH_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_CITY_WATCH_RANK
 from AU2.plugins.util.WantedManager import WantedManager
@@ -82,6 +83,8 @@ class WantedPlugin(AbstractPlugin):
         self.event_html_ids = {
             "Wanted": self.identifier + "_wanted"
         }
+
+        Assassin.__last_emailed_crime = self.assassin_property("last_emailed_crime", None, store_default=False)
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         data = {}
@@ -280,3 +283,43 @@ class WantedPlugin(AbstractPlugin):
             )
         messages.append(Label("[WANTED] Success!"))
         return messages
+
+    def on_hook_respond(self, hook: str, html_response, data) -> List[HTMLComponent]:
+        if hook == "SRCFPlugin_email":
+            events = list(EVENTS_DATABASE.events.values())
+            events.sort(key=lambda event: event.datetime)
+
+            wanted_manager = WantedManager()
+            for e in events:
+                wanted_manager.add_event(e)
+
+            wanted_data = wanted_manager.get_live_wanted_players(city_watch=False)
+            corrupt_data = wanted_manager.get_live_wanted_players(city_watch=True)
+
+            email_list: List[Email] = data
+            for email in email_list:
+                recipient = email.recipient.identifier
+                crime_data = wanted_data.get(recipient, corrupt_data.get(recipient))
+                last_emailed_crime = email.recipient.__last_emailed_crime
+                content = ""
+                require_send = False
+                if crime_data:
+                    content = (f"You are currently {'WANTED' if recipient in wanted_data else 'CORRUPT'}.\n" 
+                               f"Reason: {crime_data['crime']}\n"
+                               f"Redemption conditions: {crime_data['redemption']}")
+                    require_send = crime_data != last_emailed_crime
+                elif last_emailed_crime:
+                    content = ("You have been REDEEMED and are no longer on the "
+                              f"{'corrupt' if email.recipient.is_city_watch else 'wanted'} list.")
+                    require_send = crime_data != last_emailed_crime
+
+                if content:
+                    email.add_content(
+                        self.identifier,
+                        content=content,
+                        require_send=require_send,
+                    )
+                    # the component is named confusingly. here, True = *do* send emails!
+                    if html_response.get("SRCFPlugin_dry_run", True):
+                        email.recipient.__last_emailed_crime = crime_data
+        return []
