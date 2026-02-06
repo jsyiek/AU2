@@ -14,7 +14,7 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CityWatchRankManager import DEFAULT_RANKS, CityWatchRankManager, DEFAULT_CITY_WATCH_RANK, AUTO_RANK_DEFAULT, \
@@ -39,6 +39,7 @@ CITY_WATCH_TABLE_ROW_TEMPLATE = """
 
 NO_CITY_WATCH = """<p xmlns="">The city watch is suspiciously understaffed at the moment.</p>"""
 
+CITYWATCH_NAVBAR_ENTRY = NavbarEntry("citywatch.html", "City Watch list", 0)
 
 CITY_WATCH_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "citywatch.html"), "r", encoding="utf-8", errors="ignore") as F:
@@ -276,7 +277,7 @@ class CityWatchPlugin(AbstractPlugin):
             e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
         return [Label("[CITY WATCH] Success!")]
 
-    def on_page_generate(self, _) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         message = []
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
@@ -313,10 +314,11 @@ class CityWatchPlugin(AbstractPlugin):
             tables.append(
                 CITY_WATCH_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
+            navbar_entries.append(CITYWATCH_NAVBAR_ENTRY)
         else:
             tables.append(NO_CITY_WATCH)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "citywatch.html"), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / CITYWATCH_NAVBAR_ENTRY.url, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(
                 CITY_WATCH_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
