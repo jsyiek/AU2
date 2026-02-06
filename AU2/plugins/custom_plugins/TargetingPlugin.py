@@ -169,8 +169,8 @@ class TargetingPlugin(AbstractPlugin):
 
     def danger_explanation(self) -> str:
         if int(GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("last_emailed_event", -1)) > -1:
-            return "Targets have already been sent out to players. " \
-                   "Changing targeting settings will change players' targets!"
+            return ("Targets have already been sent out to players. "
+                   "Changing targeting settings will change players' targets!")
         else:
             ""
 
