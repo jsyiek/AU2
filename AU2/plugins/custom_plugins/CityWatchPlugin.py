@@ -17,10 +17,10 @@ from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTex
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
-from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.CityWatchRankManager import DEFAULT_RANKS, CityWatchRankManager, DEFAULT_CITY_WATCH_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, CITY_WATCH_KILLS_RANKUP_DEFAULT
-from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
+from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.date_utils import get_now_dt, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.render_utils import event_url
 
 CITY_WATCH_TABLE_TEMPLATE = """
@@ -298,7 +298,7 @@ class CityWatchPlugin(AbstractPlugin):
             city_watch.sort(key=lambda a: (-int(city_watch_rank_manager.get_relative_rank(a.identifier)), a.real_name))
             rows = []
             for a in city_watch:
-                deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
+                deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                           for e in death_manager.get_death_events(a)]
                 rows.append(
                     CITY_WATCH_TABLE_ROW_TEMPLATE.format(
@@ -308,7 +308,7 @@ class CityWatchPlugin(AbstractPlugin):
                         EMAIL=a.email,
                         COLLEGE=a.college,
                         NOTES=a.notes,
-                        DEATHS='<br />'.join(deaths) if deaths else "&mdash;",
+                        DEATHS=f"{len(deaths)} ({';<br />'.join(deaths)})" if deaths else "&mdash;",
                     )
                 )
             tables.append(

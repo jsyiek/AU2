@@ -5,6 +5,8 @@ from AU2 import TIMEZONE
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
+PRETTY_DATETIME_FORMAT = "%d %b, %H:%M %p"
+
 
 def get_now_dt():
    return datetime.datetime.now().astimezone(TIMEZONE)
