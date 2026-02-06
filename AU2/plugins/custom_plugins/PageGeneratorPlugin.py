@@ -116,7 +116,7 @@ class PageGeneratorPlugin(AbstractPlugin):
             # note: need to check default allocation first in case event is hidden!
             page_allocator=lambda e: (DUEL_CHAPTER
                                       if (default := default_page_allocator(e))
-                                         and end
+                                         and end is not None
                                          and end < e.datetime
                                       else default),
             news_list_path="news-list.html",
