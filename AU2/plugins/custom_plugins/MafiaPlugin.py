@@ -433,7 +433,7 @@ class MafiaPlugin(AbstractPlugin):
 
         for a in ASSASSINS_DATABASE.assassins:
             assassin = ASSASSINS_DATABASE.get(a)
-            if assassin.is_police:
+            if assassin.is_city_watch:
                 points[a] = 0
             else:
                 points[a] = 1
