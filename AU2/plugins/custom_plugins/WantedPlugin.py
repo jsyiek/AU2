@@ -295,8 +295,8 @@ class WantedPlugin(AbstractPlugin):
             for e in events:
                 wanted_manager.add_event(e)
 
-            wanted_data = wanted_manager.get_live_wanted_players(police=False)
-            corrupt_data = wanted_manager.get_live_wanted_players(police=True)
+            wanted_data = wanted_manager.get_live_wanted_players(city_watch=False)
+            corrupt_data = wanted_manager.get_live_wanted_players(city_watch=True)
 
             email_list: List[Email] = data
             for email in email_list:
@@ -312,7 +312,7 @@ class WantedPlugin(AbstractPlugin):
                     require_send = crime_data != last_emailed_crime
                 elif last_emailed_crime:
                     content = ("You have been REDEEMED and are no longer on the "
-                              f"{'corrupt' if email.recipient.is_police else 'wanted'} list.")
+                              f"{'corrupt' if email.recipient.is_city_watch else 'wanted'} list.")
                     require_send = crime_data != last_emailed_crime
 
                 if content:
