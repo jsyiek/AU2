@@ -9,7 +9,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.util.render_utils import Chapter, default_page_allocator, DEFAULT_REAL_NAME_BRIGHTNESS, \
     generate_news_pages, get_real_name_brightness, set_real_name_brightness
@@ -101,7 +101,7 @@ class PageGeneratorPlugin(AbstractPlugin):
                                        GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state["Duel Page?"], False)))
         return components
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entry) -> List[HTMLComponent]:
         duel_page = False
         if self.html_ids["Duel Page?"] in htmlResponse:
             duel_page = htmlResponse[self.html_ids["Duel Page?"]]
@@ -109,11 +109,17 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         end = get_game_end() if duel_page else None
 
-        DUEL_CHAPTER = Chapter("duel", "The Duel")
+        DUEL_CHAPTER = Chapter("The Duel", NavbarEntry("duel.html", "The Duel", float("Inf")))
 
         generate_news_pages(
             headlines_path="head.html",
-            page_allocator=lambda e: DUEL_CHAPTER if end and end < e.datetime else default_page_allocator(e)
+            # note: need to check default allocation first in case event is hidden!
+            page_allocator=lambda e: (DUEL_CHAPTER
+                                      if (default := default_page_allocator(e))
+                                         and end is not None
+                                         and end < e.datetime
+                                      else default),
+            news_list_path="news-list.html",
         )
 
         return [Label("[NEWS PAGE GENERATOR] Successfully generated the story!")]

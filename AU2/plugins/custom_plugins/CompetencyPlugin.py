@@ -22,7 +22,7 @@ from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, DangerousConfigExport, \
-    AttributePairTableRow
+    AttributePairTableRow, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -69,6 +69,8 @@ DEFAULT_GIGABOLT_HEADLINE = """# Write a headline for the gigabolt event
 # 
 [num_players] assassins are eliminated for inactivity!
 """
+
+INCOS_NAVBAR_ENTRY = NavbarEntry("inco.html", "Incompetents list", 2)
 
 INCOS_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "inco.html"), "r", encoding="utf-8", errors="ignore") as F:
@@ -567,7 +569,7 @@ class CompetencyPlugin(AbstractPlugin):
                     "Comment" + " "*10)
         return [Table(deadlines, headings=headings)]
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
@@ -626,8 +628,10 @@ class CompetencyPlugin(AbstractPlugin):
 
         if not tables:
             tables = [NO_INCOS]
+        else:
+            navbar_entries.append(INCOS_NAVBAR_ENTRY)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "inco.html"), "w+", encoding="utf-8") as F:
+        with open(WEBPAGE_WRITE_LOCATION / INCOS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 INCOS_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),

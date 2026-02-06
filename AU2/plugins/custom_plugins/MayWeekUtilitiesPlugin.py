@@ -21,7 +21,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
@@ -44,6 +44,8 @@ PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
                          "<td {CREW_COLOR}>{POINTS}</td>"
                          "<td {CREW_COLOR}>{MULTIPLIER}</td>"
                          "{TEAM_ENTRY}</tr>")
+
+MAYWEEK_PLAYERS_NAVBAR_ENTRY = NavbarEntry("mw-players.html", "Players", -2)
 
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -653,7 +655,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         return scores
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         """
         Generates player info page and may week news page.
 
@@ -715,7 +717,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 )
             )
 
-        with open(WEBPAGE_WRITE_LOCATION / "mw-players.html", "w+", encoding="utf-8") as F:
+        if player_rows or pseudonym_rows:
+            navbar_entries.append(MAYWEEK_PLAYERS_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / MAYWEEK_PLAYERS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(MAYWEEK_PLAYERS_TEMPLATE.format(
                 PSEUDONYM_ROWS = "\n".join(pseudonym_rows),
                 PLAYER_ROWS = "\n".join(player_rows),
@@ -747,13 +752,14 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # fallback for individual
             return get_color(pseudonym)
 
-        MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News")
+        MAYWEEK_CHAPTER = Chapter("May Week News", NavbarEntry("mw-news.html", "Reports", 0))
 
         generate_news_pages(
             headlines_path="mw-head.html",
             page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
             color_fn=mw_color_fn,
-            plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
+            plugin_managers=(self.TeamManager() for _ in range(teams_enabled)),
+            news_list_path="mw-news-list.html",
         )
 
         return [Label("[MAY WEEK] Success!")]
