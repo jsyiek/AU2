@@ -1,6 +1,6 @@
 import itertools
 import random
-from typing import Tuple, Dict, List, Set
+from typing import Dict, Iterable, List, Set, Tuple
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -37,6 +37,12 @@ Notes: {NOTES}"""
 
 class FailedToCreateChainException(Exception):
     pass
+
+
+def filter_to_targetable(idents: Iterable[str]) -> List[str]:
+    """Filters an iterable of assassin identifiers to a list of only those that are involved in targeting,
+    i.e. full players"""
+    return [ident for ident in idents if not ASSASSINS_DATABASE.get(ident).is_city_watch]
 
 
 @registered_plugin
@@ -173,7 +179,7 @@ class TargetingPlugin(AbstractPlugin):
             SelectorList(
                 identifier=self.html_ids["Seeds"],
                 title="Choose which assassins should be seeded",
-                options=sorted(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_city_watch, include_hidden=True)),
+                options=sorted(filter_to_targetable(ASSASSINS_DATABASE.assassins)),
                 defaults=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
             )
         ]
@@ -248,7 +254,7 @@ class TargetingPlugin(AbstractPlugin):
         random.seed(self.seed)
 
         # collect all targetable assassins
-        players = [a for (a, model) in ASSASSINS_DATABASE.assassins.items() if not model.is_city_watch]
+        players = filter_to_targetable(ASSASSINS_DATABASE.assassins)
 
         # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
         # last long anyway.
@@ -262,8 +268,7 @@ class TargetingPlugin(AbstractPlugin):
         claimed_combos = set()
 
         # We must respect any seeding constraints.
-        player_seeds = [p for p in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
-                        if not ASSASSINS_DATABASE.get(p).is_city_watch]
+        player_seeds = filter_to_targetable(GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", []))
 
         use_seeds_for_updates_only = GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(
             "use_seeds_for_updates_only", False)
@@ -352,10 +357,8 @@ class TargetingPlugin(AbstractPlugin):
             if int(e._Event__secret_id) > max_event:
                 break
 
-            deaths = [victim for (_, victim) in e.kills]
+            deaths = filter_to_targetable((victim for (_, victim) in e.kills))
 
-            # filter out city watch
-            deaths = [d for d in deaths if not ASSASSINS_DATABASE.get(d).is_city_watch]
             if not deaths:
                 continue
 
