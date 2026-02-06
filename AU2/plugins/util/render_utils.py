@@ -6,6 +6,7 @@ from typing import Callable, Dict, List, NamedTuple, Optional, Protocol, Sequenc
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.plugins.AbstractPlugin import NavbarEntry
 from AU2.plugins.util.CompetencyManager import CompetencyManager
@@ -81,6 +82,8 @@ CORRUPT_CITY_WATCH_COLS = [
 WANTED_COLS = [
     "#ff0033", "#cc3333", "#ff3300"
 ]
+
+DEFAULT_REAL_NAME_BRIGHTNESS = 0.7
 
 HEAD_HEADLINE_TEMPLATE = """
     <div xmlns="" class="event">
@@ -172,6 +175,41 @@ def get_color(pseudonym: str,
     return HEX_COLS[ind % len(HEX_COLS)]
 
 
+def adjust_brightness(hexcode: str, factor: float) -> str:
+    """
+    Adjusts the brightness of the specified colour by the specified factor.
+    Used for making real names slightly darker than pseudonyms.
+
+    Args:
+        hexcode (str): hexcode of the original colour, including an initial #
+        factor (float): factor by which to multiply the brightness. If < 0 this will be set to 0.
+            If the factor is such that any of the rgb values ends up > 255, they are capped at 255.
+
+    Returns:
+        str: the hexcode of the brightness-adjusted colour, (including an initial #).
+    """
+    rgb = (int(hexcode[i : i+2], 16) for i in (1, 3, 5))
+    factor = max(factor, 0)
+    scaled = (int(factor * x) for x in rgb)
+    capped = (min(255, x) for x in scaled)
+    return '#' + "".join(f"{x:02x}" for x in capped)
+
+
+def get_real_name_brightness() -> float:
+    """
+    Gets the brightness factor to apply to colours when rendering players' real names.
+    """
+    return GENERIC_STATE_DATABASE.arb_state.get("REAL_NAME_BRIGHTNESS", DEFAULT_REAL_NAME_BRIGHTNESS)
+
+
+def set_real_name_brightness(val: float):
+    """
+    Sets the brightness factor to apply to colours when rendering players' real names.
+    Truncates negative values to 0.
+    """
+    GENERIC_STATE_DATABASE.arb_state["REAL_NAME_BRIGHTNESS"] = max(val, 0)
+
+
 def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: Optional[datetime.datetime] = None) -> str:
     """
     Renders [PX], [DX], [NX], [PX_i] pseudonym codes as HTML, for a single assassin
@@ -195,8 +233,13 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
         string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
     string = string.replace(f"[D{id_}]",
                             " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
-    string = string.replace(f"[N{id_}]",
-                            PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
+    string = string.replace(
+        f"[N{id_}]",
+        PSEUDONYM_TEMPLATE.format(
+            COLOR=adjust_brightness(color, get_real_name_brightness()),
+            PSEUDONYM=soft_escape(assassin.real_name)
+        )
+    )
     return string
 
 

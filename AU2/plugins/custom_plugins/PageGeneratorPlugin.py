@@ -7,11 +7,13 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.util.render_utils import Chapter, default_page_allocator, DEFAULT_REAL_NAME_BRIGHTNESS, \
+    generate_news_pages, get_real_name_brightness, set_real_name_brightness
 from AU2.plugins.util.game import get_game_end
-from AU2.plugins.util.render_utils import Chapter, default_page_allocator, generate_news_pages
 
 @registered_plugin
 class PageGeneratorPlugin(AbstractPlugin):
@@ -22,7 +24,8 @@ class PageGeneratorPlugin(AbstractPlugin):
 
         self.html_ids = {
             "Hidden": self.identifier + "_hidden",
-            "Duel Page?": self.identifier + "_duel_page"
+            "Brightness": self.identifier + "_brightness",
+            "Duel Page?": self.identifier + "_duel_page",
         }
 
         self.plugin_state = {
@@ -31,6 +34,35 @@ class PageGeneratorPlugin(AbstractPlugin):
         }
 
         self.exports = []
+
+        self.config_exports = [
+            ConfigExport(
+                "page_generator_plugin_real_name_brightness",
+                "PageGeneratorPlugin -> Adjust brightness of real names on news pages",
+                self.ask_set_real_name_brightness,
+                self.answer_set_real_name_brightness
+            ),
+        ]
+
+    def ask_set_real_name_brightness(self) -> List[HTMLComponent]:
+        return [
+            Label("Below you can set the % brightness of real names relative to pseudonyms on news pages."),
+            Label("If brightness = 100%, real names are rendered the same colour as pseudonyms."),
+            Label("If brightness < 100%, real names are rendered darker than pseudonyms."),
+            Label("If brightness > 100%, real names are rendered lighter than pseudonyms "
+                  "(this is not recommended as it tends to be hard to read)."),
+            Label("If brightness <= 0%, real names are rendered in black."),
+            Label(f"The default, recommended brightness is {DEFAULT_REAL_NAME_BRIGHTNESS :.0%}."),
+            FloatEntry(
+                self.html_ids["Brightness"],
+                "Set % brightness for real names",
+                100 * get_real_name_brightness()
+            )
+        ]
+
+    def answer_set_real_name_brightness(self, html_response) -> List[HTMLComponent]:
+        set_real_name_brightness(html_response[self.html_ids["Brightness"]] / 100)
+        return [Label(f"[NEWS PAGE GENERATOR] Successfully set real name brightness to {get_real_name_brightness():.0%}!")]
 
     def on_event_request_create(self) -> List[HTMLComponent]:
         return [
