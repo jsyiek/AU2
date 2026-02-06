@@ -77,7 +77,7 @@ class TargetingPlugin(AbstractPlugin):
                 self.answer_set_initial_seeding
             ),
             ConfigExport(
-                "targeting_shpw_targeting_info",
+                "targeting_show_targeting_info",
                 TOGGLE_INFO_DISPLAY_NAME,
                 self.ask_toggle_targeting_info,
                 self.answer_toggle_targeting_info
@@ -190,19 +190,18 @@ class TargetingPlugin(AbstractPlugin):
         return [Label("[TARGETING] Success!")]
 
     def on_data_hook(self, hook: str, data):
-        if hook == "WantedPlugin_targeting_graph":
-            if self.show_targeting_info:
-                max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
-                start = time.perf_counter()
-                data["targeting_graph"] = self.compute_targets([], max_event)
-                calc_time = time.perf_counter() - start
-                # automatically turn off showing targeting info if calculating the targeting graph takes too long
-                # this can be overridden
-                if self.show_targeting_info == 1 and calc_time > 1:
-                    self.show_targeting_info = 0
-                    # fine for now because will end up reworking how WantedPlugin obtains licitness info anyway...
-                    print("[TARGETING] Automatically disabled displaying info due to long compute time. "
-                          f"Use `{TOGGLE_INFO_DISPLAY_NAME}` in plugin config to re-enable.")
+        if hook == "WantedPlugin_targeting_graph" and self.show_targeting_info:
+            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
+            start = time.perf_counter()
+            data["targeting_graph"] = self.compute_targets([], max_event)
+            calc_time = time.perf_counter() - start
+            # automatically turn off showing targeting info if calculating the targeting graph takes too long
+            # this can be overridden
+            if self.show_targeting_info == 1 and calc_time > 1:
+                self.show_targeting_info = 0
+                # fine for now because will end up reworking how WantedPlugin obtains licitness info anyway...
+                print("[TARGETING] Automatically disabled displaying info due to long compute time. "
+                      f"Use `{TOGGLE_INFO_DISPLAY_NAME}` in plugin config to re-enable.")
 
     def ask_set_seeds(self):
         return [
