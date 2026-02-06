@@ -34,15 +34,19 @@ class IncorrectPseudonymFormatter(SanityCheck):
         for original, replacement in fixes.items():
             suggestions.append(
                 Suggestion(
-                    identifier=f"{original}_{replacement}",
+                    data={
+                        "original": original,
+                        "replacement": replacement,
+                    },
                     explanation=f"Replace: {original} -> {replacement}"
                 )
             )
         return suggestions
 
-    def fix_event(self, e: Event, suggestion_ids: List[str]) -> List[HTMLComponent]:
-        for suggestion_str in suggestion_ids:
-            original, replacement = suggestion_str.split("_")
+    def fix_event(self, e: Event, suggestion_data: List[dict]) -> List[HTMLComponent]:
+        for data in suggestion_data:
+            original = data["original"]
+            replacement = data["replacement"]
             e.headline = e.headline.replace(original, replacement)
             for i, (assassin_id, pseudonym_id, report) in enumerate(e.reports):
                 e.reports[i] = (assassin_id, pseudonym_id, report.replace(original, replacement))

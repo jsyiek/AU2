@@ -738,7 +738,7 @@ def render(html_component, dependency_context={}):
             inquirer.List(
                 name="emails",
                 message="Which assassins would you like to email? (All options exclude hidden assassins)",
-                choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL POLICE", "MANUAL SELECTION"],
+                choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL CITY WATCH", "MANUAL SELECTION"],
                 default="UPDATES ONLY",
             )
         ]
@@ -747,8 +747,8 @@ def render(html_component, dependency_context={}):
             return {html_component.identifier: html_component.assassins}
         elif out == "ALL ALIVE":
             return {html_component.identifier: html_component.alive_assassins}
-        elif out == "ALL POLICE":
-            return {html_component.identifier: html_component.police_assassins}
+        elif out == "ALL CITY WATCH":
+            return {html_component.identifier: html_component.city_watch_assassins}
         elif out == "UPDATES ONLY":
             return {html_component.identifier: ["UPDATES ONLY"]}
         else:
@@ -763,7 +763,8 @@ def render(html_component, dependency_context={}):
 
     elif isinstance(html_component, ConfigOptionsList):
         # render dangerous config exports in red
-        choices = [("\033[31m" + c.display_name + "\033[0m", c) if isinstance(c, DangerousConfigExport)
+        choices = [("\033[31m" + c.display_name + "\033[0m", c)
+                   if isinstance(c, DangerousConfigExport) and c.danger_explanation()
                    else (c.display_name, c)
                    for c in html_component.config_options]
         selection = inquirer.list_input(
@@ -774,11 +775,11 @@ def render(html_component, dependency_context={}):
             raise KeyboardInterrupt
 
         if isinstance(selection, DangerousConfigExport):
-            # give explanation of why confirmation needed
-            print(selection.explanation)
-            i = random.randint(0, 1000000)
-            if str(i) != inquirer.text(f"Type {i} to access this config option"):
-                raise KeyboardInterrupt
+            if explanation := selection.danger_explanation():
+                print(explanation)
+                i = random.randint(0, 1000000)
+                if str(i) != inquirer.text(f"Type {i} to access this config option"):
+                    raise KeyboardInterrupt
 
         return {html_component.identifier: selection}
 
