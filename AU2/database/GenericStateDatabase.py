@@ -25,7 +25,7 @@ class GenericStateDatabase(PersistentFile):
     arb_state: Dict[str, Any] = field(default_factory=dict)
     arb_int_state: Dict[str, int] = field(default_factory=dict)
 
-    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "GenericState.json")
+    WRITE_LOCATION = BASE_WRITE_LOCATION / "GenericState.json"
 
     def __post_init__(self):
         if not isinstance(self.uniqueId, int):

@@ -908,7 +908,7 @@ class CorePlugin(AbstractPlugin):
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
-                os.remove(os.path.join(BASE_WRITE_LOCATION, f))
+                os.remove(BASE_WRITE_LOCATION / f)
         refresh_databases()
         return [Label("[CORE] Databases successfully reset.")]
 

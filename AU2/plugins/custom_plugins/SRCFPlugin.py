@@ -74,7 +74,7 @@ Your details:
 Room Water Weapons Status: {WATER_STATUS}
                Notes: {NOTES}"""
 
-EMAIL_WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "emails")
+EMAIL_WRITE_LOCATION = BASE_WRITE_LOCATION / "emails"
 REMOTE_EMAIL_WRITE_LOCATION = ASSASSINS_PATH / "emails"
 
 BACKUP_DATE_PATTERN1 = re.compile(r"\d{2}-\d{2}-\d{4}")
@@ -540,7 +540,7 @@ class SRCFPlugin(AbstractPlugin):
 
             remote_backup_folder = REMOTE_BACKUP_LOCATION / chosen_backup
             for db in sftp.listdir(str(remote_backup_folder)):
-                localpath = os.path.join(BASE_WRITE_LOCATION, db)
+                localpath = BASE_WRITE_LOCATION / db
                 remotetarget = REMOTE_DATABASE_LOCATION / db
                 remotepath = remote_backup_folder / db
                 self._log_to(sftp, PUBLISH_LOG, f"Trying to restore {remotepath}...")
@@ -601,7 +601,7 @@ class SRCFPlugin(AbstractPlugin):
         self._makedirs(sftp, backup_path)
         self._log_to(sftp, EDIT_LOG, f"Creating backup at {backup_path}")
         for f in self._find_jsons(BASE_WRITE_LOCATION):
-            localpath = os.path.join(BASE_WRITE_LOCATION, f)
+            localpath = BASE_WRITE_LOCATION / f
             remotepath = backup_path / f
             sftp.put(localpath, str(remotepath))
 
@@ -676,7 +676,7 @@ class SRCFPlugin(AbstractPlugin):
         EVENTS_DATABASE.save()
         try:
             for database in self._find_jsons(BASE_WRITE_LOCATION):
-                localpath = os.path.join(BASE_WRITE_LOCATION, database)
+                localpath = BASE_WRITE_LOCATION / database
                 remotepath = REMOTE_DATABASE_LOCATION / database
                 self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
                 sftp.put(localpath, str(remotepath))
@@ -767,7 +767,7 @@ class SRCFPlugin(AbstractPlugin):
 
     def _download_databases(self, sftp: paramiko.SFTPClient):
         for database in self._find_jsons(BASE_WRITE_LOCATION):
-            localpath = os.path.join(BASE_WRITE_LOCATION, database)
+            localpath = BASE_WRITE_LOCATION / database
             remotepath = REMOTE_DATABASE_LOCATION / database
 
             self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
@@ -825,7 +825,7 @@ class SRCFPlugin(AbstractPlugin):
         except FileNotFoundError:
             exists = False
         if exists:
-            localpath = os.path.join(BASE_WRITE_LOCATION, "TemporaryGenericStateDatabase.json")
+            localpath = BASE_WRITE_LOCATION / "TemporaryGenericStateDatabase.json"
             sftp.get(str(remotepath), localpath)
 
             with open(localpath, "r") as F:
