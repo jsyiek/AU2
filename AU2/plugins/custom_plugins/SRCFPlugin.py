@@ -847,7 +847,7 @@ class SRCFPlugin(AbstractPlugin):
             elif remote_last_upload == local_last_upload:
                 self._confirm_upload(
                     sftp,
-                    "[SRCF Plugin] Your databases appear to be AHEAD OR UP TO DATE WITH of the copies on SRCF. "
+                    "[SRCF Plugin] Your databases appear to be AHEAD OR UP TO DATE WITH the copies on SRCF. "
                     "Do you want to bring the REMOTE copies up to date?"
                 )
             else:
