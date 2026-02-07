@@ -279,13 +279,14 @@ def render(html_component, dependency_context={}):
             for a in assassins_mapping:
                 assassin_model = ASSASSINS_DATABASE.get(a)
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
-            q = [inquirer.Editor(
-                name="report",
-                message=f"Report: {escape_format_braces(ASSASSINS_DATABASE.get(ident).snapshot())}"
+            report_text = render(HtmlEntry(
+                identifier="report",
+                title=f"Report: {escape_format_braces(ASSASSINS_DATABASE.get(ident).snapshot())}"
                     + (f" as {pseudonym}" if pseudonym else ""),
-                default=old_report[2]
-            )]
-            report_text = inquirer_prompt_with_abort(q)["report"]
+                default=old_report[2],
+                soft=True,
+                short=False,
+            ))["report"]
             return ident, pseudonym_id, report_text
 
         CONTINUE = -1
