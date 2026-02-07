@@ -1,6 +1,9 @@
 import os
 import pathlib
+
 from typing import List, Optional, Tuple, Any, Dict, Iterable
+from urllib.error import URLError
+from urllib.request import urlretrieve
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -15,7 +18,6 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
-from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -45,41 +47,42 @@ OPENSEASON_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plu
 with open(OPENSEASON_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
     OPENSEASON_PAGE_TEMPLATE = F.read()
 
+TABLE_SORT_JS_CDN = "https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.js"
+TABLE_SORT_JS_FILENAME = "table-sort.js"
+
 # LHS is table header, RHS is template string for table cell values
 # note the order here determines the order in which columns are displayed
 STATS_COLUMN_TEMPLATES = {
-    "Position": "{RANK}",
-    "Died at": "{DEATHS}",
-    "Real Name": "{NAME}",
-    "Pseudonym": "{PSEUDONYMS}",
-    "Number of Attempts": "{ATTEMPTS}",
-    "Number of Kills": "{KILLS}",
-    "Conkers Score": "{CONKERS}",
-    "Score": "{SCORE}"
+    "Position": "<td>{RANK}</td>",
+    "Real Name": "<td>{NAME}</td>",
+    "Pseudonym": "<td>{PSEUDONYMS}</td>",
+    "Died at": "<td data-sort='{DEATH_TS}'>{DEATHS}</td>",
+    "Number of Attempts": "<td>{ATTEMPTS}</td>",
+    "Number of Kills": "<td>{KILLS}</td>",
+    "Conkers Score": "<td>{CONKERS}</td>",
+    "Score": "<td>{SCORE}</td>"
+}
+
+STATS_HEADER_TEMPLATES = {
+    "Died at": "<th class='data-sort'>Died at</th>",
+    "Score": "<th class='numeric-sort'>Score</td>"
 }
 
 
 def stats_row_template(columns: Iterable[str]) -> str:
     """Generate a row template for the stats page from the given columns"""
-    return "<tr>" + "".join(f"<td>{STATS_COLUMN_TEMPLATES[col]}</td>" for col in columns) + "</tr>"
+    return "<tr>" + "".join(STATS_COLUMN_TEMPLATES[col] for col in columns) + "</tr>"
 
 
 def stats_table_template(columns: Iterable[str]) -> str:
     """Generate a table template for the stats page from the given columns"""
     return (
-            '<table xmlns="" class="playerlist"><tr>'
-            + ''.join(f'<th>{header}</th>' for header in columns)
+            '<table xmlns="" class="playerlist table-sort table-arrows no-class-infer"><tr>'
+            + ''.join(STATS_HEADER_TEMPLATES.get(header, f'<th>{header}</th>') for header in columns)
             + '</tr> {ROWS} </table>'
     )
 
-
-STATS_ORDERING_KEYS = {
-    "By Death (AU1 style)": lambda score_manager, a: (-score_manager.get_rating(a), -score_manager.get_score(a)),
-    "By Kills (London style)": lambda score_manager, a: (-score_manager.get_kills(a), -score_manager.get_conkers(a)),
-}
-
 STATS_NAVBAR_ENTRY = NavbarEntry("stats.html", "Player Stats", 4)
-
 STATS_PAGE_TEMPLATE: str
 STATS_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "stats.html"
 with open(STATS_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -177,7 +180,8 @@ class ScoringPlugin(AbstractPlugin):
             "Stats Columns": self.identifier + "_stats_cols",
             "Visualise Kills?": self.identifier + "_visualise_kills",
             "Stats Order": self.identifier + "_stats_order",
-            "Generate Stats Page?": self.identifier + "_stats_page"
+            "Generate Stats Page?": self.identifier + "_stats_page",
+            "Download table-sort.js?": self.identifier + "_download_table_sort_js",
         }
 
         self.plugin_state = {
@@ -187,7 +191,6 @@ class ScoringPlugin(AbstractPlugin):
                 "Real Name", "Pseudonym", "Number of Kills", "Conkers Score"
             ]},
             "Visualise Kills?": {'id': self.identifier + "_visualise_kills", 'default': True},
-            "Stats Order": {'id': self.identifier + "_stats_order", 'default': 'By Kills (London style)'}
         }
 
         self.assassin_plugin_state = {
@@ -216,6 +219,13 @@ class ScoringPlugin(AbstractPlugin):
                 "Scoring -> Set formula",
                 self.ask_set_formula,
                 self.answer_set_formula
+            ),
+            # TODO: move this to debug exports if that is implemented (as per https://github.com/jsyiek/AU2/issues/36)
+            ConfigExport(
+                "scoring_download_table_sort_js",
+                f"Download {TABLE_SORT_JS_FILENAME}",
+                self.ask_download_table_sort_js,
+                self.answer_download_table_sort_js
             )
         ]
 
@@ -271,10 +281,26 @@ class ScoringPlugin(AbstractPlugin):
         self.aps_set(ident, "Bonus", new_bonus)
         return [Label("[SCORING] Set bonus.")]
 
+    def ask_download_table_sort_js(self) -> List[HTMLComponent]:
+        return [
+            Label(f"{TABLE_SORT_JS_FILENAME} is the JavaScript library required to make the table on the stats page sortable."),
+            Label("This should already be present on SRCF, but if it is not you can download it using this tool."),
+            Checkbox(self.html_ids["Download table-sort.js?"], "Download table-sort.js?", checked=True),
+        ]
+
+    def answer_download_table_sort_js(self, html_response) -> List[HTMLComponent]:
+        if html_response[self.html_ids["Download table-sort.js?"]]:
+            try:
+                path, response = urlretrieve(TABLE_SORT_JS_CDN, WEBPAGE_WRITE_LOCATION / TABLE_SORT_JS_FILENAME)
+                return [Label(f"Successfully downloaded {TABLE_SORT_JS_CDN} to {path}")]
+            except URLError:
+                return [Label(f"ERROR: unable to download {TABLE_SORT_JS_CDN}")]
+        else:
+            return [Label("Aborted download.")]
+
     def _generate_stats_page(self,
                              columns: List[str],
                              generate_killtree: bool,
-                             stats_order: str,
                              navbar_entries: List[NavbarEntry]) -> List[HTMLComponent]:
         components = []
         openseason_end = get_game_end()
@@ -289,7 +315,16 @@ class ScoringPlugin(AbstractPlugin):
             score_manager.add_event(e)
         rows = []
 
-        full_players.sort(key=lambda a: STATS_ORDERING_KEYS[stats_order](score_manager, a))
+        def player_rating(a):
+            """
+            The values used to 'rank' players.
+            Players are sorted by 'rating' which is time of death for those that died before the end of open season
+            and game end + score for those that survived open season. If this is a tie then ties are broken by score.
+            """
+            return -score_manager.get_rating(a), -score_manager.get_score(a)
+
+        full_players.sort(key=player_rating)
+        tied_rank = -1
         for rank, p in enumerate(full_players):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
@@ -297,8 +332,12 @@ class ScoringPlugin(AbstractPlugin):
             deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
-                      for e in score_manager.get_death_events(p)
-                      if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)]
+                      for e in score_manager.get_death_events(p)]
+
+            # players that are tied should be given the same rank
+            if (rank == 0 or player_rating(full_players[rank - 1])
+                    != player_rating(p)):
+                tied_rank = rank + 1
             rows.append(stats_row_template(columns).format(
                 NAME=p.real_name,
                 PSEUDONYMS=p.all_pseudonyms(),
@@ -306,16 +345,8 @@ class ScoringPlugin(AbstractPlugin):
                 CONKERS=score_manager.get_conkers(p),
                 ATTEMPTS=score_manager.get_attempts(p),
                 DEATHS='<br />'.join(deaths) if deaths else "&mdash;",
-                # RANK is simply the position that a player appears according to whichever metric we are using,
-                # e.g. "kills" or "rating".
-                # But if players are tied according to this ordering metric, we want to make that clear.
-                # We do this by replacing a player's rank with a " -- representing a "ditto" sign -- if they are listed
-                # below a player they are tied with.
-                RANK=(rank+1
-                      if rank == 0 or
-                      STATS_ORDERING_KEYS[stats_order](score_manager, full_players[rank-1])
-                        != STATS_ORDERING_KEYS[stats_order](score_manager, p)
-                      else '"'),
+                DEATH_TS=score_manager.get_rating(p),
+                RANK=tied_rank,
                 SCORE=score_manager.get_score(p)
             ))
         table_str = stats_table_template(columns).format(ROWS="".join(rows))
@@ -340,7 +371,8 @@ class ScoringPlugin(AbstractPlugin):
                     YEAR=get_now_dt().year,
                     TABLE=table_str,
                     KILLTREE_EMBED=killtree_embed,
-                    KILLTREE_LINK=killtree_link
+                    KILLTREE_LINK=killtree_link,
+                    TABLE_SORT_JS_URL=TABLE_SORT_JS_FILENAME,
                 )
             )
 
@@ -498,10 +530,6 @@ Syntax:
                                            title="Which columns should be included in the player stats table?",
                                            options=all_cols,
                                            defaults=selected_cols),
-                InputWithDropDown(identifier=self.html_ids["Stats Order"],
-                                                title="How should players be ordered on the stats page?",
-                                                options=list(STATS_ORDERING_KEYS.keys()),
-                                                selected=self.gsdb_get("Stats Order")),
                 Checkbox(identifier=self.html_ids["Visualise Kills?"],
                                        title="Generate visualisation of kill graph?",
                                        checked=generate_killtree),
@@ -519,8 +547,6 @@ Syntax:
             self.gsdb_set("Stats Columns", columns)
             generate_killtree: bool = htmlResponse[self.html_ids["Visualise Kills?"]]
             self.gsdb_set("Visualise Kills?", generate_killtree)
-            stats_order = htmlResponse[self.html_ids["Stats Order"]]
-            self.gsdb_set("Stats Order", stats_order)
-            components.extend(self._generate_stats_page(columns, generate_killtree, stats_order, navbar_entries))
+            components.extend(self._generate_stats_page(columns, generate_killtree, navbar_entries))
 
         return components
