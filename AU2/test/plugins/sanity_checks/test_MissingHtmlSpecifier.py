@@ -18,7 +18,7 @@ class TestMissingHtmlSpecifier:
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
         # now test fixing of headline and reports
-        core_plugin.answer_generate_pages(html_response, False)
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)
         e = event.model()
         assert e.headline == "We <b>don't</b> need a specifier in the headline"
         assert event.check_report("<!--HTML-->But we <em>do</em> need it for reports!")
@@ -41,4 +41,4 @@ class TestMissingHtmlSpecifier:
                 html_response[ident] = []
 
         # sufficient for this not to raise an error for test to pass!
-        core_plugin.answer_generate_pages(html_response, False)
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)

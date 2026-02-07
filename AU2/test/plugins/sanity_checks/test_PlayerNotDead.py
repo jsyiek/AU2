@@ -14,7 +14,7 @@ class TestPlayerNotDead:
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
         # now test fixing of headline and reports
-        core_plugin.answer_generate_pages(html_response, False)
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)
         e = event.model()
         assert e.headline == f"[P{n[0]}] kills [D{n[1]}] ([N{n[1]}])!"
         assert event.check_report(f"blah blah blah [P{n[0]}] blah blah")
