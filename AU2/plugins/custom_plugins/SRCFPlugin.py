@@ -100,7 +100,10 @@ def backup_sort_key(backup_name: str) -> (float, str):
 
     if m := BACKUP_TIME_PATTERN.search(backup_name):
         backup_time = datetime.datetime.strptime(m[0], BACKUP_TIME_FORMAT).time()
-    return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    try:
+        return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    except ValueError:
+        return 0, backup_name
 
 
 class Email:
@@ -303,9 +306,9 @@ class SRCFPlugin(AbstractPlugin):
 
             # note: hidden assassins will be excluded
             alive_assassins = ASSASSINS_DATABASE.get_identifiers(include=(
-                lambda a: a.is_police or not death_manager.is_dead(a)
+                lambda a: a.is_city_watch or not death_manager.is_dead(a)
             ))
-            police_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_police)
+            city_watch_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_city_watch)
 
             return [
                 Checkbox(
@@ -330,7 +333,7 @@ class SRCFPlugin(AbstractPlugin):
                     # note: hidden assassins will be excluded
                     assassins=ASSASSINS_DATABASE.get_identifiers(),
                     alive_assassins=alive_assassins,
-                    police_assassins=police_assassins
+                    city_watch_assassins=city_watch_assassins
                 )
             ]
         return []
@@ -859,7 +862,7 @@ class SRCFPlugin(AbstractPlugin):
         Disables SRCF plugin and prints an error message.
         """
         print("Login cancelled. Disabling SRCFPlugin.")
-        GENERIC_STATE_DATABASE.plugin_map["SRCFPlugin"] = False
+        self.enabled = False
         return []
 
     def _successful_login(self):

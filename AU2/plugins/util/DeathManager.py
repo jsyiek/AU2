@@ -1,21 +1,25 @@
 from collections import defaultdict
+from typing import List, Dict
 
 from AU2.database.model import Event, Assassin
 
 
 class DeathManager:
-    def __init__(self, perma_death: bool=True):
-        self.perma_death = perma_death
-        self.deaths = []
+    def __init__(self):
+        self.deaths: Dict[str, List[Event]] = defaultdict(list)
 
     def add_event(self, e: Event):
-        if not self.perma_death:
-            self.deaths = []
+        event_deaths = set()
         for (killer, victim) in e.kills:
-            self.deaths.append(victim)
+            if victim not in event_deaths:
+                self.deaths[victim].append(e)
+                event_deaths.add(victim)
 
-    def get_dead(self):
-        return self.deaths
+    def get_dead(self) -> List[str]:
+        return list(self.deaths)
 
-    def is_dead(self, a: Assassin):
+    def is_dead(self, a: Assassin) -> bool:
         return a.identifier in self.deaths
+
+    def get_death_events(self, a: Assassin) -> List:
+        return self.deaths[a.identifier]

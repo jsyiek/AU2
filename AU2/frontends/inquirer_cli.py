@@ -3,10 +3,15 @@ import copy
 import datetime
 import itertools
 import random
-import tabulate
-from typing import Any, Dict, List, Optional, Tuple, Union
 
+from typing import Any, Dict, List, Optional, Tuple
+
+import editor
+import html5lib
 import inquirer
+import tabulate
+
+from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -31,7 +36,7 @@ from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalD
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
-from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.HiddenComponent import HiddenComponent
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
@@ -39,6 +44,7 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
@@ -48,10 +54,10 @@ from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOption
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import escape_format_braces
+from AU2.plugins.util.game import escape_format_braces, soft_escape
 
 
-def datetime_validator(_, current):
+def datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -62,7 +68,7 @@ def datetime_validator(_, current):
 
 
 # same as above except allows blank values (for pseudonym datetimes this represents being valid forever)
-def optional_datetime_validator(_, current):
+def optional_datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -72,6 +78,20 @@ def optional_datetime_validator(_, current):
     except ValueError:
         return False
     return True
+
+
+def html_validator(_, to_validate: str) -> bool:
+    parser = html5lib.HTMLParser(strict=True)
+    try:
+        parser.parse(f"<!DOCTYPE html>{to_validate}")
+    except Exception:
+        raise ValidationError("", reason="Invalid HTML")
+    return True
+
+
+def soft_html_validator(_, to_validate: str) -> bool:
+    to_validate = soft_escape(to_validate)
+    return html_validator(_, to_validate)
 
 
 # TODO: Create a generic type validator
@@ -195,7 +215,7 @@ def render(html_component, dependency_context={}):
                         name="q",
                         message=f"{escape_format_braces(player)}: Choose pseudonym",
                         choices=choices,
-                        default=html_component.default.get(player, "")
+                        default=html_component.default.get(player, choices[-1])
                     )]
                 pseudonym_index = inquirer_prompt_with_abort(q)["q"]
             else:
@@ -249,10 +269,10 @@ def render(html_component, dependency_context={}):
 
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
-            print(
-                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
-            print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
+            print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X")
+            print("    [LX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
             print("    [NX] Renders real name of assassin with ID X (if in the event)")
+            print("    [VX] Is a shortcut for [LX] ([NX])")
             print("ASSASSIN IDENTIFIERS")
             # This is taken from the old AssassinDependentReportEntry implementation
             # TODO: find a better way of doing this?
@@ -414,9 +434,21 @@ def render(html_component, dependency_context={}):
 
     # dependent component
     elif isinstance(html_component, AssassinDependentCrimeEntry):
+        # render info pertaining to licitness of victims if available
+        if html_component.kill_entry_identifier in dependency_context and html_component.targeting_graph:
+            kills = dependency_context[html_component.kill_entry_identifier]
+            for (killer, victim) in kills:
+                if victim in html_component.targeting_graph.get(killer, []):
+                    print(f"{killer} had {victim} as a target.")
+                elif killer in html_component.targeting_graph.get(victim, []):
+                    print(f"{killer} was a target of {victim}.")
+                else:
+                    print(f"{killer} did not have {victim} as a target nor targeter; this may be an illicit kill.")
+
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
+
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
         q = [inquirer.Checkbox(
@@ -635,6 +667,7 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, Table):
         print(tabulate.tabulate(html_component.rows, headers=html_component.headings,
                                 maxcolwidths=[len(h) for h in html_component.headings]))
+        print()
         return {}
 
     elif isinstance(html_component, Checkbox):
@@ -650,7 +683,7 @@ def render(html_component, dependency_context={}):
         a = inquirer_prompt_with_abort(q)
         return {html_component.identifier: a["q"] == "Yes"}
 
-    elif isinstance(html_component, HiddenTextbox):
+    elif isinstance(html_component, HiddenComponent):
         return {html_component.identifier: html_component.default}
 
     elif isinstance(html_component, NamedSmallTextbox):
@@ -660,6 +693,14 @@ def render(html_component, dependency_context={}):
     elif isinstance(html_component, LargeTextEntry):
         q = [inquirer.Editor(name=html_component.identifier, message=escape_format_braces(html_component.title),
                              default=escape_format_braces(html_component.default))]
+        return inquirer_prompt_with_abort(q)
+
+    elif isinstance(html_component, HtmlEntry):
+        q_type = inquirer.Text if html_component.short else inquirer.Editor
+        q = [q_type(name=html_component.identifier,
+                    message=escape_format_braces(html_component.title),
+                    default=escape_format_braces(html_component.default),
+                    validate=soft_html_validator if html_component.soft else html_validator)]
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, InputWithDropDown):
@@ -697,6 +738,7 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="newpseudonym",
                     message="Enter a new pseudonym",
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["newpseudonym"]
@@ -728,8 +770,9 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="editpseudonym",
                     message="Enter replacement" + ("" if c == 0 else " (blank to delete)"),
-                    # cannot delete initial pseudonym
-                    default=escape_format_braces(v.text)
+                    # (cannot delete initial pseudonym)
+                    default=escape_format_braces(v.text),
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["editpseudonym"]
@@ -795,7 +838,7 @@ def render(html_component, dependency_context={}):
             inquirer.List(
                 name="emails",
                 message="Which assassins would you like to email? (All options exclude hidden assassins)",
-                choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL POLICE", "MANUAL SELECTION"],
+                choices=["UPDATES ONLY", "ALL", "ALL ALIVE", "ALL CITY WATCH", "MANUAL SELECTION"],
                 default="UPDATES ONLY",
             )
         ]
@@ -804,8 +847,8 @@ def render(html_component, dependency_context={}):
             return {html_component.identifier: html_component.assassins}
         elif out == "ALL ALIVE":
             return {html_component.identifier: html_component.alive_assassins}
-        elif out == "ALL POLICE":
-            return {html_component.identifier: html_component.police_assassins}
+        elif out == "ALL CITY WATCH":
+            return {html_component.identifier: html_component.city_watch_assassins}
         elif out == "UPDATES ONLY":
             return {html_component.identifier: ["UPDATES ONLY"]}
         else:
@@ -820,7 +863,8 @@ def render(html_component, dependency_context={}):
 
     elif isinstance(html_component, ConfigOptionsList):
         # render dangerous config exports in red
-        choices = [("\033[31m" + c.display_name + "\033[0m", c) if isinstance(c, DangerousConfigExport)
+        choices = [("\033[31m" + c.display_name + "\033[0m", c)
+                   if isinstance(c, DangerousConfigExport) and c.danger_explanation()
                    else (c.display_name, c)
                    for c in html_component.config_options]
         selection = inquirer.list_input(
@@ -831,11 +875,11 @@ def render(html_component, dependency_context={}):
             raise KeyboardInterrupt
 
         if isinstance(selection, DangerousConfigExport):
-            # give explanation of why confirmation needed
-            print(selection.explanation)
-            i = random.randint(0, 1000000)
-            if str(i) != inquirer.text(f"Type {i} to access this config option"):
-                raise KeyboardInterrupt
+            if explanation := selection.danger_explanation():
+                print(explanation)
+                i = random.randint(0, 1000000)
+                if str(i) != inquirer.text(f"Type {i} to access this config option"):
+                    raise KeyboardInterrupt
 
         return {html_component.identifier: selection}
 
@@ -1006,6 +1050,19 @@ def key_addons(f):
 # wrap List and Checkbox input processing for PgUp, PgDown, Home and End key support
 inquirer.render.console._list.List.process_input = key_addons(inquirer.render.console._list.List.process_input)
 inquirer.render.console._checkbox.Checkbox.process_input = key_addons(inquirer.render.console._checkbox.Checkbox.process_input)
+
+
+def editor_process_input_addon(f):
+    """Wrapper function that fixes the process_input method of inquirer Editor input,
+    so that validation doesn't wipe user input."""
+    def process_input(self, pressed):
+        if pressed in (key.CR, key.LF, key.ENTER):
+            data = editor.editor(text=self.question.default or "")
+            self.question._default = data
+            raise EndOfInput(data)
+        f(self, pressed)
+    return process_input
+inquirer.render.console._editor.Editor.process_input = editor_process_input_addon(inquirer.render.console._editor.Editor.process_input)
 
 if __name__ == "__main__":
     main()

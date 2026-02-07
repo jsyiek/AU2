@@ -43,6 +43,9 @@ class Event(PersistentFile):
     identifier: str = ""
     __secret_id: str = ""
 
+    def get_numerical_id(self) -> int:
+        return int(self.__secret_id)
+
     def __post_init__(self):
         if not self.__secret_id:
             self.__secret_id = GENERIC_STATE_DATABASE.get_unique_str()
@@ -50,3 +53,11 @@ class Event(PersistentFile):
             self.identifier = "(" + self.__secret_id + ") " + self.headline[0:25].rstrip()
 
         # self.datetime = self.datetime.replace(tzinfo=None)
+
+    def text_display(self) -> str:
+        """
+        Gives a (plaintext) rendering of this Event's headline, as a human-readable reference to this Event that, unlike
+        the internal `identifier`, changes as the Event is updated.
+        """
+        # TODO: render pseudonym codes?
+        return f"[{self.datetime.strftime('%Y-%m-%d %H:%M %p')}] {self.headline.rstrip()}"

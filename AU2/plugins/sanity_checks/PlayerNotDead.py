@@ -7,18 +7,18 @@ from AU2.html_components import HTMLComponent
 from AU2.plugins.sanity_checks.model.SanityCheck import SanityCheck
 from AU2.plugins.sanity_checks.model.SanityCheck import Suggestion
 
-DX_NX_PATTERN = re.compile(r"(\[[DN](\d+)\])")
+DX_NX_PATTERN = re.compile(r"(\[[DNLV](\d+)\])")
 
 class PlayerNotDead(SanityCheck):
     """
-    Finds and detects cases where [DX] and [NX] appear,
+    Finds and detects cases where [VX], [LX], [DX] and [NX] appear,
     despite the player being alive.
     """
 
     identifier = "Player_Not_Dead"
 
     def _find_incorrect(self, string: str, dead_secret_ids: Set[str], fixes: Dict[str, str]):
-        # matches either [DX] or [NX]
+        # matches either [VX], [LX], [DX] or [NX]
         for match in DX_NX_PATTERN.findall(string):
             X = match[1]
             if X not in dead_secret_ids:
@@ -42,15 +42,19 @@ class PlayerNotDead(SanityCheck):
                 a = alist[0]
                 suggestions.append(
                     Suggestion(
-                        identifier=f"{original}_[P{secret_id}]",
+                        data={
+                            "original": original,
+                            "replacement": f"[P{secret_id}]",
+                        },
                         explanation=f"{a.identifier} is not dead. Replace: {original} -> [P{secret_id}]"
                     )
                 )
         return suggestions
 
-    def fix_event(self, e: Event, suggestion_ids: List[str]) -> List[HTMLComponent]:
-        for suggestion_str in suggestion_ids:
-            original, replacement = suggestion_str.split("_")
+    def fix_event(self, e: Event, suggestion_data: List[dict]) -> List[HTMLComponent]:
+        for data in suggestion_data:
+            original = data["original"]
+            replacement = data["replacement"]
             e.headline = e.headline.replace(original, replacement)
             for i, (assassin_id, pseudonym_id, report) in enumerate(e.reports):
                 e.reports[i] = (assassin_id, pseudonym_id, report.replace(original, replacement))

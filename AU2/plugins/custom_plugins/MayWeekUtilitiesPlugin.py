@@ -1,7 +1,7 @@
 from collections import defaultdict
 import dataclasses
 import functools
-from typing import DefaultDict, Dict, Iterable, List, Optional, Sequence, Set
+from typing import DefaultDict, Dict, List, Optional, Sequence, Set
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -21,11 +21,11 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import render_all_events, get_color, Manager
+from AU2.plugins.util.render_utils import Chapter, generate_news_pages, get_color, Manager
 
 
 HEX_COLS = [
@@ -44,6 +44,8 @@ PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
                          "<td {CREW_COLOR}>{POINTS}</td>"
                          "<td {CREW_COLOR}>{MULTIPLIER}</td>"
                          "{TEAM_ENTRY}</tr>")
+
+MAYWEEK_PLAYERS_NAVBAR_ENTRY = NavbarEntry("mw-players.html", "Players", -2)
 
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -67,8 +69,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     """
     This is a generic May Week plugin to support common May Week game features.
 
-    **Casual players**: This is a cosmetic change; police players are referred to as
-                        'casual'.
+    **Casual players**: This is a cosmetic change; there is no City Watch in May Week,
+              so this plugin reinterprets members of the city watch as 'casual' players.
 
     **Teams**: Any number of players can be part of a team. Kills can be made as part
                of a team and points will be shared across all players (and bonus points
@@ -593,8 +595,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         # passing a team manager allows us to extract team information after this function runs
         team_manager = team_manager or self.TeamManager()
 
-        scores: Dict[str, float] = {a.identifier: Sf if not a.is_police else Sc for a in ASSASSINS_DATABASE.get_filtered(
-            include_hidden = lambda _: True  # probably not necessary in May Week (since no resurrection as police),
+        scores: Dict[str, float] = {a.identifier: Sf if not a.is_city_watch else Sc for a in ASSASSINS_DATABASE.get_filtered(
+            include_hidden = lambda _: True  # probably not necessary in May Week (since no resurrection as city watch),
                                              # but just in case...
         )}
         multiplier_owners = set()
@@ -651,7 +653,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         return scores
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         """
         Generates player info page and may week news page.
 
@@ -659,9 +661,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         multipliers, the other giving the real names and other targeting information for all the players.
 
         The may week news page collates all the events onto a single page (rather than paginating like
-        PageGeneratorPlugin) and applies May Week name colouring (i.e. crews share a colour, don't colour police (casual
-        players) differently, don't colour dead players differently outside the event in which they died, don't colour
-        incos).
+        PageGeneratorPlugin) and applies May Week name colouring (i.e. crews share a colour, don't colour city watch
+        (casual players) differently, don't colour dead players differently outside the event in which they died, don't
+        colourincos).
         """
 
         # player info page
@@ -705,7 +707,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             player_rows.append(
                 PLAYER_ROW_TEMPLATE.format(
                     REAL_NAME = player.real_name,
-                    PLAYER_TYPE = "Casual" if player.is_police else "Full",
+                    PLAYER_TYPE = "Casual" if player.is_city_watch else "Full",
                     ADDRESS = player.address,
                     COLLEGE = player.college,
                     WATER_STATUS = player.water_status,
@@ -713,7 +715,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 )
             )
 
-        with open(WEBPAGE_WRITE_LOCATION / "mw-players.html", "w+", encoding="utf-8") as F:
+        if player_rows or pseudonym_rows:
+            navbar_entries.append(MAYWEEK_PLAYERS_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / MAYWEEK_PLAYERS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(MAYWEEK_PLAYERS_TEMPLATE.format(
                 PSEUDONYM_ROWS = "\n".join(pseudonym_rows),
                 PLAYER_ROWS = "\n".join(player_rows),
@@ -726,7 +731,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         # may week news page
 
-        # colour players by crew and don't do police, or inco colouring
+        # colour players by crew and don't do city watch, or inco colouring
         def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Sequence[Manager]) -> str:
             # render dead colour -- but only if died *in this event*
             if any(victim_id == assassin_model.identifier for (_, victim_id) in e.kills):
@@ -745,22 +750,14 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # fallback for individual
             return get_color(pseudonym)
 
-        _, mw_weeks = render_all_events(
-            exclude=lambda e: (
-                    # TODO: when a game is not live, move hidden-ness of an event into core?
-                    e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)
-            ),
-            color_fn=mw_color_fn,
-            plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
-        )
-        mw_content = "".join("".join(day_news) for _, day_news in sorted(mw_weeks.items()))
+        MAYWEEK_CHAPTER = Chapter("May Week News", NavbarEntry("mw-news.html", "Reports", 0))
 
-        with open(WEBPAGE_WRITE_LOCATION / "mw-news.html", "w+", encoding="utf-8") as F:
-            F.write(
-                MAYWEEK_NEWS_TEMPLATE.format(
-                    CONTENT=mw_content,
-                    YEAR=str(get_now_dt().year)
-                )
-            )
+        generate_news_pages(
+            headlines_path="mw-head.html",
+            page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
+            color_fn=mw_color_fn,
+            plugin_managers=(self.TeamManager() for _ in range(teams_enabled)),
+            news_list_path="mw-news-list.html",
+        )
 
         return [Label("[MAY WEEK] Success!")]

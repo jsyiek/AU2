@@ -25,7 +25,8 @@ class CompetencyManager:
         self.game_start = game_start
         self.initial_competency_period = datetime.timedelta(days=GENERIC_STATE_DATABASE.arb_int_state.get(ID_GAME_START, DEFAULT_START_COMPETENCY))
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("CompetencyPlugin", False)
-        self.auto_competency = GENERIC_STATE_DATABASE.arb_state.get("auto_competency", "Manual") != "Manual"
+        # setdefault so that reversion to an older version of AU2 won't implicitly set this back to Manual
+        self.auto_competency = GENERIC_STATE_DATABASE.arb_state.setdefault("auto_competency", "Auto") != "Manual"
         self.attempts_since_kill = defaultdict(int)
 
     def add_event(self, e: Event):
@@ -41,7 +42,7 @@ class CompetencyManager:
         if self.auto_competency:
             for (killer, victim) in e.kills:
                 victim_model = ASSASSINS_DATABASE.get(victim)
-                if victim_model.is_police:
+                if victim_model.is_city_watch:
                     continue
                 self.attempts_since_kill[killer] = 0
                 # Allows overriding auto competency on a case-by-case basis
@@ -57,7 +58,7 @@ class CompetencyManager:
             for assassin_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
                 # Logic for not increasing attempts if player got a player kill in same event.
                 for (killer, victim) in e.kills:
-                    if killer == assassin_id and not ASSASSINS_DATABASE.get(victim).is_police:
+                    if killer == assassin_id and not ASSASSINS_DATABASE.get(victim).is_city_watch:
                         break
                 else:
                     self.attempts_since_kill[assassin_id] += 1
@@ -78,10 +79,10 @@ class CompetencyManager:
         """
         Returns true if:
          1) the CompetencyPlugin is activated
-         2) the assassin is not police
+         2) the assassin is not part of the city watch
          3) the deadline is earlier than the date
         """
-        return self.activated and not a.is_police and self.deadlines[a.identifier] < date
+        return self.activated and not a.is_city_watch and self.deadlines[a.identifier] < date
 
     def get_incos_at(self, date: datetime.datetime):
         """

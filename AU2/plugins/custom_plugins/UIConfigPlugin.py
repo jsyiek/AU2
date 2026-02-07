@@ -20,7 +20,7 @@ class Call(Flag):
     NONE = 0
     EVENT_CREATE = 2 << 0
     EVENT_UPDATE = 2 << 1
-    EVENT_DELETE = 2 << 2
+    RESERVED_ONE = 2 << 2
     ASSASSIN_CREATE = 2 << 3
     ASSASSIN_UPDATE = 2 << 4
     ASSASSIN_STATUS = 2 << 5
@@ -153,6 +153,16 @@ class UIConfigPlugin(AbstractPlugin):
             )
         ]
 
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        return [
+            *self.ask_toggle_parameters(),
+        ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        return [
+            *self.answer_toggle_parameters(htmlResponse),
+        ]
+
     def ask_toggle_parameters(self):
         return [
             SelectorList(
@@ -180,9 +190,6 @@ class UIConfigPlugin(AbstractPlugin):
 
     def on_event_request_update(self, _: Event) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.EVENT_UPDATE)
-
-    def on_event_request_delete(self, _: Event) -> List[HTMLComponent]:
-        return self.get_overrides_for_call(Call.EVENT_DELETE)
 
     def on_assassin_request_create(self) -> List[HTMLComponent]:
         return self.get_overrides_for_call(Call.ASSASSIN_CREATE)
