@@ -14,8 +14,7 @@ from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
-from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database import save_all_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
 from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
@@ -369,11 +368,11 @@ def render(html_component, dependency_context={}):
             kills = dependency_context[html_component.kill_entry_identifier]
             for (killer, victim) in kills:
                 if victim in html_component.targeting_graph.get(killer, []):
-                    print(f"{killer} had {victim} as a target.")
+                    print(f"{killer} has {victim} as a target.")
                 elif killer in html_component.targeting_graph.get(victim, []):
-                    print(f"{killer} was a target of {victim}.")
+                    print(f"{killer} is a target of {victim}.")
                 else:
-                    print(f"{killer} did not have {victim} as a target nor targeter; this may be an illicit kill.")
+                    print(f"{killer} does not have {victim} as a target nor targeter; this may be an illicit kill.")
 
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
@@ -958,9 +957,7 @@ def main():
                 render(component)
 
             print("Saving databases...")
-            ASSASSINS_DATABASE.save()
-            EVENTS_DATABASE.save()
-            GENERIC_STATE_DATABASE.save()  # utility database
+            save_all_databases()
 
 from readchar import key
 def key_addons(f):

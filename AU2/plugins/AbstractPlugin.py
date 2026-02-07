@@ -79,6 +79,7 @@ class DangerousConfigExport(ConfigExport):
 
 
 
+
 class HookedExport:
     """
     Represents an export capable of being hooked into other plugins for their cooperation.
@@ -111,6 +112,7 @@ class HookedExport:
 
 AttributePairTableRow = Tuple[str, str]
 NavbarEntry = NamedTuple("NavbarEntry", (("url", str), ("display", str), ("position", float)))
+
 
 
 class AbstractPlugin:
