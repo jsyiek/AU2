@@ -40,9 +40,6 @@ class FailedToCreateChainException(Exception):
     pass
 
 
-TOGGLE_INFO_DISPLAY_NAME = "Targeting Graph -> Toggle display"
-
-
 def filter_to_targetable(idents: Iterable[str]) -> List[str]:
     """Filters an iterable of assassin identifiers to a list of only those that are involved in targeting,
     i.e. full players"""
@@ -84,12 +81,6 @@ class TargetingPlugin(AbstractPlugin):
                 self.ask_set_initial_seeding,
                 self.answer_set_initial_seeding,
                 self.danger_explanation
-            ),
-            ConfigExport(
-                "targeting_show_targeting_info",
-                TOGGLE_INFO_DISPLAY_NAME,
-                self.ask_toggle_targeting_info,
-                self.answer_toggle_targeting_info
             ),
         ]
 
@@ -182,26 +173,6 @@ class TargetingPlugin(AbstractPlugin):
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
             return response
         return []
-
-    @property
-    def show_targeting_info(self) -> int:
-        return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("show_targeting_info", 1)
-
-    @show_targeting_info.setter
-    def show_targeting_info(self, val: int):
-        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["show_targeting_info"] = val
-
-    def ask_toggle_targeting_info(self) -> List[HTMLComponent]:
-        return [
-            InputWithDropDown(self.identifier,
-                              "Setting for displaying targeting information to help determine licitness of kills",
-                              [("Force On", 2), ("On", 1), ("Off", 0)],
-                              self.show_targeting_info)
-        ]
-
-    def answer_toggle_targeting_info(self, html_response) -> List[HTMLComponent]:
-        self.show_targeting_info = html_response[self.identifier]
-        return [Label("[TARGETING] Success!")]
 
     def on_data_hook(self, hook: str, data):
         if hook == "WantedPlugin_targeting_graph":
