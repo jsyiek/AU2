@@ -340,10 +340,6 @@ class ScoringPlugin(AbstractPlugin):
                 )
             )
 
-        # copy over javascipt library for sortable tables
-        shutil.copy(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "table-sort.js",
-                    WEBPAGE_WRITE_LOCATION / "table-sort.js")
-
         components.append(Label("[SCORING] Generated stats page."))
         return components
 
