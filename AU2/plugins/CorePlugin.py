@@ -2,7 +2,7 @@ import glob
 import os.path
 
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -173,6 +173,13 @@ class CorePlugin(AbstractPlugin):
                 ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
             ),
             Export(
+                "core_assassin_update_pseudonyms",
+                "Assassin -> Update Pseudonyms",
+                self.ask_core_plugin_update_pseudonyms,
+                self.answer_core_plugin_update_pseudonyms,
+                (ASSASSINS_DATABASE.get_identifiers,)
+            ),
+            Export(
                 "core_assassin_summary",
                 "Assassin -> Summary",
                 self.ask_core_plugin_summary_assassin,
@@ -202,6 +209,13 @@ class CorePlugin(AbstractPlugin):
                 "Event -> Update",
                 self.ask_core_plugin_update_event,
                 self.answer_core_plugin_update_event,
+                (self.gather_events,)
+            ),
+            Export(
+                "core_event_update_reports",
+                "Event -> Update Reports",
+                self.ask_core_plugin_update_reports,
+                self.answer_core_plugin_update_reports,
                 (self.gather_events,)
             ),
             Export(
@@ -397,10 +411,7 @@ class CorePlugin(AbstractPlugin):
         )
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            EditablePseudonymList(
-                self.html_ids["Pseudonym"], "Edit Pseudonyms",
-                (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
-            ),
+            *self.ask_core_plugin_update_pseudonyms(assassin.identifier),
             DefaultNamedSmallTextbox(self.html_ids["Real Name"], "Real Name", assassin.real_name),
             DefaultNamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns", assassin.pronouns),
             DefaultNamedSmallTextbox(self.html_ids["Email"], "Email", assassin.email, type_="email"),
@@ -415,12 +426,7 @@ class CorePlugin(AbstractPlugin):
         return html
 
     def on_assassin_update(self, assassin: Assassin, htmlResponse: Dict) -> List[HTMLComponent]:
-        # process updates to the assassin's pseudonyms
-        pseudonym_updates = htmlResponse[self.html_ids["Pseudonym"]]
-        [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
-        [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
-        [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
-        # set other attributes
+        self.answer_core_plugin_update_pseudonyms(htmlResponse)
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
         assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
         assassin.email = htmlResponse[self.html_ids["Email"]]
@@ -438,7 +444,7 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
+                    *self.ask_core_plugin_update_reports(assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
@@ -452,7 +458,8 @@ class CorePlugin(AbstractPlugin):
         ]
         return html
 
-    def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
+    def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
+        self.answer_core_plugin_update_reports(htmlResponse, e)
         return [Label("[CORE] Success!")]
 
     def on_event_request_update(self, e: Event):
@@ -465,7 +472,7 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
+                    *self.ask_core_plugin_update_reports(e.identifier, assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
@@ -483,7 +490,7 @@ class CorePlugin(AbstractPlugin):
         event.assassins = htmlResponse[self.event_html_ids["Assassin Pseudonym"]]
         event.datetime = htmlResponse[self.event_html_ids["Datetime"]]
         event.headline = htmlResponse[self.event_html_ids["Headline"]]
-        event.reports = htmlResponse[self.event_html_ids["Reports"]]
+        self.answer_core_plugin_update_reports(htmlResponse, event)
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
@@ -655,6 +662,28 @@ class CorePlugin(AbstractPlugin):
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
 
+    def ask_core_plugin_update_pseudonyms(self, assassin_id: str):
+        assassin = ASSASSINS_DATABASE.get(assassin_id)
+        return [
+            HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
+            EditablePseudonymList(
+                self.html_ids["Pseudonym"], "Edit Pseudonyms",
+                (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
+            ),
+        ]
+
+    def answer_core_plugin_update_pseudonyms(self, html_response: Dict):
+        ident = html_response[self.HTML_SECRET_ID]
+        assassin = ASSASSINS_DATABASE.get(ident)
+        # process updates to the assassin's pseudonyms
+        pseudonym_updates = html_response[self.html_ids["Pseudonym"]]
+        [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
+        [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
+        [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
+        return [
+            Label(f"[CORE] Successfully updated {ident}'s pseudonyms.")
+        ]
+
     def ask_core_plugin_create_event(self):
         components = []
         for p in PLUGINS:
@@ -687,6 +716,41 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             components += p.on_event_update(event, html_response_args)
         return components
+
+    def ask_core_plugin_update_reports(self, event_id: str = "", assassin_pseudonyms_identifier: str = "") -> List[HTMLComponent]:
+        """
+        Export for updating the reports in an event.
+        If assassin_pseudonyms_identifier this returns only the AssassinDependentReportEntry component, for use in
+        Event -> Create and Event -> Update, otherwise it returns the components necessary to function as a standalone
+        export.
+        """
+        FALLBACK_ID = self.event_html_ids["Assassin Pseudonym"]
+        event = EVENTS_DATABASE.get(event_id)
+        component = AssassinDependentReportEntry(assassin_pseudonyms_identifier or FALLBACK_ID,
+                                                 self.event_html_ids["Reports"],
+                                                 "Reports", event.reports if event else [])
+        if assassin_pseudonyms_identifier:
+            return [component]
+        else:
+            return [
+                HiddenTextbox(self.HTML_SECRET_ID, event_id),
+                Dependency(
+                    dependentOn=FALLBACK_ID,
+                    htmlComponents=[
+                        HiddenJSON(FALLBACK_ID, event.assassins),
+                        component
+                    ]
+                ),
+            ]
+
+    def answer_core_plugin_update_reports(self, html_response: Dict, event: Optional[Event] = None) -> List[HTMLComponent]:
+        if not event:
+            ident = html_response[self.HTML_SECRET_ID]
+            event = EVENTS_DATABASE.get(ident)
+        event.reports = html_response[self.event_html_ids["Reports"]]
+        return [
+            Label("[CORE] Successfully updated reports.")
+        ]
 
     def gather_events(self) -> List[Tuple[str, str]]:
         # headline is truncated because `inquirer` doesn't deal with overlong options well
