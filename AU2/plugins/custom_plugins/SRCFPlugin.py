@@ -1,6 +1,5 @@
 import contextlib
 import datetime
-import keyring
 import os
 import re
 import time

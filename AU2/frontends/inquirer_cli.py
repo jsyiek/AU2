@@ -229,7 +229,7 @@ def render(html_component, dependency_context={}):
                 choices=[("*DELETE REPORT*", None), *((ASSASSINS_DATABASE.get(a).snapshot(), a) for a in assassins_mapping.keys())],
                 default=old_report[0]
             )]
-            ident = inquirer_prompt_with_abort(q)["author"]
+            ident: Optional[str] = inquirer_prompt_with_abort(q)["author"]
             if ident is None:
                 # signals that the report should be deleted
                 return None
@@ -243,7 +243,9 @@ def render(html_component, dependency_context={}):
             )]
             pseudonym_id = inquirer_prompt_with_abort(q)["pseudonym"]
             pseudonym_id = int(pseudonym_id) if pseudonym_id is not None else assassins_mapping[ident]
-            pseudonym = assassin_pseudonyms[ident][pseudonym_id] if pseudonym_id is not None else None
+            pseudonym = (assassin_pseudonyms[ident][pseudonym_id]
+                         if pseudonym_id is not None and len(assassin_pseudonyms[ident]) > pseudonym_id
+                         else None)
 
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
@@ -266,9 +268,12 @@ def render(html_component, dependency_context={}):
             report_text = inquirer_prompt_with_abort(q)["report"]
             return ident, pseudonym_id, report_text
 
+        CONTINUE = -1
+        NEW = -2
+
         while True:
             report_options = [
-                ("*CONTINUE*", -1),
+                ("*CONTINUE*", CONTINUE),
                 *(
                     (
                         (
@@ -279,7 +284,7 @@ def render(html_component, dependency_context={}):
                     )
                     for i, (ident, p, _) in enumerate(reports)
                 ),
-                ("*NEW*", -2)
+                ("*NEW*", NEW)
             ]
             q = [inquirer.List(
                 name=html_component.identifier,
@@ -288,7 +293,7 @@ def render(html_component, dependency_context={}):
             )]
             a = inquirer_prompt_with_abort(q)
             c = a[html_component.identifier]  # index of choice
-            if c == -2:  # case where "*NEW*" selected
+            if c == NEW:
                 try:
                     new_report = _render_report_editor(("", None, ""))
                     if new_report is not None:
@@ -296,7 +301,7 @@ def render(html_component, dependency_context={}):
                 except KeyboardInterrupt:
                     continue
 
-            elif c == -1:  # case where "*CONTINUE*" selected
+            elif c == CONTINUE:
                 break
             else:  # case where editing existing report
                 old_report = reports[c]
