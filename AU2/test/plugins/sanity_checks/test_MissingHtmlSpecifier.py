@@ -29,7 +29,7 @@ class TestMissingHtmlSpecifier:
     def test_reject_suggestions(self):
         p = some_players(1)
         game = MockGame().having_assassins(p)
-        event = game.assassin(p[0]).is_involved_in_event().with_report(p[0], 0, "Here is a report that <i>should</i> have a HTML specifier")
+        event = game.assassin(p[0]).is_involved_in_event().with_report(p[0], 0, "Here is a report that <i>should</i> have an HTML specifier")
         core_plugin = CorePlugin()
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
