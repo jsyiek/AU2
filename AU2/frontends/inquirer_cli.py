@@ -3,10 +3,14 @@ import copy
 import datetime
 import itertools
 import random
-import tabulate
 from typing import List, Any, Dict, Optional, Tuple
 
+import editor
+import html5lib
 import inquirer
+import tabulate
+
+from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -39,6 +43,7 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
@@ -48,10 +53,10 @@ from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOption
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import escape_format_braces
+from AU2.plugins.util.game import escape_format_braces, soft_escape
 
 
-def datetime_validator(_, current):
+def datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -62,7 +67,7 @@ def datetime_validator(_, current):
 
 
 # same as above except allows blank values (for pseudonym datetimes this represents being valid forever)
-def optional_datetime_validator(_, current):
+def optional_datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -72,6 +77,20 @@ def optional_datetime_validator(_, current):
     except ValueError:
         return False
     return True
+
+
+def html_validator(_, to_validate: str) -> bool:
+    parser = html5lib.HTMLParser(strict=True)
+    try:
+        parser.parse(f"<!DOCTYPE html>{to_validate}")
+    except Exception:
+        raise ValidationError("", reason="Invalid HTML")
+    return True
+
+
+def soft_html_validator(_, to_validate: str) -> bool:
+    to_validate = soft_escape(to_validate)
+    return html_validator(_, to_validate)
 
 
 # TODO: Create a generic type validator
@@ -236,12 +255,13 @@ def render(html_component, dependency_context={}):
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
         for r in reporters:
             key = (r, assassins_mapping[r])
-            q = [inquirer.Editor(
-                name="report",
-                message=f"Report: {escape_format_braces(r)}",
-                default=escape_format_braces(default_mapping.get(key, ''))
-            )]
-            report = inquirer_prompt_with_abort(q)["report"]
+            report = render(HtmlEntry(
+                identifier="report",
+                title=f"Report: {r}",
+                default=default_mapping.get(key, ''),
+                soft=True,
+                short=False,
+            ))["report"]
             results.append((r, assassins_mapping[r], report))
         return {html_component.identifier: results}
 
@@ -605,6 +625,14 @@ def render(html_component, dependency_context={}):
                              default=escape_format_braces(html_component.default))]
         return inquirer_prompt_with_abort(q)
 
+    elif isinstance(html_component, HtmlEntry):
+        q_type = inquirer.Text if html_component.short else inquirer.Editor
+        q = [q_type(name=html_component.identifier,
+                    message=escape_format_braces(html_component.title),
+                    default=escape_format_braces(html_component.default),
+                    validate=soft_html_validator if html_component.soft else html_validator)]
+        return inquirer_prompt_with_abort(q)
+
     elif isinstance(html_component, InputWithDropDown):
         q = [inquirer.List(
             name=html_component.identifier,
@@ -640,6 +668,7 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="newpseudonym",
                     message="Enter a new pseudonym",
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["newpseudonym"]
@@ -671,8 +700,9 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="editpseudonym",
                     message="Enter replacement" + ("" if c == 0 else " (blank to delete)"),
-                    # cannot delete initial pseudonym
-                    default=escape_format_braces(v.text)
+                    # (cannot delete initial pseudonym)
+                    default=escape_format_braces(v.text),
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["editpseudonym"]
@@ -950,6 +980,19 @@ def key_addons(f):
 # wrap List and Checkbox input processing for PgUp, PgDown, Home and End key support
 inquirer.render.console._list.List.process_input = key_addons(inquirer.render.console._list.List.process_input)
 inquirer.render.console._checkbox.Checkbox.process_input = key_addons(inquirer.render.console._checkbox.Checkbox.process_input)
+
+
+def editor_process_input_addon(f):
+    """Wrapper function that fixes the process_input method of inquirer Editor input,
+    so that validation doesn't wipe user input."""
+    def process_input(self, pressed):
+        if pressed in (key.CR, key.LF, key.ENTER):
+            data = editor.editor(text=self.question.default or "")
+            self.question._default = data
+            raise EndOfInput(data)
+        f(self, pressed)
+    return process_input
+inquirer.render.console._editor.Editor.process_input = editor_process_input_addon(inquirer.render.console._editor.Editor.process_input)
 
 if __name__ == "__main__":
     main()
