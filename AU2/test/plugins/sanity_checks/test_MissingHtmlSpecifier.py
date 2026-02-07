@@ -1,3 +1,5 @@
+import re
+
 from AU2.plugins.CorePlugin import CorePlugin
 from AU2.test.test_utils import evaluate_components, MockGame, plugin_test, some_players
 
@@ -16,9 +18,27 @@ class TestMissingHtmlSpecifier:
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
         # now test fixing of headline and reports
-        core_plugin.answer_generate_pages(html_response, True)
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)
         e = event.model()
         assert e.headline == "We <b>don't</b> need a specifier in the headline"
         assert event.check_report("<!--HTML-->But we <em>do</em> need it for reports!")
         assert event.check_report("<!--HTML--> Unless we <b>already</b> have a html specifier...")
         assert event.check_report("Or there is no HTML!")
+
+    @plugin_test
+    def test_reject_suggestions(self):
+        p = some_players(1)
+        game = MockGame().having_assassins(p)
+        event = game.assassin(p[0]).is_involved_in_event().with_report(p[0], 0, "Here is a report that <i>should</i> have an HTML specifier")
+        core_plugin = CorePlugin()
+        components = core_plugin.ask_generate_pages()
+        html_response = evaluate_components(components)
+
+        # edit html_response to reject all suggested fixes
+        SUGGESTION_COMPONENT_ID_PATTERN = re.compile(r"SanityCheck_\d+_explanations")
+        for ident in html_response:
+            if SUGGESTION_COMPONENT_ID_PATTERN.match(ident):
+                html_response[ident] = []
+
+        # sufficient for this not to raise an error for test to pass!
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)
