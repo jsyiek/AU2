@@ -15,7 +15,7 @@ setuptools.setup(
     python_requires='>=3.9',
     entry_points={
         'console_scripts': [
-            "au2 = AU2.frontends.inquirer_cli:main",
+            "au2 = AU2.__main__:safe_main",
             "au2_packager = AU2.frontends.au2_packager:main"
         ],
     },
