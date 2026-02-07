@@ -336,21 +336,22 @@ class CorePlugin(AbstractPlugin):
             ("Deaths", ", ".join(kill[1] for kill in event.kills))
         ]
 
-        snapshot = lambda a: f"{a.real_name} ({a._secret_id})"
         for (i, ident) in enumerate(event.assassins):
             a = ASSASSINS_DATABASE.get(ident)
             pseudonym = a.get_pseudonym(event.assassins[ident])
-            response.append((f"Participant {i+1}", f"{snapshot(a)} as {pseudonym}"))
+            response.append((f"Participant {i+1}", f"{a.snapshot()} as {pseudonym}"))
 
         for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
             a = ASSASSINS_DATABASE.get(ident)
+            if pseudonym_idx is None:
+                pseudonym_idx = event.assassins[ident]
             pseudonym = a.get_pseudonym(pseudonym_idx)
-            response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
+            response.append((f"Report {i+1}", f"{a.snapshot()} as {pseudonym}"))
 
         for (i, (killer_id, victim_id)) in enumerate(event.kills):
             killer = ASSASSINS_DATABASE.get(killer_id)
             victim = ASSASSINS_DATABASE.get(victim_id)
-            response.append((f"Kill {i+1}", f"{snapshot(killer)} kills {snapshot(victim)}"))
+            response.append((f"Kill {i+1}", f"{killer.snapshot()} kills {victim.snapshot()}"))
         return response
 
     def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:
@@ -727,9 +728,13 @@ class CorePlugin(AbstractPlugin):
         """
         FALLBACK_ID = self.event_html_ids["Assassin Pseudonym"]
         event = EVENTS_DATABASE.get(event_id)
-        component = AssassinDependentReportEntry(assassin_pseudonyms_identifier or FALLBACK_ID,
-                                                 self.event_html_ids["Reports"],
-                                                 "Reports", event.reports if event else [])
+        component = AssassinDependentReportEntry(
+            pseudonym_list_identifier=assassin_pseudonyms_identifier or FALLBACK_ID,
+            identifier=self.event_html_ids["Reports"],
+            title="Reports",
+            assassins=ASSASSINS_DATABASE.get_ident_pseudonym_pairs(include_hidden=True),
+            default=event.reports if event else []
+        )
         if assassin_pseudonyms_identifier:
             return [component]
         else:

@@ -413,14 +413,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
         response = []
 
-        snapshot = lambda a: f"{a.real_name} ({a._secret_id})" # TODO: move to common library location
-
         if self.gsdb_get("Enable Teams?", False):
             team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
             team_str = self.get_cosmetic_name("Teams").capitalize()
             for i, (a_id, t_id) in enumerate(self.eps_get(event, "Team Changes", {}).items()):
                 a = ASSASSINS_DATABASE.get(a_id)
-                change_str = f"{snapshot(a)} " + (
+                change_str = f"{a.snapshot()} " + (
                     f"joins {team_names[t_id]}" if t_id is not None
                     else "goes it alone"
                 )
@@ -428,17 +426,17 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             for i, (killer_id, victim_id) in enumerate(self.eps_get(event, "Kills as Team", [])):
                 killer = ASSASSINS_DATABASE.get(killer_id)
                 victim = ASSASSINS_DATABASE.get(victim_id)
-                response.append((f"{team_str} Kill {i+1} ", f"{snapshot(killer)} kills {snapshot(victim)}"))
+                response.append((f"{team_str} Kill {i+1} ", f"{killer.snapshot()} kills {victim.snapshot()}"))
 
         multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
         for i, (old_owner, receiver) in enumerate(self.eps_get(event, "Multiplier Transfers", [])):
-            a1 = snapshot(ASSASSINS_DATABASE.get(old_owner)) if old_owner is not None else "None"
-            a2 = snapshot(ASSASSINS_DATABASE.get(receiver)) if receiver is not None else "None"
+            a1 = ASSASSINS_DATABASE.get(old_owner).snapshot() if old_owner is not None else "None"
+            a2 = ASSASSINS_DATABASE.get(receiver).snapshot() if receiver is not None else "None"
             response.append((f"{multiplier_str} Transfer {i+1}", f"{a1} -> {a2}"))
 
         for i, (a_id, points) in enumerate(self.eps_get(event, "BS Points", {}).items()):
             a = ASSASSINS_DATABASE.get(a_id)
-            response.append((f"BS Points for {snapshot(a)}", f"{points}"))
+            response.append((f"BS Points for {a.snapshot()}", f"{points}"))
 
         return response
 
