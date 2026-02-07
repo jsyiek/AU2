@@ -1,7 +1,9 @@
-import pathlib
-import shutil
 import os
+import pathlib
+
 from typing import List, Optional, Tuple, Any, Dict, Iterable
+from urllib.error import URLError
+from urllib.request import urlretrieve
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -16,7 +18,6 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
-from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
@@ -42,6 +43,9 @@ OPENSEASON_PAGE_TEMPLATE: str
 OPENSEASON_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "openseason.html"
 with open(OPENSEASON_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
     OPENSEASON_PAGE_TEMPLATE = F.read()
+
+TABLE_SORT_JS_CDN = "https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.js"
+TABLE_SORT_JS_FILENAME = "table-sort.js"
 
 # LHS is table header, RHS is template string for table cell values
 # note the order here determines the order in which columns are displayed
@@ -173,7 +177,8 @@ class ScoringPlugin(AbstractPlugin):
             "Stats Columns": self.identifier + "_stats_cols",
             "Visualise Kills?": self.identifier + "_visualise_kills",
             "Stats Order": self.identifier + "_stats_order",
-            "Generate Stats Page?": self.identifier + "_stats_page"
+            "Generate Stats Page?": self.identifier + "_stats_page",
+            "Download table-sort.js?": self.identifier + "_download_table_sort_js",
         }
 
         self.plugin_state = {
@@ -211,6 +216,13 @@ class ScoringPlugin(AbstractPlugin):
                 "Scoring -> Set formula",
                 self.ask_set_formula,
                 self.answer_set_formula
+            ),
+            # TODO: move this to debug exports if that is implemented (as per https://github.com/jsyiek/AU2/issues/36)
+            ConfigExport(
+                "scoring_download_table_sort_js",
+                f"Download {TABLE_SORT_JS_FILENAME}",
+                self.ask_download_table_sort_js,
+                self.answer_download_table_sort_js
             )
         ]
 
@@ -265,6 +277,23 @@ class ScoringPlugin(AbstractPlugin):
         ident = html_response[self.html_ids["Assassin"]]
         self.aps_set(ident, "Bonus", new_bonus)
         return [Label("[SCORING] Set bonus.")]
+
+    def ask_download_table_sort_js(self) -> List[HTMLComponent]:
+        return [
+            Label(f"{TABLE_SORT_JS_FILENAME} is the JavaScript library required to make the table on the stats page sortable."),
+            Label("This should already be present on SRCF, but if it is not you can download it using this tool."),
+            Checkbox(self.html_ids["Download table-sort.js?"], "Download table-sort.js?", checked=True),
+        ]
+
+    def answer_download_table_sort_js(self, html_response) -> List[HTMLComponent]:
+        if html_response[self.html_ids["Download table-sort.js?"]]:
+            try:
+                path, response = urlretrieve(TABLE_SORT_JS_CDN, WEBPAGE_WRITE_LOCATION / TABLE_SORT_JS_FILENAME)
+                return [Label(f"Successfully downloaded {TABLE_SORT_JS_CDN} to {path}")]
+            except URLError:
+                return [Label(f"ERROR: unable to download {TABLE_SORT_JS_CDN}")]
+        else:
+            return [Label("Aborted download.")]
 
     def _generate_stats_page(self,
                              columns: List[str],
@@ -336,7 +365,8 @@ class ScoringPlugin(AbstractPlugin):
                     YEAR=get_now_dt().year,
                     TABLE=table_str,
                     KILLTREE_EMBED=killtree_embed,
-                    KILLTREE_LINK=killtree_link
+                    KILLTREE_LINK=killtree_link,
+                    TABLE_SORT_JS_URL=TABLE_SORT_JS_FILENAME,
                 )
             )
 
