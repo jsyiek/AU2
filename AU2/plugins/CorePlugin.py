@@ -36,7 +36,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end, snapshot
+from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 from AU2.plugins.util.date_utils import get_now_dt
 
 AVAILABLE_PLUGINS = {}
@@ -272,19 +272,19 @@ class CorePlugin(AbstractPlugin):
         for (i, ident) in enumerate(event.assassins):
             a = ASSASSINS_DATABASE.get(ident)
             pseudonym = a.get_pseudonym(event.assassins[ident])
-            response.append((f"Participant {i+1}", f"{snapshot(a)} as {pseudonym}"))
+            response.append((f"Participant {i+1}", f"{a.snapshot()} as {pseudonym}"))
 
         for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
             a = ASSASSINS_DATABASE.get(ident)
             if pseudonym_idx is None:
                 pseudonym_idx = event.assassins[ident]
             pseudonym = a.get_pseudonym(pseudonym_idx)
-            response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
+            response.append((f"Report {i+1}", f"{a.snapshot()} as {pseudonym}"))
 
         for (i, (killer_id, victim_id)) in enumerate(event.kills):
             killer = ASSASSINS_DATABASE.get(killer_id)
             victim = ASSASSINS_DATABASE.get(victim_id)
-            response.append((f"Kill {i+1}", f"{snapshot(killer)} kills {snapshot(victim)}"))
+            response.append((f"Kill {i+1}", f"{killer.snapshot()} kills {victim.snapshot()}"))
         return response
 
     def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:

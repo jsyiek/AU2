@@ -48,7 +48,7 @@ from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOption
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import escape_format_braces, snapshot
+from AU2.plugins.util.game import escape_format_braces
 
 
 def datetime_validator(_, current):
@@ -226,7 +226,7 @@ def render(html_component, dependency_context={}):
             q = [inquirer.List(
                 name="author",
                 message="Select the AUTHOR of the report",
-                choices=[("*DELETE REPORT*", None), *((snapshot(ASSASSINS_DATABASE.get(a)), a) for a in assassins_mapping.keys())],
+                choices=[("*DELETE REPORT*", None), *((ASSASSINS_DATABASE.get(a).snapshot(), a) for a in assassins_mapping.keys())],
                 default=old_report[0]
             )]
             ident = inquirer_prompt_with_abort(q)["author"]
@@ -259,7 +259,7 @@ def render(html_component, dependency_context={}):
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
             q = [inquirer.Editor(
                 name="report",
-                message=f"Report: {escape_format_braces(snapshot(ASSASSINS_DATABASE.get(ident)))}"
+                message=f"Report: {escape_format_braces(ASSASSINS_DATABASE.get(ident).snapshot())}"
                     + (f" as {pseudonym}" if pseudonym else ""),
                 default=old_report[2]
             )]
@@ -272,7 +272,7 @@ def render(html_component, dependency_context={}):
                 *(
                     (
                         (
-                           f"{snapshot(ASSASSINS_DATABASE.get(ident))}"
+                           f"{ASSASSINS_DATABASE.get(ident).snapshot()}"
                            + (f" as {assassin_pseudonyms[ident][p]}" if p is not None else "")
                         ),
                         i

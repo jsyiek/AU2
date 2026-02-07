@@ -75,7 +75,3 @@ def escape_format_braces(string: str) -> str:
         ":}} :{{"
     """
     return string.replace("{", "{{").replace("}", "}}")
-
-def snapshot(a: Assassin) -> str:
-    return f"{a.real_name} ({a._secret_id})"
-

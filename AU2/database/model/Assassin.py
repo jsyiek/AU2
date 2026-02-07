@@ -62,6 +62,9 @@ class Assassin(PersistentFile):
             dotdotdot = "..." if len(self.pseudonyms[0]) > 15 else ""
             self.identifier = f"{self.real_name} ({self.pseudonyms[0][:15]}{dotdotdot}) ID: {self._secret_id}"
 
+    def snapshot(self) -> str:
+        return f"{self.real_name} ({self._secret_id})"
+
     def clone(self, **changes):
         """
         Creates a clone of this assassin with a new identifier and specified changes.
