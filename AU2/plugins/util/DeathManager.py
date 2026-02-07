@@ -9,8 +9,11 @@ class DeathManager:
         self.deaths: Dict[str, List[Event]] = defaultdict(list)
 
     def add_event(self, e: Event):
+        event_deaths = set()
         for (killer, victim) in e.kills:
-            self.deaths[victim].append(e)
+            if victim not in event_deaths:
+                self.deaths[victim].append(e)
+                event_deaths.add(victim)
 
     def get_dead(self) -> List[str]:
         return list(self.deaths)

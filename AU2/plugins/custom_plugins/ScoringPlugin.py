@@ -18,14 +18,15 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.render_utils import get_color, render_headline_and_reports, event_url
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
+from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 
 OPENSEASON_TABLE_TEMPLATE = """
@@ -38,6 +39,8 @@ OPENSEASON_TABLE_TEMPLATE = """
 OPENSEASON_ROW_TEMPLATE = """
 <tr><td>{NAME}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td><td>{POINTS:g}</tr>
 """
+
+OPENSEASON_NAVBAR_ENTRY = NavbarEntry("openseason.html", "Open Season", 3)
 
 OPENSEASON_PAGE_TEMPLATE: str
 OPENSEASON_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "openseason.html"
@@ -79,7 +82,7 @@ def stats_table_template(columns: Iterable[str]) -> str:
             + '</tr> {ROWS} </table>'
     )
 
-
+STATS_NAVBAR_ENTRY = NavbarEntry("stats.html", "Player Stats", 4)
 STATS_PAGE_TEMPLATE: str
 STATS_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "stats.html"
 with open(STATS_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -297,7 +300,8 @@ class ScoringPlugin(AbstractPlugin):
 
     def _generate_stats_page(self,
                              columns: List[str],
-                             generate_killtree: bool) -> List[HTMLComponent]:
+                             generate_killtree: bool,
+                             navbar_entries: List[NavbarEntry]) -> List[HTMLComponent]:
         components = []
         openseason_end = get_game_end()
         # use a score manager to count kills, conkers, and attempts
@@ -325,7 +329,7 @@ class ScoringPlugin(AbstractPlugin):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
             # note: the link may be broken for may week games... (see https://github.com/jsyiek/AU2/issues/161)
-            deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(DATETIME_FORMAT)}</a>'
+            deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
                       for e in score_manager.get_death_events(p)]
@@ -359,7 +363,9 @@ class ScoringPlugin(AbstractPlugin):
                 killtree_embed = KILLTREE_EMBED
                 components.append(Label("[SCORING] Generated killtree page."))
 
-        with open(WEBPAGE_WRITE_LOCATION / "stats.html", "w+", encoding="utf-8") as F:
+        navbar_entries.append(STATS_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / STATS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 STATS_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,
@@ -448,10 +454,10 @@ Syntax:
         except Exception:
             return False
 
-    def _generate_openseason_page(self):
+    def _generate_openseason_page(self, navbar_entries: List[NavbarEntry]):
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
-        if not open_season_start or open_season_start > get_now_dt():
+        if not open_season_start or open_season_start >= get_now_dt():
             return []
         # also don't generate if formula is invalid
         formula = self.gsdb_get("Formula")
@@ -496,7 +502,9 @@ Syntax:
                 )
             table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "openseason.html"), "w+", encoding="utf-8") as F:
+        navbar_entries.append(OPENSEASON_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / OPENSEASON_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 OPENSEASON_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,
@@ -529,9 +537,9 @@ Syntax:
             ])
         return components
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         components = []
-        components.extend(self._generate_openseason_page())
+        components.extend(self._generate_openseason_page(navbar_entries))
         if htmlResponse.get(self.html_ids["Generate Stats Page?"], "False") == "True":
             # this is silly but needed to fix a bug where columns end up in the wrong order
             columns: List[str] = [c for c in STATS_COLUMN_TEMPLATES if
@@ -539,6 +547,6 @@ Syntax:
             self.gsdb_set("Stats Columns", columns)
             generate_killtree: bool = htmlResponse[self.html_ids["Visualise Kills?"]]
             self.gsdb_set("Visualise Kills?", generate_killtree)
-            components.extend(self._generate_stats_page(columns, generate_killtree))
+            components.extend(self._generate_stats_page(columns, generate_killtree, navbar_entries))
 
         return components
