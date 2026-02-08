@@ -10,7 +10,7 @@ from AU2 import ROOT_DIR
 
 def parse_args():
     parser = argparse.ArgumentParser("Package an AU2 version for release")
-    parser.add_argument("--version-name", required=True, help="Version number of AU2")
+    parser.add_argument("--version-name", required=False, default=None, help="Version number of AU2 (defaults to current version)")
     parser.add_argument("--dest", required=True, help="Folder in which to save the release")
     parser.add_argument(
         "--glob-file-types",
@@ -40,7 +40,12 @@ def port_files(source_dir: str, target_dir: str, allowed_filetypes: List[str]):
 def main():
     args = parse_args()
 
-    print(f"Outputting au2-v{args.version_name}.zip...")
+    version_name = args.version_name
+    if version_name is None:
+        from AU2._version import __version__
+        version_name = __version__
+
+    print(f"Outputting au2-v{version_name}.zip...")
 
     with tempfile.TemporaryDirectory() as tempdir:
         source_code_path = os.path.join(tempdir, "AU2")
@@ -48,7 +53,7 @@ def main():
         shutil.copy(os.path.join(ROOT_DIR, "frontends", "au2_installer.py"), os.path.join(tempdir, "au2_installer.py"))
         port_files(os.path.join(ROOT_DIR, ".."), source_code_path, args.glob_file_types)
 
-        zip_target = os.path.join(os.path.expanduser(args.dest), f"au2-v{args.version_name}")
+        zip_target = os.path.join(os.path.expanduser(args.dest), f"au2-v{version_name}")
         print("Compressing, this may take a while...")
         shutil.make_archive(zip_target, "zip", tempdir)
     print("Success.")

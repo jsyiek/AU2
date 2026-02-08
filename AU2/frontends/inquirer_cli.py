@@ -954,6 +954,17 @@ def main():
     except:
         pass
 
+    try:
+        from AU2 import __version__
+        from AU2.plugins.custom_plugins.AutoUpdatePlugin import check_for_update
+        update = check_for_update(__version__)
+        if update:
+            tag = update["tag_name"].lstrip("v")
+            print(f"\n  [UPDATE] AU2 {tag} is available (you have {__version__}). "
+                  f"Select 'Check for updates' from the menu to update.\n")
+    except Exception:
+        pass
+
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
         exports = core_plugin.get_all_exports()

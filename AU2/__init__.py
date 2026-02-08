@@ -1,7 +1,8 @@
 import os
 import pathlib
-
 import pytz
+
+from AU2._version import __version__
 
 ROOT_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 BASE_WRITE_LOCATION = os.path.expanduser("~/database")
