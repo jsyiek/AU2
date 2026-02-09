@@ -42,15 +42,16 @@ jobs:
       - name: Calculate new version
         run: |
           python3 << 'PYEOF'
-          import os, re, subprocess
+          import os, subprocess
 
           # Read current version from AU2/_version.py
+          _version_info = {}
           with open("AU2/_version.py") as f:
-              content = f.read()
-          m = re.search(r'__version__ = "(\d+)\.(\d+)\.(\d+)"', content)
-          if not m:
+              exec(f.read(), _version_info)
+          version_parts = _version_info["__version__"].split(".")
+          if len(version_parts) != 3:
               raise SystemExit("Could not parse version from AU2/_version.py")
-          major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+          major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
 
           bump = os.environ["BUMP"]
           if bump == "major":
