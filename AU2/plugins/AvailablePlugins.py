@@ -17,12 +17,12 @@ class __PluginMap:
         """
         You can access plugins using syntax such as `for plugin in pluginMap`
         """
-        yield from [p for p in self.plugins.values() if GENERIC_STATE_DATABASE.plugin_map.get(p.identifier, True)]
+        yield from [p for p in self.plugins.values() if p.enabled]
 
     def __getitem__(self, item: str):
         """
         If there is a particular plugin you want and you know the ID, you can do
-        `pluginMap["police"]`
+        `pluginMap["CorePlugin"]`
         """
         return self.plugins[item]
 

@@ -5,7 +5,7 @@ with open("requirements.txt", "r") as requirements:
 
 setuptools.setup(
     name='Auto-Umpire 2',
-    version='1.4.2',
+    version='1.5.0',
     description="Software to run the Cambridge Assassins' Guild",
     author="B. M. Syiek, P. Jackson, and A. C. Newton",
     author_email="",

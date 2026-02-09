@@ -3,16 +3,19 @@ import datetime
 import itertools
 import os
 import re
-from typing import Callable, Dict, Generator, List, NamedTuple, Optional, Tuple
+
+from typing import Callable, Dict, Generator, List, NamedTuple, Optional, Protocol, Sequence, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.AbstractPlugin import NavbarEntry
 from AU2.plugins.CorePlugin import PLUGINS
-from AU2.plugins.util.colors import CORRUPT_POLICE_COLS, DEAD_COLS, DEAD_POLICE_COLS, HARDCODED_COLORS, HEX_COLS, \
-    INCO_COLS, POLICE_COLS, WANTED_COLS
+from AU2.plugins.util.colors import CORRUPT_CITY_WATCH_COLS, DEAD_COLS, DEAD_CITY_WATCH_COLS, HARDCODED_COLORS, HEX_COLS, \
+    INCO_COLS, CITY_WATCH_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
 
@@ -39,6 +42,8 @@ REPORT_TEMPLATE = """<div class="report">{PSEUDONYM} reports: <br/>
 
 PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
 
+DEFAULT_REAL_NAME_BRIGHTNESS = 0.7
+
 HEAD_HEADLINE_TEMPLATE = """
     <div xmlns="" class="event">
   [<a href="{URL}">{TIME}</a>]
@@ -46,10 +51,11 @@ HEAD_HEADLINE_TEMPLATE = """
 
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
-FORMAT_SPECIFIER_REGEX = r"\[[D,P,N]([0-9]+)(?:_([0-9]+))?\]"
+LIST_ITEM_TEMPLATE = """<li><a href="{URL}">{DISPLAY}</a></li>\n"""
 
-Chapter = NamedTuple("Chapter", (("page", str), ("title", str)))
+FORMAT_SPECIFIER_REGEX = r"\[[P,D,L,N,V]([0-9]+)(?:_([0-9]+))?\]"
 
+Chapter = NamedTuple("Chapter", (("title", str), ("nav_entry", NavbarEntry)))
 
 def default_page_allocator(e: Event) -> Optional[Chapter]:
     """Basis page allocation function"""
@@ -96,33 +102,68 @@ def event_url(e: Event, page: Optional[str] = None) -> str:
     Generates the (relative) url pointing to this event's appearance on the news pages.
     If the event doesn't appear on any page (i.e. is hidden), "" is returned.
     """
-    page = page or hooked_page_allocator(e).page
-    return f"{page}.html#{e._Event__secret_id}" if page else ""
+    page = page or hooked_page_allocator(e).nav_entry.url
+    return f"{page}#{e._Event__secret_id}" if page else ""
 
 
 def get_color(pseudonym: str,
               dead: bool = False,
               incompetent: bool = False,
-              is_police: bool = False,
+              is_city_watch: bool = False,
               is_wanted: bool = False) -> str:
     """Basic colouring rules, currently only used by ScoringPlugin"""
     ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
     # colour appropriately
     if is_wanted:
-        if is_police:
-            return CORRUPT_POLICE_COLS[ind % len(CORRUPT_POLICE_COLS)]
+        if is_city_watch:
+            return CORRUPT_CITY_WATCH_COLS[ind % len(CORRUPT_CITY_WATCH_COLS)]
         return WANTED_COLS[ind % len(WANTED_COLS)]
     if dead:
-        if is_police:
-            return DEAD_POLICE_COLS[ind % len(DEAD_POLICE_COLS)]
+        if is_city_watch:
+            return DEAD_CITY_WATCH_COLS[ind % len(DEAD_CITY_WATCH_COLS)]
         return DEAD_COLS[ind % len(DEAD_COLS)]
     if incompetent:
         return INCO_COLS[ind % len(INCO_COLS)]
     if pseudonym in HARDCODED_COLORS:
         return HARDCODED_COLORS[pseudonym]
-    if is_police:
-        return POLICE_COLS[ind % len(POLICE_COLS)]
+    if is_city_watch:
+        return CITY_WATCH_COLS[ind % len(CITY_WATCH_COLS)]
     return HEX_COLS[ind % len(HEX_COLS)]
+
+
+def adjust_brightness(hexcode: str, factor: float) -> str:
+    """
+    Adjusts the brightness of the specified colour by the specified factor.
+    Used for making real names slightly darker than pseudonyms.
+
+    Args:
+        hexcode (str): hexcode of the original colour, including an initial #
+        factor (float): factor by which to multiply the brightness. If < 0 this will be set to 0.
+            If the factor is such that any of the rgb values ends up > 255, they are capped at 255.
+
+    Returns:
+        str: the hexcode of the brightness-adjusted colour, (including an initial #).
+    """
+    rgb = (int(hexcode[i : i+2], 16) for i in (1, 3, 5))
+    factor = max(factor, 0)
+    scaled = (int(factor * x) for x in rgb)
+    capped = (min(255, x) for x in scaled)
+    return '#' + "".join(f"{x:02x}" for x in capped)
+
+
+def get_real_name_brightness() -> float:
+    """
+    Gets the brightness factor to apply to colours when rendering players' real names.
+    """
+    return GENERIC_STATE_DATABASE.arb_state.get("REAL_NAME_BRIGHTNESS", DEFAULT_REAL_NAME_BRIGHTNESS)
+
+
+def set_real_name_brightness(val: float):
+    """
+    Sets the brightness factor to apply to colours when rendering players' real names.
+    Truncates negative values to 0.
+    """
+    GENERIC_STATE_DATABASE.arb_state["REAL_NAME_BRIGHTNESS"] = max(val, 0)
 
 
 def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, color: str, dt: Optional[datetime.datetime] = None) -> str:
@@ -146,10 +187,16 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     string = string.replace(f"[P{id_}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(main_pseudonym)))
     for i in range(len(assassin.pseudonyms)):
         string = string.replace(f"[P{id_}_{i}]", PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.get_pseudonym(i))))
-    string = string.replace(f"[D{id_}]",
-                            " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt)))
+    string = string.replace(f"[V{id_}]", f"[L{id_}] ([N{id_}])")
+    list_of_pseudonyms = " AKA ".join(PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(p)) for p in assassin.pseudonyms_until(dt))
+    string = string.replace(f"[L{id_}]", list_of_pseudonyms)
+    string = string.replace(f"[D{id_}]", list_of_pseudonyms)  # for backwards-compatibility; may remove in future
     string = string.replace(f"[N{id_}]",
-                            PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(assassin.real_name)))
+        PSEUDONYM_TEMPLATE.format(
+            COLOR=adjust_brightness(color, get_real_name_brightness()),
+            PSEUDONYM=soft_escape(assassin.real_name)
+        )
+    )
     return string
 
 
@@ -259,6 +306,10 @@ def render_event(e: Event,
         # If they tell it not to, they do so at their own risk. Make sure you know what you want to do!
         # TODO: Initialize the default report template with some helpful HTML tips, such as this fact
         assassin_model = ASSASSINS_DATABASE.get(assassin)
+        if pseudonym_index is None:
+            # Auto pseudonym mode
+            # unfortunately can't do `= pseudonym_index or` because pseudonym_index can also be 0....
+            pseudonym_index = e.assassins[assassin]
         pseudonym = assassin_model.get_pseudonym(pseudonym_index)
         color = color_fn(assassin_model, pseudonym)
 
@@ -300,6 +351,8 @@ def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> 
     events = list(EVENTS_DATABASE.events.values())
     events.sort(key=lambda event: event.datetime)
 
+    start_datetime = get_game_start()
+
     # maps chapter (news week) to day-of-week to list of reports
     # this is 1-indexed (week 1 is first week of game)
     # days are 0-indexed (fun, huh?)
@@ -320,7 +373,7 @@ def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> 
 
         event_text, headline_text = render_event(
             e,
-            chapter.page,
+            chapter.nav_entry.url,
             color_fn
         )
 
@@ -353,7 +406,27 @@ def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> 
     return head_days, chapters
 
 
-def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = hooked_page_allocator):
+def generate_navbar(navbar_entries: List[NavbarEntry], filename: str):
+    """
+    Generates a html list of page links, for inclusion into header.html using `w3-include-html`.
+
+    Args:
+        navbar_entries (list(NavbarEntry)): each NavberEntry namedtuple specifies a url, display text, and position.
+            The position is a float value and the entries are rendered from top to bottom in *ascending* order of
+            position.
+        filename (str): the filename to save the list under (in the WEBPAGE_WRITE_LOCATION directory).
+    """
+    with open(WEBPAGE_WRITE_LOCATION / filename, "w+", encoding="utf-8", errors="ignore") as f:
+        f.write("\n".join(
+            LIST_ITEM_TEMPLATE.format(
+                URL=entry.url,
+                DISPLAY=entry.display
+            ) for entry in sorted(navbar_entries, key=lambda e: e.position)
+        ))
+
+
+def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = hooked_page_allocator,
+                        news_list_path: str = ""):
     """
     Generates news pages sorted according to `page_allocator`.
 
@@ -365,20 +438,28 @@ def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = hoo
     """
     headline_days, chapters = render_all_events(page_allocator)
 
-    for (page, title), days in chapters.items():
-        path = os.path.join(WEBPAGE_WRITE_LOCATION, f"{page}.html")
-        week_page_text = NEWS_TEMPLATE.format(
-            TITLE=title,
-            DAYS="".join(days),
-            YEAR=str(get_now_dt().year)
-        )
-        with open(path, "w+", encoding="utf-8", errors="ignore") as F:
-            F.write(week_page_text)
+    news_navbar_entries = []
 
-    if headlines_path:
+    # generate headlines page
+    if headlines_path and headline_days:
         head_page_text = HEAD_TEMPLATE.format(
             CONTENT="".join(headline_days),
             YEAR=str(get_now_dt().year)
         )
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, headlines_path), "w+", encoding="utf-8", errors="ignore") as F:
+        with open(WEBPAGE_WRITE_LOCATION / headlines_path, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(head_page_text)
+
+        news_navbar_entries.append(NavbarEntry(headlines_path, "Headlines", -1))
+
+    # generate news pages
+    for chapter, days in chapters.items():
+        week_page_text = NEWS_TEMPLATE.format(
+            TITLE=chapter.title,
+            DAYS="".join(days),
+            YEAR=str(get_now_dt().year)
+        )
+        with open(WEBPAGE_WRITE_LOCATION / chapter.nav_entry.url, "w+", encoding="utf-8", errors="ignore") as F:
+            F.write(week_page_text)
+        news_navbar_entries.append(chapter.nav_entry)
+
+    generate_navbar(news_navbar_entries or [NavbarEntry("#", "None Yet", 0)], news_list_path)

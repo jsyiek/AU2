@@ -10,9 +10,10 @@ import inquirer
 import paramiko
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
-from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE, AssassinsDatabase
+from AU2.database.EventsDatabase import EVENTS_DATABASE, EventsDatabase
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
+from AU2.database import save_all_databases
 from AU2.database.model import Assassin
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
@@ -100,7 +101,10 @@ def backup_sort_key(backup_name: str) -> (float, str):
 
     if m := BACKUP_TIME_PATTERN.search(backup_name):
         backup_time = datetime.datetime.strptime(m[0], BACKUP_TIME_FORMAT).time()
-    return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    try:
+        return -datetime.datetime.combine(backup_date, backup_time).timestamp(), backup_name
+    except ValueError:
+        return 0, backup_name
 
 
 class Email:
@@ -303,9 +307,9 @@ class SRCFPlugin(AbstractPlugin):
 
             # note: hidden assassins will be excluded
             alive_assassins = ASSASSINS_DATABASE.get_identifiers(include=(
-                lambda a: a.is_police or not death_manager.is_dead(a)
+                lambda a: a.is_city_watch or not death_manager.is_dead(a)
             ))
-            police_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_police)
+            city_watch_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: a.is_city_watch)
 
             return [
                 Checkbox(
@@ -330,7 +334,7 @@ class SRCFPlugin(AbstractPlugin):
                     # note: hidden assassins will be excluded
                     assassins=ASSASSINS_DATABASE.get_identifiers(),
                     alive_assassins=alive_assassins,
-                    police_assassins=police_assassins
+                    city_watch_assassins=city_watch_assassins
                 )
             ]
         return []
@@ -424,6 +428,7 @@ class SRCFPlugin(AbstractPlugin):
                         components.append(Table([[email_str] for email_str in email_str_list]))
 
                     self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
+                    save_all_databases()  # needed to make sure emailed competency deadlines and targets are uploaded
                     self._publish_databases(sftp)
                     components.append(Label(f"[SRCFPlugin] Uploaded database."))
                     autobackup_name = self._autobackup(sftp)
@@ -647,7 +652,7 @@ class SRCFPlugin(AbstractPlugin):
 
     def _publish_databases(self, sftp: paramiko.SFTPClient):
         """
-        Publishes all databases
+        Publishes all databases (as saved to file)
         """
         for database in self._find_jsons(BASE_WRITE_LOCATION):
             localpath = os.path.join(BASE_WRITE_LOCATION, database)
@@ -859,7 +864,7 @@ class SRCFPlugin(AbstractPlugin):
         Disables SRCF plugin and prints an error message.
         """
         print("Login cancelled. Disabling SRCFPlugin.")
-        GENERIC_STATE_DATABASE.plugin_map["SRCFPlugin"] = False
+        self.enabled = False
         return []
 
     def _successful_login(self):

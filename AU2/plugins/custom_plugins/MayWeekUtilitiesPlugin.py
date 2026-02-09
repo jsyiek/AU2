@@ -1,7 +1,8 @@
 from collections import defaultdict
 import dataclasses
 import functools
-from typing import DefaultDict, Dict, List, Optional, Set, Tuple
+
+from typing import DefaultDict, Dict, List, Optional, Sequence, Set, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -21,12 +22,13 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ColorFnGenerator, ConfigExport, Export, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator, ConfigExport, Export, \
+    NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.colors import HEX_COLS
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import Chapter, PageAllocatorData
+from AU2.plugins.util.render_utils import Chapter, generate_news_pages, get_color, PageAllocatorData
 
 
 CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
@@ -38,13 +40,11 @@ PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
                          "<td {CREW_COLOR}>{MULTIPLIER}</td>"
                          "{TEAM_ENTRY}</tr>")
 
+MAYWEEK_PLAYERS_NAVBAR_ENTRY = NavbarEntry("mw-players.html", "Players", -2)
+
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
     MAYWEEK_PLAYERS_TEMPLATE = F.read()
-
-MAYWEEK_NEWS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_news.html"
-with open(MAYWEEK_NEWS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
-    MAYWEEK_NEWS_TEMPLATE = F.read()
 
 
 def get_team_color(team_i: int) -> str:
@@ -66,8 +66,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     """
     This is a generic May Week plugin to support common May Week game features.
 
-    **Casual players**: This is a cosmetic change; police players are referred to as
-                        'casual'.
+    **Casual players**: This is a cosmetic change; there is no City Watch in May Week,
+              so this plugin reinterprets members of the city watch as 'casual' players.
 
     **Teams**: Any number of players can be part of a team. Kills can be made as part
                of a team and points will be shared across all players (and bonus points
@@ -423,14 +423,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
         response = []
 
-        snapshot = lambda a: f"{a.real_name} ({a._secret_id})" # TODO: move to common library location
-
         if self.gsdb_get("Enable Teams?", False):
             team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
             team_str = self.get_cosmetic_name("Teams").capitalize()
             for i, (a_id, t_id) in enumerate(self.eps_get(event, "Team Changes", {}).items()):
                 a = ASSASSINS_DATABASE.get(a_id)
-                change_str = f"{snapshot(a)} " + (
+                change_str = f"{a.snapshot()} " + (
                     f"joins {team_names[t_id]}" if t_id is not None
                     else "goes it alone"
                 )
@@ -438,17 +436,17 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             for i, (killer_id, victim_id) in enumerate(self.eps_get(event, "Kills as Team", [])):
                 killer = ASSASSINS_DATABASE.get(killer_id)
                 victim = ASSASSINS_DATABASE.get(victim_id)
-                response.append((f"{team_str} Kill {i+1} ", f"{snapshot(killer)} kills {snapshot(victim)}"))
+                response.append((f"{team_str} Kill {i+1} ", f"{killer.snapshot()} kills {victim.snapshot()}"))
 
         multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
         for i, (old_owner, receiver) in enumerate(self.eps_get(event, "Multiplier Transfers", [])):
-            a1 = snapshot(ASSASSINS_DATABASE.get(old_owner)) if old_owner is not None else "None"
-            a2 = snapshot(ASSASSINS_DATABASE.get(receiver)) if receiver is not None else "None"
+            a1 = ASSASSINS_DATABASE.get(old_owner).snapshot() if old_owner is not None else "None"
+            a2 = ASSASSINS_DATABASE.get(receiver).snapshot() if receiver is not None else "None"
             response.append((f"{multiplier_str} Transfer {i+1}", f"{a1} -> {a2}"))
 
         for i, (a_id, points) in enumerate(self.eps_get(event, "BS Points", {}).items()):
             a = ASSASSINS_DATABASE.get(a_id)
-            response.append((f"BS Points for {snapshot(a)}", f"{points}"))
+            response.append((f"BS Points for {a.snapshot()}", f"{points}"))
 
         return response
 
@@ -607,8 +605,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         # passing a team manager allows us to extract team information after this function runs
         team_manager = team_manager or self.TeamManager()
 
-        scores: Dict[str, float] = {a.identifier: Sf if not a.is_police else Sc for a in ASSASSINS_DATABASE.get_filtered(
-            include_hidden = lambda _: True  # probably not necessary in May Week (since no resurrection as police),
+        scores: Dict[str, float] = {a.identifier: Sf if not a.is_city_watch else Sc for a in ASSASSINS_DATABASE.get_filtered(
+            include_hidden = lambda _: True  # probably not necessary in May Week (since no resurrection as city watch),
                                              # but just in case...
         )}
         multiplier_owners = set()
@@ -674,9 +672,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 data.chapter = Chapter("mw-news", "May Week News")
                 data.priority = PRIORITY
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         """
-        Generates player info page and may week news page.
+        Generates player info page.
 
         The player info page displays two lists, one giving player pseudonyms, scores, teams (if applicable) and
         multipliers, the other giving the real names and other targeting information for all the players.
@@ -718,7 +716,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             player_rows.append(
                 PLAYER_ROW_TEMPLATE.format(
                     REAL_NAME = player.real_name,
-                    PLAYER_TYPE = "Casual" if player.is_police else "Full",
+                    PLAYER_TYPE = "Casual" if player.is_city_watch else "Full",
                     ADDRESS = player.address,
                     COLLEGE = player.college,
                     WATER_STATUS = player.water_status,
@@ -726,7 +724,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 )
             )
 
-        with open(WEBPAGE_WRITE_LOCATION / "mw-players.html", "w+", encoding="utf-8") as F:
+        if player_rows or pseudonym_rows:
+            navbar_entries.append(MAYWEEK_PLAYERS_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / MAYWEEK_PLAYERS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(MAYWEEK_PLAYERS_TEMPLATE.format(
                 PSEUDONYM_ROWS = "\n".join(pseudonym_rows),
                 PLAYER_ROWS = "\n".join(player_rows),

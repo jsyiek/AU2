@@ -21,8 +21,8 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, DangerousConfigExport, \
-    AttributePairTableRow, ColorFnGenerator
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator, ConfigExport, \
+    DangerousConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -71,6 +71,8 @@ DEFAULT_GIGABOLT_HEADLINE = """# Write a headline for the gigabolt event
 [num_players] assassins are eliminated for inactivity!
 """
 
+INCOS_NAVBAR_ENTRY = NavbarEntry("inco.html", "Incompetents list", 2)
+
 INCOS_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "inco.html"), "r", encoding="utf-8", errors="ignore") as F:
     INCOS_PAGE_TEMPLATE = F.read()
@@ -78,7 +80,7 @@ with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", 
 
 class PlayerStatus(enum.Enum):
     COMPETENT = enum.auto()
-    POLICE = enum.auto()
+    CITY_WATCH = enum.auto()
     INCOMPETENT = enum.auto()
     GIGAINCOMPETENT = enum.auto()
     DEAD = enum.auto()
@@ -140,8 +142,8 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
         is_dead = death_manager.is_dead(a)
 
         # Ordering of the below is important - don't reorder!
-        if a.is_police:
-            status = PlayerStatus.POLICE
+        if a.is_city_watch:
+            status = PlayerStatus.CITY_WATCH
         elif is_dead:
             status = PlayerStatus.DEAD
         elif is_gigainco:
@@ -189,6 +191,8 @@ class CompetencyPlugin(AbstractPlugin):
             "CURRENT DEFAULT": "current_default"
         }
 
+        Assassin.__last_emailed_competency = self.assassin_property("last_emailed_competency", None, store_default=False)
+
         self.exports = [
             Export(
                 identifier="competency_plugin_show_deadlines",
@@ -215,7 +219,8 @@ class CompetencyPlugin(AbstractPlugin):
                 identifier="CompetencyPlugin_auto_competency",
                 display_name="Competency -> Change Auto Competency",
                 ask=self.ask_auto_competency,
-                answer=self.answer_auto_competency
+                answer=self.answer_auto_competency,
+                danger_explanation=self.auto_competency_danger_explanation
             ),
             ConfigExport(
                 identifier="CompetencyPlugin_attempt_tracking",
@@ -240,6 +245,18 @@ class CompetencyPlugin(AbstractPlugin):
 
             yield_next = color_fn
 
+    def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
+        # don't ask about auto-competency or attempt tracking because we'll just default these to on
+        # and changing these would only be helpful to someone who has a good idea of what they're doing
+        return [
+            *self.set_default_competency_deadline_ask(),
+        ]
+
+    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+        return [
+            *self.set_default_competency_deadline_answer(htmlResponse),
+        ]
+
     def gigabolt_ask(self):
         questions = []
 
@@ -249,7 +266,7 @@ class CompetencyPlugin(AbstractPlugin):
 
         death_manager = DeathManager()
         active_players = get_active_players(death_manager)
-        available_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: not (a.is_police or death_manager.is_dead(a)))
+        available_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: not (a.is_city_watch or death_manager.is_dead(a)))
         questions.append(SelectorList(
             title="Select assassins to thunderbolt",
             identifier=self.html_ids["Gigabolt"],
@@ -259,9 +276,9 @@ class CompetencyPlugin(AbstractPlugin):
         questions.append(InputWithDropDown(
             title="Select the umpire, since someone needs to kill the selected players",
             identifier=self.html_ids["Umpire"],
-            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_police],
-            selected=GENERIC_STATE_DATABASE.arb_state.get("PolicePlugin", {}).get("PolicePlugin_umpires", [""])[0]
-            # Will crash if there are no police to choose from
+            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_city_watch],
+            selected=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [""])[0]
+            # Will crash if there are no city watch to choose from
         ))
         questions.append(DatetimeEntry(
             identifier=self.html_ids["Datetime"],
@@ -305,12 +322,12 @@ class CompetencyPlugin(AbstractPlugin):
         return [
             Label("Competency periods begin automatically from game start."),
             IntegerEntry(
-                title="Enter competency granted at game start",
+                title="Enter competency granted at game start (in days)",
                 identifier=self.html_ids["Game Start Competency"],
                 default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["GAME START"], DEFAULT_START_COMPETENCY)
             ),
             IntegerEntry(
-                title="Enter default competency extension",
+                title="Enter default competency extension (in days)",
                 identifier=self.html_ids["Default"],
                 default=GENERIC_STATE_DATABASE.arb_int_state.get(self.plugin_state["DEFAULT"], DEFAULT_EXTENSION)
             )
@@ -342,6 +359,12 @@ class CompetencyPlugin(AbstractPlugin):
                 Label("[COMPETENCY] Warning: Attempt Tracking not enabled. Attempt competency must be added manually.")
             )
         return response
+
+    def auto_competency_danger_explanation(self) -> str:
+        if GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["AUTO COMPETENCY"], "Auto") != "Manual":
+            return "Auto competency is enabled. It is inadvisable to disable it."
+        else:
+            return ""
 
     def ask_toggle_attempt_tracking(self) -> List[HTMLComponent]:
         return [
@@ -383,7 +406,7 @@ class CompetencyPlugin(AbstractPlugin):
             email_list: List[Email] = data
             for email in email_list:
                 recipient = email.recipient
-                if recipient.is_police:
+                if recipient.is_city_watch or death_manager.is_dead(recipient):
                     continue
                 if competency_manager.is_inco_at(recipient, now):
                     content = "It would seem you've become incompetent. You might wish to change that.\nIn order to " \
@@ -395,8 +418,15 @@ class CompetencyPlugin(AbstractPlugin):
                 email.add_content(
                     self.identifier,
                     content=content,
-                    require_send=False
+                    require_send=recipient.__last_emailed_competency != competency_manager.deadlines[recipient.identifier]
                 )
+
+                # only record emailed competency if emails will actually be sent
+                # the component is named confusingly. here, True = *do* send emails!
+                # TODO: would be good to be able to do this *after* emails sent...
+                if htmlResponse.get("SRCFPlugin_dry_run", True):
+                    recipient.__last_emailed_competency = competency_manager.deadlines[recipient.identifier]
+
         return []
 
     def on_event_request_create(self) -> List[HTMLComponent]:
@@ -481,7 +511,7 @@ class CompetencyPlugin(AbstractPlugin):
 
         mode = GENERIC_STATE_DATABASE.arb_state.setdefault(self.plugin_state["AUTO COMPETENCY"], "Auto")
         # Allow competency editing on event update even if full auto competency enabled.
-        # TODO Make a selector that pre-filters to non-police players
+        # TODO Make a selector that pre-filters to full players
         questions.append(Dependency(
             dependentOn="CorePlugin_assassin_pseudonym",
             htmlComponents=[
@@ -555,7 +585,7 @@ class CompetencyPlugin(AbstractPlugin):
                     "Comment" + " "*10)
         return [Table(deadlines, headings=headings)]
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         events = list(EVENTS_DATABASE.events.values())
         events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
@@ -572,7 +602,7 @@ class CompetencyPlugin(AbstractPlugin):
         # dead incos != incos who are currently dead,
         # but rather players who died while inco.
         # note that `dead_incos` includes hidden assassins,
-        # otherwise a player would disappear from the list of corpses when resurrected as police
+        # otherwise a player would disappear from the list of corpses when resurrected as part of the city watch
         dead_incos = competency_manager.inco_corpses
         alive_incos: List[Assassin] = [i for i in competency_manager.get_incos_at(limit)
                                        if not i.hidden
@@ -614,8 +644,10 @@ class CompetencyPlugin(AbstractPlugin):
 
         if not tables:
             tables = [NO_INCOS]
+        else:
+            navbar_entries.append(INCOS_NAVBAR_ENTRY)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "inco.html"), "w+", encoding="utf-8") as F:
+        with open(WEBPAGE_WRITE_LOCATION / INCOS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 INCOS_PAGE_TEMPLATE.format(
                     CONTENT="\n".join(tables),
