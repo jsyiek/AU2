@@ -96,7 +96,7 @@ class WantedPlugin(AbstractPlugin):
                 """Special colouring for wanted players"""
                 if wanted_manager.is_player_wanted(assassin.identifier, time=e.datetime):
                     ind = sum(ord(c) for c in pseudonym)
-                    if assassin.is_police:
+                    if assassin.is_city_watch:
                         return 6, CORRUPT_CITY_WATCH_COLS[ind % len(CORRUPT_CITY_WATCH_COLS)]
                     else:
                         return 6, WANTED_COLS[ind % len(WANTED_COLS)]

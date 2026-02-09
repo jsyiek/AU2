@@ -117,14 +117,14 @@ class CityWatchPlugin(AbstractPlugin):
             e = yield yield_next
 
             def color_fn(assassin: Assassin, pseudonym: str) -> Optional[Tuple[float, str]]:
-                """Special colouring for police"""
-                if assassin.is_police:
+                """Special colouring for city watch"""
+                if assassin.is_city_watch:
                     ind = sum(ord(c) for c in pseudonym)
                     if any(victim == assassin.identifier for _, victim in e.kills):
-                        # case where police died in event
+                        # case where city watch member died in event
                         return 5, DEAD_CITY_WATCH_COLS[ind % len(DEAD_CITY_WATCH_COLS)]
                     else:
-                        # live police
+                        # live city watch
                         return 1, CITY_WATCH_COLS[ind % len(CITY_WATCH_COLS)]
 
             yield_next = color_fn
