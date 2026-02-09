@@ -5,10 +5,11 @@ from AU2.database.model.Event import Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.navbar import NavbarEntry
 from AU2.plugins.util.render_utils import Chapter, render_all_events
 
 BOUNTY_NEWS_NAVBAR_ENTRY = NavbarEntry("bounty-news.html", "Bounties", -1)

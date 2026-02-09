@@ -10,14 +10,14 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
-from AU2.plugins.AbstractPlugin import NavbarEntry
 from AU2.plugins.CorePlugin import PLUGINS
 from AU2.plugins.util.colors import CORRUPT_CITY_WATCH_COLS, DEAD_COLS, DEAD_CITY_WATCH_COLS, HARDCODED_COLORS, HEX_COLS, \
     INCO_COLS, CITY_WATCH_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
+from AU2.plugins.util.navbar import NavbarEntry
 
 NEWS_TEMPLATE: str
 with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "news.html", "r", encoding="utf-8", errors="ignore") as F:
@@ -50,8 +50,6 @@ HEAD_HEADLINE_TEMPLATE = """
    <span class="headline">{HEADLINE}</span><br/></div>"""
 
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
-
-LIST_ITEM_TEMPLATE = """<li><a href="{URL}">{DISPLAY}</a></li>\n"""
 
 FORMAT_SPECIFIER_REGEX = r"\[[P,D,L,N,V]([0-9]+)(?:_([0-9]+))?\]"
 
@@ -404,25 +402,6 @@ def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> 
         )
 
     return head_days, chapters
-
-
-def generate_navbar(navbar_entries: List[NavbarEntry], filename: str):
-    """
-    Generates a html list of page links, for inclusion into header.html using `w3-include-html`.
-
-    Args:
-        navbar_entries (list(NavbarEntry)): each NavberEntry namedtuple specifies a url, display text, and position.
-            The position is a float value and the entries are rendered from top to bottom in *ascending* order of
-            position.
-        filename (str): the filename to save the list under (in the WEBPAGE_WRITE_LOCATION directory).
-    """
-    with open(WEBPAGE_WRITE_LOCATION / filename, "w+", encoding="utf-8", errors="ignore") as f:
-        f.write("\n".join(
-            LIST_ITEM_TEMPLATE.format(
-                URL=entry.url,
-                DISPLAY=entry.display
-            ) for entry in sorted(navbar_entries, key=lambda e: e.position)
-        ))
 
 
 def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = hooked_page_allocator,

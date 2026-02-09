@@ -11,7 +11,7 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator
 from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
@@ -20,6 +20,7 @@ from AU2.plugins.util.CityWatchRankManager import CityWatchRankManager, AUTO_RAN
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.colors import CORRUPT_CITY_WATCH_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.navbar import NavbarEntry
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">

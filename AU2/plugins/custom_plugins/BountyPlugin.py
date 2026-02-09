@@ -12,10 +12,11 @@ from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import Defaul
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.DerivativeComponents.SearchableInputDropdown import SearchableInputDropdown
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.navbar import NavbarEntry
 
 TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">

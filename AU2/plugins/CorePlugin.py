@@ -33,14 +33,14 @@ from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator, ConfigExport, \
-    DangerousConfigExport, Export, HookedExport, NavbarEntry
+    DangerousConfigExport, Export, HookedExport
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.colors import DEAD_COLS, HARDCODED_COLORS
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
-from AU2.plugins.util.render_utils import generate_navbar
+from AU2.plugins.util.navbar import generate_navbar
 
 AVAILABLE_PLUGINS = {}
 

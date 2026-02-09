@@ -14,7 +14,7 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ColorFnGenerator, ConfigExport, Export, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ColorFnGenerator, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CityWatchRankManager import DEFAULT_RANKS, CityWatchRankManager, DEFAULT_CITY_WATCH_RANK, AUTO_RANK_DEFAULT, \
@@ -22,6 +22,7 @@ from AU2.plugins.util.CityWatchRankManager import DEFAULT_RANKS, CityWatchRankMa
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.colors import DEAD_CITY_WATCH_COLS, CITY_WATCH_COLS
 from AU2.plugins.util.date_utils import get_now_dt, PRETTY_DATETIME_FORMAT
+from AU2.plugins.util.navbar import NavbarEntry
 from AU2.plugins.util.render_utils import event_url
 
 CITY_WATCH_TABLE_TEMPLATE = """

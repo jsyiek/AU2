@@ -3,6 +3,7 @@ from typing import Any, Callable, Generator, List, NamedTuple, Optional, Tuple, 
 from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
+from AU2.plugins.util.navbar import NavbarEntry
 
 ColorFnGenerator = Generator[Callable[[Assassin, str], Optional[Tuple[float, str]]], Event, None]
 
@@ -113,8 +114,6 @@ class HookedExport:
 
 
 AttributePairTableRow = Tuple[str, str]
-NavbarEntry = NamedTuple("NavbarEntry", (("url", str), ("display", str), ("position", float)))
-
 
 
 class AbstractPlugin:

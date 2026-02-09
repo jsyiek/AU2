@@ -9,9 +9,10 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.util.game import get_game_end
+from AU2.plugins.util.navbar import NavbarEntry
 from AU2.plugins.util.render_utils import Chapter, default_page_allocator, DEFAULT_REAL_NAME_BRIGHTNESS, \
     generate_news_pages, get_real_name_brightness, PageAllocatorData, set_real_name_brightness
 
