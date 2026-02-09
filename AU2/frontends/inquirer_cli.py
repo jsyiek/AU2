@@ -960,7 +960,7 @@ def main():
         if update:
             tag = update["tag_name"].lstrip("v")
             print(f"\n  [UPDATE] AU2 {tag} is available (you have {__version__}). "
-                  f"Select 'Check for updates' from the menu to update.\n")
+                  f"Load the AutoUpdatePlugin and select 'Check for updates' from the menu to update.\n")
     except Exception:
         pass
 
