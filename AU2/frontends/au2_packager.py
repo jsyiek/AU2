@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument(
         "--glob-file-types",
         nargs="+",
-        default=[".html", ".py", ".txt"],
+        default=[".html", ".py", ".txt", ".js"],
         help="File types to include"
     )
     return parser.parse_args()
