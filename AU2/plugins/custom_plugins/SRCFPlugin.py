@@ -657,14 +657,8 @@ class SRCFPlugin(AbstractPlugin):
         old_gsb = GenericStateDatabase.load()
         # ensure that timestamp is saved in the database being uploaded...
         GENERIC_STATE_DATABASE.last_uploaded = self._get_remote_time()
+        GENERIC_STATE_DATABASE.uploader = self.username
         GENERIC_STATE_DATABASE.save()
-        # also save any other changes made during the upload process
-        # (e.g. in PR #170 last emailed competencies are stored in the AssassinsDatabase)
-        # do this *after* fetching remote timestamp in case that throws an exception!
-        old_ad = AssassinsDatabase.load()
-        ASSASSINS_DATABASE.save()
-        old_ed = EventsDatabase.load()
-        EVENTS_DATABASE.save()
         try:
             for database in self._find_jsons(BASE_WRITE_LOCATION):
                 localpath = BASE_WRITE_LOCATION / database
@@ -672,13 +666,12 @@ class SRCFPlugin(AbstractPlugin):
                 self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
                 sftp.put(localpath, str(remotepath))
                 self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
-        except Exception as e:
+        except BaseException:
             # if error, rollback local copies of databases
             old_gsb.save()
-            old_ad.save()
-            old_ed.save()
             # also revert timestamp in memory in case the exception is caught again
             GENERIC_STATE_DATABASE.last_uploaded = old_gsb.last_uploaded
+            GENERIC_STATE_DATABASE.uploader = old_gsb.uploader
             raise
 
     def _lock(self, sftp: paramiko.SFTPClient):
@@ -847,11 +840,18 @@ class SRCFPlugin(AbstractPlugin):
             elif remote_last_upload > local_last_upload:
                 self._confirm_download(sftp)
             elif remote_last_upload == local_last_upload:
-                self._confirm_upload(
-                    sftp,
-                    "[SRCF Plugin] Your databases appear to be AHEAD OR UP TO DATE WITH the copies on SRCF. "
-                    "Do you want to bring the REMOTE copies up to date?"
-                )
+                if remote_gsd.uploader == GENERIC_STATE_DATABASE.uploader:
+                    self._confirm_upload(
+                        sftp,
+                        "[SRCF Plugin] Your databases appear to be AHEAD OR UP TO DATE WITH the copies on SRCF. "
+                        "Do you want to bring the REMOTE copies up to date?"
+                    )
+                else:
+                    # Edge case where two users manage to have the same upload timestamp
+                    readable_upload_ts = datetime.datetime.utcfromtimestamp(remote_last_upload).strftime('%Y-%m-%d %H:%M:%S')
+                    print(f"[SRCF Plugin] Unable to determine whether your databases are ahead, behind or up to date "
+                          f"with the copies on SCRF, uploaded by {remote_gsd.uploader} at {readable_upload_ts}.")
+                    self._choose_upload_or_download(sftp)
             else:
                 # in this case, remote_last_upload < local_last_upload,
                 # which should be impossible, unless the user is somehow connecting to a different server
