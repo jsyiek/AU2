@@ -28,7 +28,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.colors import HEX_COLS
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import Chapter, generate_news_pages, get_color, PageAllocatorData
+from AU2.plugins.util.render_utils import Chapter, PageAllocatorData
 
 
 CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
@@ -669,7 +669,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             data: PageAllocatorData
             PRIORITY = 1
             if data.priority < PRIORITY:
-                data.chapter = Chapter("mw-news", "May Week News")
+                data.chapter = Chapter("May Week News", NavbarEntry("mw-news.html", "Reports", 0))
                 data.priority = PRIORITY
 
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:

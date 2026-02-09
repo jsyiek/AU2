@@ -104,7 +104,7 @@ class PageGeneratorPlugin(AbstractPlugin):
                     and data.priority < DUEL_PAGE_PRIORITY):
                 end = get_game_end()
                 if end and end < data.event.datetime:
-                    data.chapter = Chapter("duel", "The Duel")
+                    data.chapter = Chapter("duel", NavbarEntry("duel.html", "The Duel", float("Inf")))
                     data.priority = DUEL_PAGE_PRIORITY
 
     def on_page_request_generate(self) -> List[HTMLComponent]:
@@ -122,23 +122,11 @@ class PageGeneratorPlugin(AbstractPlugin):
         return components
 
     def on_page_generate(self, htmlResponse, navbar_entry) -> List[HTMLComponent]:
-        duel_page = False
         if self.html_ids["Duel Page?"] in htmlResponse:
-            duel_page = htmlResponse[self.html_ids["Duel Page?"]]
-            GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state["Duel Page?"]] = duel_page
-
-        end = get_game_end() if duel_page else None
-
-        DUEL_CHAPTER = Chapter("The Duel", NavbarEntry("duel.html", "The Duel", float("Inf")))
+            GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state["Duel Page?"]] = htmlResponse[self.html_ids["Duel Page?"]]
 
         generate_news_pages(
             headlines_path="head.html",
-            # note: need to check default allocation first in case event is hidden!
-            page_allocator=lambda e: (DUEL_CHAPTER
-                                      if (default := default_page_allocator(e))
-                                         and end is not None
-                                         and end < e.datetime
-                                      else default),
             news_list_path="news-list.html",
         )
 

@@ -17,7 +17,7 @@ from AU2.plugins.util.colors import CORRUPT_CITY_WATCH_COLS, DEAD_COLS, DEAD_CIT
     INCO_COLS, CITY_WATCH_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
-from AU2.plugins.util.navbar import NavbarEntry
+from AU2.plugins.util.navbar import generate_navbar, NavbarEntry
 
 NEWS_TEMPLATE: str
 with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "news.html", "r", encoding="utf-8", errors="ignore") as F:
@@ -59,7 +59,7 @@ def default_page_allocator(e: Event) -> Optional[Chapter]:
     """Basis page allocation function"""
     if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
         week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
-        return Chapter(f"news{week:02}", f"Week {week} News")
+        return Chapter(f"Week {week} News", NavbarEntry(f"news{week:02}.html", f"Week {week} Reports", week))
 
 
 PageAllocator = Callable[[Event], Optional[Chapter]]
@@ -338,9 +338,9 @@ def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> 
     Produces renderings of all events, sorted into pages according to `page_allocator`.
 
     Args:
-        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the name and title
-            of the page the event is to be rendered on, or `None` if the event should be skipped.
-            E.g. an event in week 2 would be mapped to Chapter("week02", "Week 2 News").
+        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the title and
+            navbar entry of the page the event is to be rendered on, or `None` if the event should be skipped.
+            E.g. an event in week 2 would be mapped to Chapter("Week 2 News", NavbarEntry("week02.html", "Week 2 News", 2))
 
     Returns:
         A tuple of: a list of strings where each element is the HTML rendering of one day's headlines, and a dict
@@ -404,16 +404,16 @@ def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> 
     return head_days, chapters
 
 
-def generate_news_pages(headlines_path: str, page_allocator: PageAllocator = hooked_page_allocator,
-                        news_list_path: str = ""):
+def generate_news_pages(headlines_path: str, news_list_path: str = "",
+                        page_allocator: PageAllocator = hooked_page_allocator):
     """
     Generates news pages sorted according to `page_allocator`.
 
     Args:
         headlines_path (str): filename to save the headlines page under. If empty ("") no headlines page is generated.
-        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the name and title
-            of the page the event is to be rendered on, or `None` if the event should be skipped.
-            E.g. an event in week 2 would be mapped to Chapter("week02", "Week 2 News").
+        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the title and
+            navbar entry of the page the event is to be rendered on, or `None` if the event should be skipped.
+            E.g. an event in week 2 would be mapped to Chapter("Week 2 News", NavbarEntry("week02.html", "Week 2 News", 2))
     """
     headline_days, chapters = render_all_events(page_allocator)
 
