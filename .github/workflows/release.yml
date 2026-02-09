@@ -16,6 +16,11 @@ on:
         required: true
         default: master
         type: string
+      dry_run:
+        description: "Dry run (upload artifact instead of publishing release)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,6 +33,7 @@ jobs:
       BUMP: ${{ inputs.bump || 'patch' }}
       TARGET_BRANCH: ${{ inputs.target_branch || github.head_ref || 'master' }}
       IS_DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
+      DRY_RUN: ${{ inputs.dry_run || false }}
     steps:
       - name: Checkout target branch
         uses: actions/checkout@v4
@@ -91,7 +97,7 @@ jobs:
           PYEOF
 
       - name: Update version in _version.py
-        if: env.IS_DISPATCH == 'true'
+        if: env.IS_DISPATCH == 'true' && env.DRY_RUN != 'true'
         run: |
           sed -i 's/__version__ = ".*"/__version__ = "'"$VERSION"'"/' AU2/_version.py
           git config user.name "github-actions[bot]"
@@ -110,8 +116,15 @@ jobs:
             --dest "${{ runner.temp }}/release"
           ls -lh "${{ runner.temp }}/release/au2-v${VERSION}.zip"
 
+      - name: Upload release artifact (dry run)
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: au2-v${{ env.VERSION }}
+          path: ${{ runner.temp }}/release/au2-v${{ env.VERSION }}.zip
+
       - name: Create GitHub Release
-        if: env.IS_DISPATCH == 'true'
+        if: env.IS_DISPATCH == 'true' && env.DRY_RUN != 'true'
         run: |
           LATEST_FLAG=""
           if [ "${{ env.TARGET_BRANCH }}" = "master" ]; then
