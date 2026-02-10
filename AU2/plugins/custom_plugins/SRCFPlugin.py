@@ -15,7 +15,7 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE, EventsDatabase
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
 from AU2.database import save_all_databases
 from AU2.database.model import Assassin
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database.model.database_utils import is_database_file, refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
@@ -726,7 +726,7 @@ class SRCFPlugin(AbstractPlugin):
 
     def _find_jsons(self, path):
         for db in os.listdir(path):
-            if db.endswith(".json"):
+            if is_database_file(db):
                 yield db
 
     def _sync(self, sftp: paramiko.SFTPClient):
