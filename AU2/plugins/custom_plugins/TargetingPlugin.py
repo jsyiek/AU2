@@ -177,11 +177,17 @@ class TargetingPlugin(AbstractPlugin):
     def on_data_hook(self, hook: str, data):
         if hook == "WantedPlugin_targeting_graph":
             # note: targeting graph is only requested when using Event -> Create
-            data["targeting_graph"] = {
+            graph = {
                 assassin.identifier: assassin.__last_emailed_targets
                 for assassin in ASSASSINS_DATABASE.get_filtered(include=lambda a: a.__last_emailed_targets,
                                                                 include_hidden=True)
             }
+
+            # backwards compatibility for a smoother transition during live game
+            if not graph:
+                graph = self.compute_targets([])
+
+            data["targeting_graph"] = graph
 
     def danger_explanation(self) -> str:
         if int(GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("last_emailed_event", -1)) > -1:
