@@ -11,7 +11,7 @@ from AU2.database.model import PersistentFile, Assassin
 @dataclass_json
 @dataclass
 class AssassinsDatabase(PersistentFile):
-    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "AssassinsDatabase.json")
+    WRITE_LOCATION = BASE_WRITE_LOCATION / "AssassinsDatabase.json"
     assassins: Dict[str, Assassin]
 
     def add(self, assassin: Assassin):
