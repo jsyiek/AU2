@@ -992,7 +992,7 @@ class CorePlugin(AbstractPlugin):
     def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
         if not verify_DigitsChallenge(self.identifier, htmlResponse):
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
-        include_local = htmlResponse[self.identifier + "_include_local"]
+        include_local = htmlResponse.get(self.identifier + "_include_local", False)
         for f in os.listdir(BASE_WRITE_LOCATION):
             if is_database_file(f, include_local):
                 os.remove(os.path.join(BASE_WRITE_LOCATION, f))
