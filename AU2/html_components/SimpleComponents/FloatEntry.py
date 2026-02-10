@@ -4,7 +4,7 @@ from AU2.html_components import HTMLComponent
 class FloatEntry(HTMLComponent):
     name: str = "IntegerEntry"
 
-    def __init__(self, identifier: str, title: str, default: int):
+    def __init__(self, identifier: str, title: str, default: float):
         self.title = title
         self.identifier = identifier
         self.uniqueStr = self.get_unique_str()

@@ -3,16 +3,19 @@ import copy
 import datetime
 import itertools
 import random
-import tabulate
-from typing import List, Any, Dict, Optional, Tuple
 
+from typing import Any, Dict, List, Optional, Tuple
+
+import editor
+import html5lib
 import inquirer
+import tabulate
+
+from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
-from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.LocalConfigDatabase import LOCAL_CONFIG_DATABASE
+from AU2.database import save_all_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
 from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
@@ -40,6 +43,7 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
+from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
@@ -49,10 +53,10 @@ from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOption
 from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
-from AU2.plugins.util.game import escape_format_braces
+from AU2.plugins.util.game import escape_format_braces, soft_escape
 
 
-def datetime_validator(_, current):
+def datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -63,7 +67,7 @@ def datetime_validator(_, current):
 
 
 # same as above except allows blank values (for pseudonym datetimes this represents being valid forever)
-def optional_datetime_validator(_, current):
+def optional_datetime_validator(_, current) -> bool:
     try:
         if current is None:
             raise KeyboardInterrupt
@@ -73,6 +77,20 @@ def optional_datetime_validator(_, current):
     except ValueError:
         return False
     return True
+
+
+def html_validator(_, to_validate: str) -> bool:
+    parser = html5lib.HTMLParser(strict=True)
+    try:
+        parser.parse(f"<!DOCTYPE html>{to_validate}")
+    except Exception:
+        raise ValidationError("", reason="Invalid HTML")
+    return True
+
+
+def soft_html_validator(_, to_validate: str) -> bool:
+    to_validate = soft_escape(to_validate)
+    return html_validator(_, to_validate)
 
 
 # TODO: Create a generic type validator
@@ -174,7 +192,7 @@ def render(html_component, dependency_context={}):
 
     # dependent component
     elif isinstance(html_component, AssassinPseudonymPair):
-        assassins = [a[0] for a in html_component.assassins]
+        assassins = list(set([a[0] for a in html_component.assassins] + [a for a in html_component.default.keys()]))
         assassins.sort()
         if not assassins:
             return {html_component.identifier: {}, "skip": True}
@@ -208,43 +226,114 @@ def render(html_component, dependency_context={}):
 
     # dependent component
     elif isinstance(html_component, AssassinDependentReportEntry):
+        reports = list(html_component.default)
+
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
-        if not assassins_mapping:
+        if not assassins_mapping and not reports:
             return {html_component.identifier: [], "skip": True}
-        q = [inquirer.Checkbox(
-            name="q",
-            message="Reports (select players with reports)",
-            choices=list(assassins_mapping.keys()),
-            default=list(a[0] for a in html_component.default)  # default: List[Tuple[str, int, str]]
-        )]
-        reporters = inquirer_prompt_with_abort(q)["q"]
-        results = []
-        default_mapping = {
-            a[:2]: a[2] for a in html_component.default
-        }
-        if assassins_mapping:
+
+        assassin_pseudonyms = {aId : pseudonyms for (aId, pseudonyms) in html_component.assassins if aId in assassins_mapping}
+        Report = Tuple[str, Optional[int], str]
+
+        def _render_report_editor(old_report: Report) -> Optional[Report]:
+            """
+            Renders the report editor UI for `report`, returning the edited report,
+            or `None` if the report should be deleted.
+            """
+            q = [inquirer.List(
+                name="author",
+                message="Select the AUTHOR of the report",
+                choices=[("*DELETE REPORT*", None), *((ASSASSINS_DATABASE.get(a).snapshot(), a) for a in assassins_mapping.keys())],
+                default=old_report[0]
+            )]
+            ident: Optional[str] = inquirer_prompt_with_abort(q)["author"]
+            if ident is None:
+                # signals that the report should be deleted
+                return None
+            # ignore deleted pseudonyms
+            pseudonym_options = ((p, i) for i, p in enumerate(assassin_pseudonyms[ident]) if p)
+            q = [inquirer.List(
+                name="pseudonym",
+                message="Select the PSEUDONYM to attribute the report to",
+                choices=[("(Auto)", None), *pseudonym_options],
+                default=old_report[1]
+            )]
+            pseudonym_id = inquirer_prompt_with_abort(q)["pseudonym"]
+            pseudonym_id = int(pseudonym_id) if pseudonym_id is not None else assassins_mapping[ident]
+            pseudonym = (assassin_pseudonyms[ident][pseudonym_id]
+                         if pseudonym_id is not None and len(assassin_pseudonyms[ident]) > pseudonym_id
+                         else None)
+
             print("FORMATTING ADVICE")
             print("    [PX] Renders pseudonym of assassin with ID X (if in the event)")
-            print(
-                "    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X (if in the event)")
-            print("    [DX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
+            print("    [PX_i] Renders the ith pseudonym (with 0 as first pseudonym) of assassin with ID X")
+            print("    [LX] Renders ALL pseudonyms of assassin with ID X (if in the event)")
             print("    [NX] Renders real name of assassin with ID X (if in the event)")
+            print("    [VX] Is a shortcut for [LX] ([NX])")
             print("ASSASSIN IDENTIFIERS")
+            # This is taken from the old AssassinDependentReportEntry implementation
+            # TODO: find a better way of doing this?
             for a in assassins_mapping:
                 assassin_model = ASSASSINS_DATABASE.get(a)
                 print(f"    ({assassin_model._secret_id}) {assassin_model.real_name}")
-        for r in reporters:
-            key = (r, assassins_mapping[r])
-            q = [inquirer.Editor(
-                name="report",
-                message=f"Report: {escape_format_braces(r)}",
-                default=escape_format_braces(default_mapping.get(key, ''))
+            report_text = render(HtmlEntry(
+                identifier="report",
+                title=f"Report: {escape_format_braces(ASSASSINS_DATABASE.get(ident).snapshot())}"
+                    + (f" as {pseudonym}" if pseudonym else ""),
+                default=old_report[2],
+                soft=True,
+                short=False,
+            ))["report"]
+            return ident, pseudonym_id, report_text
+
+        CONTINUE = -1
+        NEW = -2
+
+        while True:
+            report_options = [
+                ("*CONTINUE*", CONTINUE),
+                *(
+                    (
+                        (
+                           f"{ASSASSINS_DATABASE.get(ident).snapshot()}"
+                           + (f" as {assassin_pseudonyms[ident][p]}" if p is not None else "")
+                        ),
+                        i
+                    )
+                    for i, (ident, p, _) in enumerate(reports)
+                ),
+                ("*NEW*", NEW)
+            ]
+            q = [inquirer.List(
+                name=html_component.identifier,
+                message=escape_format_braces(html_component.title),
+                choices=report_options
             )]
-            report = inquirer_prompt_with_abort(q)["report"]
-            results.append((r, assassins_mapping[r], report))
-        return {html_component.identifier: results}
+            a = inquirer_prompt_with_abort(q)
+            c = a[html_component.identifier]  # index of choice
+            if c == NEW:
+                try:
+                    new_report = _render_report_editor(("", None, ""))
+                    if new_report is not None:
+                        reports.append(new_report)
+                except KeyboardInterrupt:
+                    continue
+
+            elif c == CONTINUE:
+                break
+            else:  # case where editing existing report
+                old_report = reports[c]
+                try:
+                    new_report = _render_report_editor(old_report)
+                    if new_report is None:
+                        reports.pop(c)
+                    else:
+                        reports[c] = new_report
+                except KeyboardInterrupt:
+                    continue
+        return {html_component.identifier: reports}
 
     # dependent component
     elif isinstance(html_component, AssassinDependentKillEntry):
@@ -350,11 +439,11 @@ def render(html_component, dependency_context={}):
             kills = dependency_context[html_component.kill_entry_identifier]
             for (killer, victim) in kills:
                 if victim in html_component.targeting_graph.get(killer, []):
-                    print(f"{killer} had {victim} as a target.")
+                    print(f"{killer} has {victim} as a target.")
                 elif killer in html_component.targeting_graph.get(victim, []):
-                    print(f"{killer} was a target of {victim}.")
+                    print(f"{killer} is a target of {victim}.")
                 else:
-                    print(f"{killer} did not have {victim} as a target nor targeter; this may be an illicit kill.")
+                    print(f"{killer} does not have {victim} as a target nor targeter; this may be an illicit kill.")
 
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
@@ -606,6 +695,14 @@ def render(html_component, dependency_context={}):
                              default=escape_format_braces(html_component.default))]
         return inquirer_prompt_with_abort(q)
 
+    elif isinstance(html_component, HtmlEntry):
+        q_type = inquirer.Text if html_component.short else inquirer.Editor
+        q = [q_type(name=html_component.identifier,
+                    message=escape_format_braces(html_component.title),
+                    default=escape_format_braces(html_component.default),
+                    validate=soft_html_validator if html_component.soft else html_validator)]
+        return inquirer_prompt_with_abort(q)
+
     elif isinstance(html_component, InputWithDropDown):
         q = [inquirer.List(
             name=html_component.identifier,
@@ -641,6 +738,7 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="newpseudonym",
                     message="Enter a new pseudonym",
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["newpseudonym"]
@@ -672,8 +770,9 @@ def render(html_component, dependency_context={}):
                 q = [inquirer.Text(
                     name="editpseudonym",
                     message="Enter replacement" + ("" if c == 0 else " (blank to delete)"),
-                    # cannot delete initial pseudonym
-                    default=escape_format_braces(v.text)
+                    # (cannot delete initial pseudonym)
+                    default=escape_format_braces(v.text),
+                    validate=soft_html_validator
                 )]
                 try:
                     p = inquirer_prompt_with_abort(q)["editpseudonym"]
@@ -764,7 +863,8 @@ def render(html_component, dependency_context={}):
 
     elif isinstance(html_component, ConfigOptionsList):
         # render dangerous config exports in red
-        choices = [("\033[31m" + c.display_name + "\033[0m", c) if isinstance(c, DangerousConfigExport)
+        choices = [("\033[31m" + c.display_name + "\033[0m", c)
+                   if isinstance(c, DangerousConfigExport) and c.danger_explanation()
                    else (c.display_name, c)
                    for c in html_component.config_options]
         selection = inquirer.list_input(
@@ -775,11 +875,11 @@ def render(html_component, dependency_context={}):
             raise KeyboardInterrupt
 
         if isinstance(selection, DangerousConfigExport):
-            # give explanation of why confirmation needed
-            print(selection.explanation)
-            i = random.randint(0, 1000000)
-            if str(i) != inquirer.text(f"Type {i} to access this config option"):
-                raise KeyboardInterrupt
+            if explanation := selection.danger_explanation():
+                print(explanation)
+                i = random.randint(0, 1000000)
+                if str(i) != inquirer.text(f"Type {i} to access this config option"):
+                    raise KeyboardInterrupt
 
         return {html_component.identifier: selection}
 
@@ -928,10 +1028,7 @@ def main():
                 render(component)
 
             print("Saving databases...")
-            ASSASSINS_DATABASE.save()
-            EVENTS_DATABASE.save()
-            GENERIC_STATE_DATABASE.save()  # utility database
-            LOCAL_CONFIG_DATABASE.save()  # ui database
+            save_all_databases()
 
 from readchar import key
 def key_addons(f):
@@ -951,6 +1048,19 @@ def key_addons(f):
 # wrap List and Checkbox input processing for PgUp, PgDown, Home and End key support
 inquirer.render.console._list.List.process_input = key_addons(inquirer.render.console._list.List.process_input)
 inquirer.render.console._checkbox.Checkbox.process_input = key_addons(inquirer.render.console._checkbox.Checkbox.process_input)
+
+
+def editor_process_input_addon(f):
+    """Wrapper function that fixes the process_input method of inquirer Editor input,
+    so that validation doesn't wipe user input."""
+    def process_input(self, pressed):
+        if pressed in (key.CR, key.LF, key.ENTER):
+            data = editor.editor(text=self.question.default or "")
+            self.question._default = data
+            raise EndOfInput(data)
+        f(self, pressed)
+    return process_input
+inquirer.render.console._editor.Editor.process_input = editor_process_input_addon(inquirer.render.console._editor.Editor.process_input)
 
 if __name__ == "__main__":
     main()

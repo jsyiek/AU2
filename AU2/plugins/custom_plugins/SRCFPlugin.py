@@ -10,9 +10,10 @@ import inquirer
 import paramiko
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
-from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE, AssassinsDatabase
+from AU2.database.EventsDatabase import EVENTS_DATABASE, EventsDatabase
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
+from AU2.database import save_all_databases
 from AU2.database.model import Assassin
 from AU2.database.model.database_utils import is_database_file, refresh_databases
 from AU2.html_components import HTMLComponent
@@ -427,6 +428,7 @@ class SRCFPlugin(AbstractPlugin):
                         components.append(Table([[email_str] for email_str in email_str_list]))
 
                     self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
+                    save_all_databases()  # needed to make sure emailed competency deadlines and targets are uploaded
                     self._publish_databases(sftp)
                     components.append(Label(f"[SRCFPlugin] Uploaded database."))
                     autobackup_name = self._autobackup(sftp)
@@ -650,7 +652,7 @@ class SRCFPlugin(AbstractPlugin):
 
     def _publish_databases(self, sftp: paramiko.SFTPClient):
         """
-        Publishes all databases
+        Publishes all databases (as saved to file)
         """
         for database in self._find_jsons(BASE_WRITE_LOCATION):
             localpath = os.path.join(BASE_WRITE_LOCATION, database)

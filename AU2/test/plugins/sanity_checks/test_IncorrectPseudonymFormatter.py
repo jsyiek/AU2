@@ -15,7 +15,7 @@ class TestIncorrectPseudonymFormatter:
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
         # now test fixing of headline and reports
-        core_plugin.answer_generate_pages(html_response, True)
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)
         e = event.model()
         assert e.headline == f"[P{p0}] does something."
         assert event.check_report(f"I am [P{p0}]! I did something!")
@@ -31,7 +31,7 @@ class TestIncorrectPseudonymFormatter:
         components = core_plugin.ask_generate_pages()
         html_response = evaluate_components(components)
         # now test fixing of headline and reports
-        core_plugin.answer_generate_pages(html_response, True)
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)
         e = event.model()
         assert e.headline == f"text_with_underscores [P{p0}]_ text"
         assert event.check_report(f" text_ _[P{p0}] text_with_underscores")
@@ -51,7 +51,7 @@ class TestIncorrectPseudonymFormatter:
                 c.defaults = []
         html_response = evaluate_components(components)
         # now test fixing of headline and reports
-        core_plugin.answer_generate_pages(html_response, True)
+        core_plugin.answer_generate_pages(html_response, actually_generate_pages=False)
         e = event.model()
         assert e.headline == f"[{p0}] does something."
         assert event.check_report(f"I am [{p0}]! I did something!")

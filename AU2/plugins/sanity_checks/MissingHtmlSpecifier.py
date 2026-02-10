@@ -40,6 +40,8 @@ class MissingHtmlSpecifier(SanityCheck):
         fix_ptr = 0
         labels = []
         for i, (assassin, pseudonym_id, report) in enumerate(e.reports):
+            if fix_ptr == len(suggestion_ids):
+                break
             if i == suggestion_ids[fix_ptr]:
                 fix_ptr += 1
                 report = HTML_REPORT_PREFIX + report
@@ -48,6 +50,4 @@ class MissingHtmlSpecifier(SanityCheck):
                 labels.append(
                     Label(f"({e.identifier}) Enabled HTML for {name}'s report.")
                 )
-            if fix_ptr == len(suggestion_ids):
-                break
         return labels
