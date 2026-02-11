@@ -1,8 +1,10 @@
 import datetime
 import itertools
-import markdown
 import re
 from typing import Callable, Dict, List, NamedTuple, Optional, Protocol, Sequence, Tuple
+
+import markdown
+from mdx_gfm import GithubFlavoredMarkdownExtension
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -261,7 +263,7 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     return string
 
 
-headline_markdown_renderer = markdown.Markdown(extensions=['md_in_html'])
+headline_markdown_renderer = markdown.Markdown(extensions=['md_in_html', GithubFlavoredMarkdownExtension()])
 
 
 def inline_markdown(string: str) -> str:
@@ -272,7 +274,7 @@ def inline_markdown(string: str) -> str:
     return headline_markdown_renderer.convert(f"<td markdown='span'>{string}</td>")[4:-5]
 
 
-markdown_renderer = markdown.Markdown(extensions=['nl2br'])
+markdown_renderer = markdown.Markdown(extensions=['nl2br', GithubFlavoredMarkdownExtension()])
 
 
 def block_markdown(string: str) -> str:
