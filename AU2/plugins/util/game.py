@@ -5,6 +5,7 @@ from typing import Optional
 
 from AU2 import TIMEZONE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.model import Assassin
 from AU2.plugins.util.date_utils import get_now_dt
 
 HTML_REPORT_PREFIX = "<!--HTML-->"

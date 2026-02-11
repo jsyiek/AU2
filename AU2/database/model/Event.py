@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import datetime as dt
 from dataclasses_json import dataclass_json, config
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
@@ -31,7 +31,7 @@ class Event(PersistentFile):
     headline: str
 
     # from assassin ID and their pseudonym ID to their report
-    reports: List[Tuple[str, int, str]]
+    reports: List[Tuple[str, Optional[int], str]]
 
     # Map from killer to victim
     kills: List[Tuple[str, str]]
@@ -53,3 +53,11 @@ class Event(PersistentFile):
             self.identifier = "(" + self.__secret_id + ") " + self.headline[0:25].rstrip()
 
         # self.datetime = self.datetime.replace(tzinfo=None)
+
+    def text_display(self) -> str:
+        """
+        Gives a (plaintext) rendering of this Event's headline, as a human-readable reference to this Event that, unlike
+        the internal `identifier`, changes as the Event is updated.
+        """
+        # TODO: render pseudonym codes?
+        return f"[{self.datetime.strftime('%Y-%m-%d %H:%M %p')}] {self.headline.rstrip()}"
