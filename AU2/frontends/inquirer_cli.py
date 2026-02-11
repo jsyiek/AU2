@@ -10,10 +10,19 @@ import editor
 import html5lib
 import inquirer
 import tabulate
+from readchar import key
 
 from inquirer.errors import ValidationError, EndOfInput
 
-from AU2 import TIMEZONE
+from AU2 import TIMEZONE, __version__
+from AU2.plugins.custom_plugins.AutoUpdatePlugin import check_for_update
+
+# Fix ANSI rendering in old Windows terminals
+try:
+    from colorama import just_fix_windows_console
+    just_fix_windows_console()
+except Exception:
+    pass
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database import save_all_databases
 from AU2.html_components import HTMLComponent
@@ -946,12 +955,13 @@ def replace_overrides(component_list: List[HTMLComponent], existing_overrides={}
 
 
 def main():
-    # this fixes rendering of ANSI codes in old Windows terminals
-    # if it fails we don't want it to cause a crash though
     try:
-        from colorama import just_fix_windows_console
-        just_fix_windows_console()
-    except:
+        update = check_for_update(__version__)
+        if update:
+            tag = update["tag_name"].lstrip("v")
+            print(f"\n  [UPDATE] AU2 {tag} is available (you have {__version__}). "
+                  f"Load the AutoUpdatePlugin and select 'Check for updates' from the menu to update.\n")
+    except Exception:
         pass
 
     while True:
@@ -1030,7 +1040,7 @@ def main():
             print("Saving databases...")
             save_all_databases()
 
-from readchar import key
+
 def key_addons(f):
     """Wrapper function adding extra key handling to List.process_input or Checkbox.process_input"""
     def g(self, pressed):

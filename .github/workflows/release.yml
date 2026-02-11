@@ -16,6 +16,11 @@ on:
         required: true
         default: master
         type: string
+      dry_run:
+        description: "Dry run (upload artifact instead of publishing release)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,6 +33,7 @@ jobs:
       BUMP: ${{ inputs.bump || 'patch' }}
       TARGET_BRANCH: ${{ inputs.target_branch || github.head_ref || 'master' }}
       IS_DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
+      DRY_RUN: ${{ inputs.dry_run || false }}
     steps:
       - name: Checkout target branch
         uses: actions/checkout@v4
@@ -42,15 +48,16 @@ jobs:
       - name: Calculate new version
         run: |
           python3 << 'PYEOF'
-          import os, re, subprocess
+          import os, subprocess
 
-          # Read current version from setup.py
-          with open("setup.py") as f:
-              content = f.read()
-          m = re.search(r"version='(\d+)\.(\d+)\.(\d+)'", content)
-          if not m:
-              raise SystemExit("Could not parse version from setup.py")
-          major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+          # Read current version from AU2/_version.py
+          _version_info = {}
+          with open("AU2/_version.py") as f:
+              exec(f.read(), _version_info)
+          version_parts = _version_info["__version__"].split(".")
+          if len(version_parts) != 3:
+              raise SystemExit("Could not parse version from AU2/_version.py")
+          major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
 
           bump = os.environ["BUMP"]
           if bump == "major":
@@ -89,13 +96,13 @@ jobs:
               env.write(f"TAG={tag}\n")
           PYEOF
 
-      - name: Update version in setup.py
-        if: env.IS_DISPATCH == 'true'
+      - name: Update version in _version.py
+        if: env.IS_DISPATCH == 'true' && env.DRY_RUN != 'true'
         run: |
-          sed -i "s/version='.*'/version='$VERSION'/" setup.py
+          sed -i 's/__version__ = ".*"/__version__ = "'"$VERSION"'"/' AU2/_version.py
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add setup.py
+          git add AU2/_version.py
           git commit -m "Bump version to $VERSION"
           git push origin HEAD:${{ env.TARGET_BRANCH }}
 
@@ -109,8 +116,15 @@ jobs:
             --dest "${{ runner.temp }}/release"
           ls -lh "${{ runner.temp }}/release/au2-v${VERSION}.zip"
 
+      - name: Upload release artifact (dry run)
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: au2-v${{ env.VERSION }}
+          path: ${{ runner.temp }}/release/au2-v${{ env.VERSION }}.zip
+
       - name: Create GitHub Release
-        if: env.IS_DISPATCH == 'true'
+        if: env.IS_DISPATCH == 'true' && env.DRY_RUN != 'true'
         run: |
           LATEST_FLAG=""
           if [ "${{ env.TARGET_BRANCH }}" = "master" ]; then
