@@ -1,7 +1,8 @@
 from collections import defaultdict
 import dataclasses
 import functools
-from typing import DefaultDict, Dict, List, Optional, Sequence, Set
+
+from typing import DefaultDict, Dict, List, Optional, Sequence, Set, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -21,20 +22,14 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, Export, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator, ConfigExport, Export, \
+    NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.util.colors import HEX_COLS
 from AU2.plugins.util.date_utils import get_now_dt
-from AU2.plugins.util.render_utils import Chapter, generate_news_pages, get_color, Manager
+from AU2.plugins.util.render_utils import Chapter, PageAllocatorData
 
-
-HEX_COLS = [
-    '#00A6A3', '#26CCC8', '#008B8A', '#B69C1F',
-    '#D1B135', '#5B836E', '#7A9E83', '#00822b',
-    '#00A563', '#FFA44D', '#CC6C1E', '#37b717',
-    '#27B91E', '#1F9E1A', '#3DC74E', '#00c6c3',
-    '#b7a020', '#637777', '#f28110'
-]
 
 CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
 TEAM_ENTRY_TEMPLATE = "<td {CREW_COLOR}>{TEAM}</td>"
@@ -51,9 +46,10 @@ MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
     MAYWEEK_PLAYERS_TEMPLATE = F.read()
 
-MAYWEEK_NEWS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_news.html"
-with open(MAYWEEK_NEWS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
-    MAYWEEK_NEWS_TEMPLATE = F.read()
+
+def get_team_color(team_i: int) -> str:
+    return HEX_COLS[team_i % len(HEX_COLS)]
+
 
 @dataclasses.dataclass
 class ScoringParameter:
@@ -63,6 +59,7 @@ class ScoringParameter:
 
     def identifier(self) -> str:
         return f"may_week_scoring_{self.name}"
+
 
 @registered_plugin
 class MayWeekUtilitiesPlugin(AbstractPlugin):
@@ -263,6 +260,19 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def eps_set(self, e: Event, plugin_state_id, data):
         e.pluginState.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]] = data
 
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        team_manager = self.TeamManager()
+        yield_next = None
+        while True:
+            e = yield yield_next
+            team_manager.add_event(e)
+
+            def color_fn(assassin: Assassin, _: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for teams"""
+                team = team_manager.member_to_team[assassin.identifier]
+                if team is not None:
+                    return 1.5, get_team_color(team)
+            yield_next = color_fn
 
     def ask_enable_teams(self):
         return [Checkbox(
@@ -653,17 +663,21 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         return scores
 
+    def on_data_hook(self, hook: str, data):
+        if hook == "page_allocator":
+            """Collate all the events onto a single page, rather than paginating into weeks"""
+            data: PageAllocatorData
+            PRIORITY = 1
+            if data.priority < PRIORITY:
+                data.chapter = Chapter("May Week News", NavbarEntry("mw-news.html", "Reports", 0))
+                data.priority = PRIORITY
+
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         """
-        Generates player info page and may week news page.
+        Generates player info page.
 
         The player info page displays two lists, one giving player pseudonyms, scores, teams (if applicable) and
         multipliers, the other giving the real names and other targeting information for all the players.
-
-        The may week news page collates all the events onto a single page (rather than paginating like
-        PageGeneratorPlugin) and applies May Week name colouring (i.e. crews share a colour, don't colour city watch
-        (casual players) differently, don't colour dead players differently outside the event in which they died, don't
-        colourincos).
         """
 
         # player info page
@@ -672,13 +686,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         multiplier_owners = set(self.get_multiplier_owners())
         teams_enabled = self.gsdb_get("Enable Teams?", False)
         member_to_team = team_manager.member_to_team
-        team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
-
-        team_to_hex_col = {}
-        for (i, team) in enumerate(team_to_members):
-            team_to_hex_col[team] = HEX_COLS[i % len(HEX_COLS)]
 
         # discard hidden players from scores -- in case a dummy casual player is added to represent a civilian
         for hidden_id in ASSASSINS_DATABASE.get_identifiers(include = lambda _: False,
@@ -689,7 +698,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         for (score, a_id) in sorted(((v, k) for (k, v) in scores.items()), reverse=True):
             # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
             team_id = member_to_team[a_id]
-            crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team_id]) if team_id is not None else "")
+            crew_color = (CREW_COLOR_TEMPLATE.format(HEX=get_team_color(team_id)) if team_id is not None else "")
             team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id], CREW_COLOR=crew_color) if team_id is not None else "")
             assassin = ASSASSINS_DATABASE.get(a_id)
             pseudonym_rows.append(
@@ -728,36 +737,5 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     TEAM_STR = self.get_cosmetic_name("Teams") if teams_enabled else ""
                 )
             ))
-
-        # may week news page
-
-        # colour players by crew and don't do city watch, or inco colouring
-        def mw_color_fn(pseudonym: str, assassin_model: Assassin, e: Event, managers: Sequence[Manager]) -> str:
-            # render dead colour -- but only if died *in this event*
-            if any(victim_id == assassin_model.identifier for (_, victim_id) in e.kills):
-                return get_color(pseudonym, dead=True)
-
-            # but otherwise use team colours,
-            # getting the team from TeamManager
-            team = None
-            for manager in managers:
-                if isinstance(manager, self.TeamManager):
-                    team = manager.member_to_team[assassin_model.identifier]
-                    break
-            if team is not None:
-                return team_to_hex_col[team]
-
-            # fallback for individual
-            return get_color(pseudonym)
-
-        MAYWEEK_CHAPTER = Chapter("May Week News", NavbarEntry("mw-news.html", "Reports", 0))
-
-        generate_news_pages(
-            headlines_path="mw-head.html",
-            page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
-            color_fn=mw_color_fn,
-            plugin_managers=(self.TeamManager() for _ in range(teams_enabled)),
-            news_list_path="mw-news-list.html",
-        )
 
         return [Label("[MAY WEEK] Success!")]

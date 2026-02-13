@@ -1,6 +1,6 @@
 import os
 from html import escape
-from typing import List
+from typing import List, Optional, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -11,14 +11,16 @@ from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentCrimeEntry import AssassinDependentCrimeEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ColorFnGenerator
 from AU2.plugins.CorePlugin import PLUGINS, registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 from AU2.plugins.util.CityWatchRankManager import CityWatchRankManager, AUTO_RANK_DEFAULT, CITY_WATCH_KILLS_RANKUP_DEFAULT, \
     DEFAULT_RANKS, DEFAULT_CITY_WATCH_RANK
 from AU2.plugins.util.WantedManager import WantedManager
+from AU2.plugins.util.colors import CORRUPT_CITY_WATCH_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.navbar import NavbarEntry
 
 PLAYER_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -83,6 +85,24 @@ class WantedPlugin(AbstractPlugin):
         self.event_html_ids = {
             "Wanted": self.identifier + "_wanted"
         }
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        wanted_manager = WantedManager()
+        yield_next = None
+        while True:
+            e = yield yield_next
+            wanted_manager.add_event(e)
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for wanted players"""
+                if wanted_manager.is_player_wanted(assassin.identifier, time=e.datetime):
+                    ind = sum(ord(c) for c in pseudonym)
+                    if assassin.is_city_watch:
+                        return 6, CORRUPT_CITY_WATCH_COLS[ind % len(CORRUPT_CITY_WATCH_COLS)]
+                    else:
+                        return 6, WANTED_COLS[ind % len(WANTED_COLS)]
+
+            yield_next = color_fn
 
         Assassin.__last_emailed_crime = self.assassin_property("last_emailed_crime", None, store_default=False)
 
