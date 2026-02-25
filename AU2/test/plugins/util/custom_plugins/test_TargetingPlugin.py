@@ -13,19 +13,17 @@ def valid_targets(num_players, targets):
     return True
 
 
-def teams_respected(targets: Dict[str, List[str]], teams: List[List[str]]) -> bool:
+def teams_respected(targets: Dict[str, List[str]], teams: List[List[str]])l:
     for team in teams:
         for member in team:
             for target in targets.get(member, ()):
                 assert target not in team
-    return True
 
 
-def seeds_respected(targets: Dict[str, List[str]], seeds: List[str]) -> bool:
-    for seed1 in seeds:
-        for seed2 in seeds:
-            assert seed2 not in targets[seed1]
-    return True
+def seeds_respected(targets: Dict[str, List[str]], seeds: List[str]):
+    for (seed1, seed2) in itertools.combinations(seeds, 2):
+        assert seed1 not in targets[seed2]
+        assert seed2 not in targets[seed1]
 
 
 class TestTargetingPlugin:

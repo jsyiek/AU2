@@ -530,7 +530,9 @@ class TargetingPlugin(AbstractPlugin):
                             else:
                                 raise FailedToCreateChainException()
 
-            # check constraints for endpoints of chain (since actually a cycle)
+            # The chain is represented as a terminating list, but actually 
+            # represents something cyclical. Our earlier checks don't enforce
+            # constraints hold with targets on either end of the list, so we check here. 
             if not (
                     check_constraints(chain[0], chain[-1], chain[-2])
                     and check_constraints(chain[1], chain[0], chain[-2])
@@ -538,7 +540,7 @@ class TargetingPlugin(AbstractPlugin):
                 raise FailedToCreateChainException()
 
             # save the new edges
-            for (targeter, targetee) in zip(chain, chain[1:] + [chain[0]]):
+            for (targeter, targetee) in zip(chain, itertools.chain(chain[1:], [chain[0]])):
                 targeting_graph.setdefault(targeter, set()).add(targetee)
 
             return chain
