@@ -1,7 +1,5 @@
 import itertools
 import random
-import time
-
 from typing import Dict, List, Iterable, Sequence, Set, Tuple
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -10,14 +8,12 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
-from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SpecialComponents.TeamsEditor import TeamsEditor
-from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, DangerousConfigExport, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, DangerousConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -226,8 +222,7 @@ class TargetingPlugin(AbstractPlugin):
     def ask_set_teams(self):
         return [
             TeamsEditor(self.html_ids["Teams"], "",
-                        ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_city_watch,
-                                                           include_hidden=True),
+                        filter_to_targetable(ASSASSINS_DATABASE.assassins),
                         GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("teams", []))
         ]
 
@@ -324,8 +319,7 @@ class TargetingPlugin(AbstractPlugin):
         # reset the seed for determinism
         random.seed(self.seed)
 
-        # collect all targetable assassins
-        players = [a for (a, model) in ASSASSINS_DATABASE.assassins.items() if not model.is_city_watch]
+        players = filter_to_targetable(ASSASSINS_DATABASE.assassins)
 
         # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
         # last long anyway.
@@ -358,20 +352,57 @@ class TargetingPlugin(AbstractPlugin):
 
             def check_constraints(next_p: str, curr_p: str, prev_p: str,
                                   no_triangles=True, no_teammates=True, no_mutuals=True) -> bool:
-                return not (
-                        next_p in targeting_graph.get(curr_p, set())  # duplicates
-                        or (no_mutuals and curr_p in targeting_graph.get(next_p, set()))
-                        or (no_teammates and next_p in player_teammate_mapping.get(curr_p, set()))
-                        # check whether any of next_p's existing targets targets curr_p
-                        # has two parts because targets due to the current chain don't appear in targeting_graph yet
-                        or (no_triangles and (
-                            prev_p in targeting_graph.get(next_p, set())
-                            or any(
-                                curr_p in targeting_graph.get(next_p_targ, set())
-                                for next_p_targ in targeting_graph.get(next_p, set())
-                            )
-                        ))
-                )
+                """
+                Checks whether adding the targeting relation curr_p -> next_p would violate any targeting constraints.
+
+                Args:
+                    next_p (str): Identifier of the next assassin we want to add to the current chain
+                    curr_p (str): Identifier of the most recent assassin added to the current chain
+                    prev_p (str): Identifier of the assassin added to the current chain before curr_p
+                    no_triangles (bool): Whether to enforce the constraint of no triangles in the targeting graph
+                    no_teammates (bool): Whether to enforce the constraint of teammates (including seeds) not targeting
+                        each other
+                    no_mutuals (bool): Whether to enforce the constraint of players not having each other as targets.
+
+                Returns:
+                    bool: True if all constraints are satisfied, otherwise False.
+                """
+                has_duplicate = next_p in targeting_graph.get(curr_p, set())
+                if has_duplicate:
+                    return False
+
+                if no_mutuals:
+                    has_mutual_targets = curr_p in targeting_graph.get(next_p, set())
+                    if has_mutual_targets:
+                        return False
+
+                if no_teammates:
+                    has_intra_team_target = next_p in player_teammate_mapping.get(curr_p, set())
+                    if has_intra_team_target:
+                        return False
+
+                if no_triangles:
+                    # detect situations where
+                    # prev_p -> curr_p
+                    # and next_p -> prev_p
+                    # so adding the targeting relation curr_p -> next_p would create a triangle
+                    # this is separate to the following condition because the prev_p -> curr_p targeting relation
+                    # will not have been added to targeting_graph at this point!
+                    prev_p_is_target_of_next_p = prev_p in targeting_graph.get(next_p, set())
+                    if prev_p_is_target_of_next_p:
+                        return False
+
+                    # detects situations where one of the existing targets of next_p has curr_p as a target,
+                    # and so adding the targeting relation curr_p -> next_p would create a triangle
+                    curr_p_is_target_of_one_of_next_p_s_targets = any(
+                        curr_p in targeting_graph.get(next_p_targ, set())
+                        for next_p_targ in targeting_graph.get(next_p, set())
+                    )
+                    if curr_p_is_target_of_one_of_next_p_s_targets:
+                        return False
+
+                # if none of the above conditions fail then the constraints are satisfied (for now)
+                return True
 
             def lengthen_chain(no_triangles=True,
                                no_teammates=True,
