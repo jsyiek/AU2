@@ -47,10 +47,147 @@ def filter_to_targetable(idents: Iterable[str]) -> List[str]:
 
 
 @dataclasses.dataclass
+class ChainGenerator:
+    players: List[str]
+    targeting_graph: Dict[str, Set[str]]
+    player_teammate_mapping: Dict[str, Set[str]]
+
+    def check_constraints(self, next_p: str, curr_p: str, prev_p: str,
+                          no_triangles=True, no_teammates=True, no_mutuals=True) -> bool:
+        """
+        Checks whether adding the targeting relation curr_p -> next_p would violate any targeting constraints.
+
+        Args:
+            next_p (str): Identifier of the next assassin we want to add to the current chain
+            curr_p (str): Identifier of the most recent assassin added to the current chain
+            prev_p (str): Identifier of the assassin added to the current chain before curr_p
+            no_triangles (bool): Whether to enforce the constraint of no triangles in the targeting graph
+            no_teammates (bool): Whether to enforce the constraint of teammates (including seeds) not targeting
+                each other
+            no_mutuals (bool): Whether to enforce the constraint of players not having each other as targets.
+
+        Returns:
+            bool: True if all constraints are satisfied, otherwise False.
+        """
+        has_duplicate = next_p in self.targeting_graph.get(curr_p, set())
+        if has_duplicate:
+            return False
+
+        if no_mutuals:
+            has_mutual_targets = curr_p in self.targeting_graph.get(next_p, set())
+            if has_mutual_targets:
+                return False
+
+        if no_teammates:
+            has_intra_team_target = next_p in self.player_teammate_mapping.get(curr_p, set())
+            if has_intra_team_target:
+                return False
+
+        if no_triangles:
+            # detect situations where
+            # prev_p -> curr_p
+            # and next_p -> prev_p
+            # so adding the targeting relation curr_p -> next_p would create a triangle
+            # this is separate to the following condition because the prev_p -> curr_p targeting relation
+            # will not have been added to targeting_graph at this point!
+            prev_p_is_target_of_next_p = prev_p in self.targeting_graph.get(next_p, set())
+            if prev_p_is_target_of_next_p:
+                return False
+
+            # detects situations where one of the existing targets of next_p has curr_p as a target,
+            # and so adding the targeting relation curr_p -> next_p would create a triangle
+            curr_p_is_target_of_one_of_next_p_s_targets = any(
+                curr_p in self.targeting_graph.get(next_p_targ, set())
+                for next_p_targ in self.targeting_graph.get(next_p, set())
+            )
+            if curr_p_is_target_of_one_of_next_p_s_targets:
+                return False
+
+        # if none of the above conditions fail then the constraints are satisfied (for now)
+        return True
+
+    def lengthen_chain(self,
+                       chain: List[str],
+                       remaining_players: List[str],
+                       no_triangles=True,
+                       no_teammates=True,
+                       no_mutuals=True) -> List[str]:
+        """Extends the chain subject to specified constraints,
+        returning players that weren't added due to failing a constraint."""
+        unused_players = []
+        for next_p in remaining_players:
+            curr_p = chain[-1] if len(chain) > 0 else None
+            prev_p = chain[-2] if len(chain) > 1 else None
+            if self.check_constraints(next_p, curr_p, prev_p,
+                                 no_triangles=no_triangles, no_teammates=no_teammates, no_mutuals=no_mutuals):
+                chain.append(next_p)
+            else:
+                unused_players.append(next_p)
+                # constraints are only relaxed to prevent an impasse
+                # thus, once the chain is lengthened they should be enforced again
+                no_teammates, no_mutuals, no_triangles = True, True, True
+        return unused_players
+
+    def new_chain(self,
+                  enforce_no_triangles: bool = True,
+                  enforce_teams: bool = True,
+                  enforce_no_mutuals: bool = True) -> List[str]:
+        """Generate chain that satisfies constraints"""
+
+        # shuffle list of players
+        remaining_players = list(self.players)
+        random.shuffle(remaining_players)
+
+        chain = []
+
+        while remaining_players:
+            remaining_before = len(remaining_players)
+            remaining_players = self.lengthen_chain(chain, remaining_players)
+            # gradually relax constraints if allowed and necessary
+            # first we allow triangles in the targeting graph
+            # then if this doesn't help, we allow teammates to target each other
+            # finally if even that fails we allow mutual targeting
+            if len(remaining_players) == remaining_before:
+                if not enforce_teams:
+                    remaining_players = self.lengthen_chain(no_triangles=False)
+                else:
+                    raise FailedToCreateChainException()
+                if len(remaining_players) == remaining_before:
+                    if not enforce_no_triangles:
+                        remaining_players = self.lengthen_chain(no_triangles=False, no_teammates=False)
+                    else:
+                        raise FailedToCreateChainException()
+                    if len(remaining_players) == remaining_before:
+                        if enforce_no_mutuals:
+                            remaining_players = self.lengthen_chain(no_triangles=False, no_teammates=False, no_mutuals=False)
+                        else:
+                            raise FailedToCreateChainException()
+
+        # The chain is represented as a terminating list, but actually
+        # represents something cyclical. Our earlier checks don't enforce
+        # constraints hold with targets on either end of the list, so we check here.
+        if not (
+                self.check_constraints(chain[0], chain[-1], chain[-2])
+                and self.check_constraints(chain[1], chain[0], chain[-2])
+        ):
+            raise FailedToCreateChainException()
+
+        # save the new edges
+        for (targeter, targetee) in zip(chain, itertools.chain(chain[1:], [chain[0]])):
+            self.targeting_graph.setdefault(targeter, set()).add(targetee)
+
+        return chain
+
+    def reset(self):
+        self.targeting_graph = {}
+
+
+@dataclasses.dataclass
 class TargetingParameter:
     name: str
     default_value: int
     description: str
+
 
 @registered_plugin
 class TargetingPlugin(AbstractPlugin):
@@ -422,129 +559,6 @@ class TargetingPlugin(AbstractPlugin):
         # player -> teams mapping for checking seeding constraints
         player_teammate_mapping = {p: {teammate for t in teams for teammate in t if p in t} for p in players}
 
-        def new_chain(targeting_graph: Dict[str, Set[str]],
-                      enforce_no_triangles: bool = True,
-                      enforce_teams: bool = True,
-                      enforce_no_mutuals: bool = True) -> List[str]:
-            """Generate chain that satisfies constraints"""
-
-            # shuffle list of players
-            remaining_players = list(players)
-            random.shuffle(remaining_players)
-
-            chain = []
-
-            def check_constraints(next_p: str, curr_p: str, prev_p: str,
-                                  no_triangles=True, no_teammates=True, no_mutuals=True) -> bool:
-                """
-                Checks whether adding the targeting relation curr_p -> next_p would violate any targeting constraints.
-
-                Args:
-                    next_p (str): Identifier of the next assassin we want to add to the current chain
-                    curr_p (str): Identifier of the most recent assassin added to the current chain
-                    prev_p (str): Identifier of the assassin added to the current chain before curr_p
-                    no_triangles (bool): Whether to enforce the constraint of no triangles in the targeting graph
-                    no_teammates (bool): Whether to enforce the constraint of teammates (including seeds) not targeting
-                        each other
-                    no_mutuals (bool): Whether to enforce the constraint of players not having each other as targets.
-
-                Returns:
-                    bool: True if all constraints are satisfied, otherwise False.
-                """
-                has_duplicate = next_p in targeting_graph.get(curr_p, set())
-                if has_duplicate:
-                    return False
-
-                if no_mutuals:
-                    has_mutual_targets = curr_p in targeting_graph.get(next_p, set())
-                    if has_mutual_targets:
-                        return False
-
-                if no_teammates:
-                    has_intra_team_target = next_p in player_teammate_mapping.get(curr_p, set())
-                    if has_intra_team_target:
-                        return False
-
-                if no_triangles:
-                    # detect situations where
-                    # prev_p -> curr_p
-                    # and next_p -> prev_p
-                    # so adding the targeting relation curr_p -> next_p would create a triangle
-                    # this is separate to the following condition because the prev_p -> curr_p targeting relation
-                    # will not have been added to targeting_graph at this point!
-                    prev_p_is_target_of_next_p = prev_p in targeting_graph.get(next_p, set())
-                    if prev_p_is_target_of_next_p:
-                        return False
-
-                    # detects situations where one of the existing targets of next_p has curr_p as a target,
-                    # and so adding the targeting relation curr_p -> next_p would create a triangle
-                    curr_p_is_target_of_one_of_next_p_s_targets = any(
-                        curr_p in targeting_graph.get(next_p_targ, set())
-                        for next_p_targ in targeting_graph.get(next_p, set())
-                    )
-                    if curr_p_is_target_of_one_of_next_p_s_targets:
-                        return False
-
-                # if none of the above conditions fail then the constraints are satisfied (for now)
-                return True
-
-            def lengthen_chain(no_triangles=True,
-                               no_teammates=True,
-                               no_mutuals=True) -> List[str]:
-                """Extends the chain subject to specified constraints,
-                returning players that weren't added due to failing a constraint."""
-                unused_players = []
-                for next_p in remaining_players:
-                    curr_p = chain[-1] if len(chain) > 0 else None
-                    prev_p = chain[-2] if len(chain) > 1 else None
-                    if check_constraints(next_p, curr_p, prev_p,
-                                         no_triangles=no_triangles, no_teammates=no_teammates, no_mutuals=no_mutuals):
-                        chain.append(next_p)
-                    else:
-                        unused_players.append(next_p)
-                        # constraints are only relaxed to prevent an impasse
-                        # thus, once the chain is lengthened they should be enforced again
-                        no_teammates, no_mutuals, no_triangles = True, True, True
-                return unused_players
-
-            while remaining_players:
-                remaining_before = len(remaining_players)
-                remaining_players = lengthen_chain()
-                # gradually relax constraints if allowed and necessary
-                # first we allow triangles in the targeting graph
-                # then if this doesn't help, we allow teammates to target each other
-                # finally if even that fails we allow mutual targeting
-                if len(remaining_players) == remaining_before:
-                    if not enforce_teams:
-                        remaining_players = lengthen_chain(no_triangles=False)
-                    else:
-                        raise FailedToCreateChainException()
-                    if len(remaining_players) == remaining_before:
-                        if not enforce_no_triangles:
-                            remaining_players = lengthen_chain(no_triangles=False, no_teammates=False)
-                        else:
-                            raise FailedToCreateChainException()
-                        if len(remaining_players) == remaining_before:
-                            if enforce_no_mutuals:
-                                remaining_players = lengthen_chain(no_triangles=False, no_teammates=False, no_mutuals=False)
-                            else:
-                                raise FailedToCreateChainException()
-
-            # The chain is represented as a terminating list, but actually 
-            # represents something cyclical. Our earlier checks don't enforce
-            # constraints hold with targets on either end of the list, so we check here. 
-            if not (
-                    check_constraints(chain[0], chain[-1], chain[-2])
-                    and check_constraints(chain[1], chain[0], chain[-2])
-            ):
-                raise FailedToCreateChainException()
-
-            # save the new edges
-            for (targeter, targetee) in zip(chain, itertools.chain(chain[1:], [chain[0]])):
-                targeting_graph.setdefault(targeter, set()).add(targetee)
-
-            return chain
-
         # generate initial targets via "chains"
         TARGETS_PER_PLAYER = self.get_targeting_param("targets_per_player")
         targeting_graph = {}
@@ -560,15 +574,24 @@ class TargetingPlugin(AbstractPlugin):
         NO_TRIANGLES_THRESHOLD = self.get_targeting_param("no_triangles_threshold")
         NO_MUTALS_THRESHOLD = self.get_targeting_param("no_mutuals_threshold")
 
+        chain_generator = ChainGenerator(
+            players=players,
+            targeting_graph=targeting_graph,
+            player_teammate_mapping=player_teammate_mapping
+        )
+
+        MAX_TRIES = self.get_targeting_param("max_tries")
+
         consecutive_fails = 0
         chains = []
-        for i in range(self.get_targeting_param("max_tries")):
+        for i in range(MAX_TRIES):
             try:
                 enforce_constraints = i < RELAXATION_THRESHOLD
-                chains.append(new_chain(targeting_graph,
+                chains.append(chain_generator.new_chain(
                                         enforce_teams=enforce_constraints and (consecutive_fails < NO_TEAMS_THRESHOLD),
                                         enforce_no_triangles=enforce_constraints and (consecutive_fails < NO_TRIANGLES_THRESHOLD),
-                                        enforce_no_mutuals=enforce_constraints and (consecutive_fails < NO_MUTALS_THRESHOLD)))
+                                        enforce_no_mutuals=enforce_constraints and (consecutive_fails < NO_MUTALS_THRESHOLD)
+                ))
                 # TODO: message informing user about broken constraints...
                 consecutive_fails = 0
                 if len(chains) == TARGETS_PER_PLAYER:
@@ -577,7 +600,7 @@ class TargetingPlugin(AbstractPlugin):
                 consecutive_fails += 1
                 if consecutive_fails >= START_OVER_THRESHOLD:
                     chains = []
-                    targeting_graph = {}
+                    chain_generator.reset()
                     consecutive_fails = 0
         else:
             response.append(
@@ -589,8 +612,7 @@ class TargetingPlugin(AbstractPlugin):
         targeting_graph = {
             p: list(targets) for p, targets in targeting_graph.items()
         }
-        targs = self._process_graph_updates(targeting_graph, response, max_event, set(player_seeds), teams)
-        return targs
+        return self._process_graph_updates(targeting_graph, response, max_event, set(player_seeds), teams)
 
     def old_compute_targets(self, response, max_event=100000000000000000):
         """
