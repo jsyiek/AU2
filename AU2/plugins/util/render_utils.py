@@ -1,20 +1,23 @@
+import dataclasses
 import datetime
 import itertools
+import os
 import re
-from typing import Callable, Dict, List, NamedTuple, Optional, Protocol, Sequence, Tuple
+
+from typing import Callable, Dict, Generator, List, NamedTuple, Optional, Protocol, Sequence, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
-from AU2.plugins.AbstractPlugin import NavbarEntry
-from AU2.plugins.util.CompetencyManager import CompetencyManager
-from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.WantedManager import WantedManager
+from AU2.database.model import Assassin, Event
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
+from AU2.plugins.CorePlugin import PLUGINS
+from AU2.plugins.util.colors import CORRUPT_CITY_WATCH_COLS, DEAD_COLS, DEAD_CITY_WATCH_COLS, HARDCODED_COLORS, HEX_COLS, \
+    INCO_COLS, CITY_WATCH_COLS, WANTED_COLS
 from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
 from AU2.plugins.util.game import get_game_start, soft_escape
+from AU2.plugins.util.navbar import generate_navbar, NavbarEntry
 
 NEWS_TEMPLATE: str
 with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "news.html", "r", encoding="utf-8", errors="ignore") as F:
@@ -39,50 +42,6 @@ REPORT_TEMPLATE = """<div class="report">{PSEUDONYM} reports: <br/>
 
 PSEUDONYM_TEMPLATE = """<b style="color:{COLOR}">{PSEUDONYM}</b>"""
 
-# TODO: make this configurable?
-HARDCODED_COLORS = {
-    "The Dragon Queen": "#19268A",
-    "Water Ghost": "#606060",
-    "Valheru": "#03FCEC",
-    "Vendetta": "#B920DB"
-}
-
-HEX_COLS = [
-    '#00A6A3', '#26CCC8', '#008B8A', '#B69C1F',
-    '#D1B135', '#5B836E', '#7A9E83', '#00822b',
-    '#00A563', '#FFA44D', '#CC6C1E', '#37b717',
-    '#27B91E', '#1F9E1A', '#3DC74E', '#00c6c3',
-    '#b7a020', '#637777', '#f28110'
-]
-
-DEAD_COLS = [
-    "#A9756C", "#A688BF", "#A34595", "#8C5D56",
-    "#8E7A9E", "#873A80", "#B0978F", "#9C8FA8",
-]
-
-
-INCO_COLS = [
-    "#FF33CC", "#FF6699", "#FF3399",
-    "#E63FAE", "#D94F9F", "#FF80BF",
-]
-
-CITY_WATCH_COLS = [
-    "#4D54E3", "#7433FF", "#3B6BD4",
-    "#0066CC", "#3366B2", "#4159E0",
-]
-
-DEAD_CITY_WATCH_COLS = [
-    "#000066"
-]
-
-CORRUPT_CITY_WATCH_COLS = [
-    "#9999CC"
-]
-
-WANTED_COLS = [
-    "#ff0033", "#cc3333", "#ff3300"
-]
-
 DEFAULT_REAL_NAME_BRIGHTNESS = 0.7
 
 HEAD_HEADLINE_TEMPLATE = """
@@ -92,62 +51,57 @@ HEAD_HEADLINE_TEMPLATE = """
 
 HEAD_DAY_TEMPLATE = """<h3 xmlns="">{DATE}</h3> {HEADLINES}"""
 
-LIST_ITEM_TEMPLATE = """<li><a href="{URL}">{DISPLAY}</a></li>\n"""
-
 FORMAT_SPECIFIER_REGEX = r"\[[P,D,L,N,V]([0-9]+)(?:_([0-9]+))?\]"
 
 Chapter = NamedTuple("Chapter", (("title", str), ("nav_entry", NavbarEntry)))
 
-
 def default_page_allocator(e: Event) -> Optional[Chapter]:
-    # TODO: move hidden Event attribute into core
+    """Basis page allocation function"""
     if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False):
         week = date_to_weeks_and_days(get_game_start().date(), e.datetime.date()).week
         return Chapter(f"Week {week} News", NavbarEntry(f"news{week:02}.html", f"Week {week} Reports", week))
 
 
+PageAllocator = Callable[[Event], Optional[Chapter]]
+
+
+@dataclasses.dataclass
+class PageAllocatorData:
+    """
+    Dataclass for the data sent to plugins for the "page_allocator" data hook.
+
+    Attributes:
+        event (Event): tells plugins which event is being allocated a page
+        chapter (Optional[Chapter]): modified by plugins to set the page alloction for the event
+        priority (float): tracks the priority level of the previous modification
+    """
+    event: Event
+    chapter: Optional[Chapter]
+    priority: float
+
+
+def hooked_page_allocator(e: Event) -> Optional[Chapter]:
+    """
+    Gets the (main) page allocation of a given Event, by calling a the "page_allocator" data hook
+
+    Args:
+        e (Event): Event to get the page of
+
+    Returns:
+        Optional[Chapter]: Either a Chapter NamedTuple representing the page that the event has been rendered on,
+            or `None` if it hasn't been rendered.
+    """
+    data = PLUGINS.data_hook("page_allocator", PageAllocatorData(event=e, priority=0, chapter=default_page_allocator(e)))
+    return data.chapter
+
+
 def event_url(e: Event, page: Optional[str] = None) -> str:
     """
     Generates the (relative) url pointing to this event's appearance on the news pages.
+    If the event doesn't appear on any page (i.e. is hidden), "" is returned.
     """
-    page = page or default_page_allocator(e).nav_entry.url
-    return f"{page}#{e._Event__secret_id}"
-
-
-class Manager(Protocol):
-    """
-    Interface for managers to process game state for correct player colouring.
-    Implemented by CompetencyManager, DeathManager, WantedManager, and also TeamManager from MayWeekUtilitiesPlugin
-    """
-    def add_event(self, e: Event):
-        """Interface for having a manager process an event."""
-
-
-def default_color_fn(pseudonym: str,
-                     assassin_model: Assassin,
-                     e: Event,
-                     plugin_managers: Sequence[Manager]) -> str:
-    """
-    Default rules for colouring pseudonyms.
-
-    Determines competency, wantedness, and vitality at the event `e` from managers in `plugin_manager` that have been
-    updated chronologically up to the event `e`.
-
-    Colour is then assigned by `get_color` using this information.
-    """
-    is_city_watch = assassin_model.is_city_watch
-
-    # retrieve info from managers
-    is_wanted, dead, incompetent = False, False, False
-    for manager in plugin_managers:
-        if isinstance(manager, DeathManager):
-            dead = manager.is_dead(assassin_model)
-        elif isinstance(manager, CompetencyManager):
-            incompetent = manager.is_inco_at(assassin_model, e.datetime)
-        elif isinstance(manager, WantedManager):
-            is_wanted = manager.is_player_wanted(assassin_model.identifier, time=e.datetime)
-
-    return get_color(pseudonym, dead, incompetent, is_city_watch, is_wanted)
+    page = page or hooked_page_allocator(e).nav_entry.url
+    return f"{page}#{e._Event__secret_id}" if page else ""
 
 
 def get_color(pseudonym: str,
@@ -155,7 +109,7 @@ def get_color(pseudonym: str,
               incompetent: bool = False,
               is_city_watch: bool = False,
               is_wanted: bool = False) -> str:
-    """Basic colouring rules that can be used by `ColorFn`s."""
+    """Basic colouring rules, currently only used by ScoringPlugin"""
     ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
     # colour appropriately
     if is_wanted:
@@ -244,30 +198,48 @@ def substitute_pseudonyms(string: str, main_pseudonym: str, assassin: Assassin, 
     return string
 
 
-# required signature when replacing default_color_fn
-ColorFn = Callable[[str, Assassin, Event, Sequence[Manager]], str]
+AggregateColorFn = Callable[[Assassin, str], str]
 
 
-def render_headline_and_reports(e: Event,
-                                plugin_managers: Sequence[Manager] = tuple(),
-                                color_fn: ColorFn = default_color_fn) -> (str, Dict[Tuple[str, int], str]):
+def aggregate_color_fn_generator() -> Generator[AggregateColorFn, Event, None]:
+    color_fn_generators = [p.colour_fn_generator() for p in PLUGINS]
+    [next(g) for g in color_fn_generators]  # need to start the generators first to be able to send events to them...
+    yield_next = None
+    try:
+        while True:
+            e = yield yield_next
+            color_fns = [g.send(e) for g in color_fn_generators]
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> str:
+                """
+                "Aggregated" colour function processing the priorities of each of the colour functions and returning a
+                single colour hexcode.
+                """
+                ind = sum(ord(c) for c in pseudonym)  # simple hash of the pseudonym
+                # note that because the colour functions return the priority as the 0th element,
+                # lexicographic ordering of their outputs gives the correct priority order
+                return max((t for f in color_fns if (t := f(assassin, pseudonym))),
+                           default=(0, HEX_COLS[ind % len(HEX_COLS)]))[1]
+
+            yield_next = color_fn
+    except GeneratorExit:
+        [g.close() for g in color_fn_generators]
+
+
+def render_headline_and_reports(e: Event, color_fn: AggregateColorFn) -> (str, Dict[Tuple[str, int], str]):
     """
     Produces the HTML renderings of an events headline and its reports
 
     Args:
         e (Event): the event to render the headline and reports of
-        plugin_managers (Sequence[Manager]): A sequence of managers that have been updated up to the event
-            `e`. When called by PageGeneratorPlugin this will contain a CompetencyManager, DeathManager, and
-            WantedManager, but other plugins may use it differently.
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
+        color_fn (AggregateColorFn): A function taking an assassin model and a pseudonym and returning the colour to
+            apply to the pseudonym
 
     Returns:
         (str, Dict[Tuple[str, int], str]): A tuple of:
             - the event `e`'s headline rendered as HTML
-            - a dict mapping tuples (assasin identifier, pseudonym index) to rendered HTML report bodies
+            - a dict mapping tuples (assassin identifier, pseudonym index) to rendered HTML report bodies
     """
-    plugin_managers = plugin_managers or tuple()
 
     headline = e.headline
 
@@ -296,12 +268,7 @@ def render_headline_and_reports(e: Event,
             pseudonym_index = int(match[1] or e.assassins.get(assassin_model.identifier, 0))
             pseudonym = assassin_model.get_pseudonym(pseudonym_index)
 
-            color = color_fn(
-                pseudonym,
-                assassin_model,
-                e,
-                plugin_managers
-            )
+            color = color_fn(assassin_model, pseudonym)
 
             candidate_pseudonyms.append((assassin_model, pseudonym, color))
 
@@ -314,32 +281,23 @@ def render_headline_and_reports(e: Event,
 
 
 def render_event(e: Event,
-                 page: str,
-                 plugin_managers: Sequence[Manager] = tuple(),
-                 color_fn: ColorFn = default_color_fn) -> (str, str):
+                 chapter: str,
+                 color_fn: AggregateColorFn) -> (str, str):
     """
     Renders the full HTML for the event, including headline and reports
     Also gives the HTML rendering of the headline for the headlines page.
 
     Args:
         e (Event): the event to render as html
-        page (str): the page that the Event is being rendered for. Needed for the correct href in the headline.
-        plugin_managers (Sequence[Manager]): A sequence of managers that have been updated up to the event
-            `e`. When called by PageGeneratorPlugin this will contain a CompetencyManager, DeathManager, and
-            WantedManager, but other plugins may use it differently.
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
+        chapter (str): the page that the Event is being rendered for. Needed for the correct href in the headline.
+        color_fn (AggregateColorFn): A function taking an assassin model and a pseudonym and returning the colour to
+            apply to the pseudonym
 
     Returns:
         (str, str): A tuple of (event_html, headline_html), i.e. html renderings of, respectively, the whole event
         (headline and reports, for news pages), and the headline only (for the headlines page).
     """
-    plugin_managers = plugin_managers or tuple()
-    headline, reports = render_headline_and_reports(
-        e,
-        plugin_managers=plugin_managers,
-        color_fn=color_fn
-    )
+    headline, reports = render_headline_and_reports(e, color_fn)
     report_list = []
     for ((assassin, pseudonym_index), r) in reports.items():
         # Umpires must tell AU to NOT escape HTML
@@ -351,12 +309,7 @@ def render_event(e: Event,
             # unfortunately can't do `= pseudonym_index or` because pseudonym_index can also be 0....
             pseudonym_index = e.assassins[assassin]
         pseudonym = assassin_model.get_pseudonym(pseudonym_index)
-        color = color_fn(
-            pseudonym,
-            assassin_model,
-            e,
-            plugin_managers
-        )
+        color = color_fn(assassin_model, pseudonym)
 
         painted_pseudonym = PSEUDONYM_TEMPLATE.format(COLOR=color, PSEUDONYM=soft_escape(pseudonym))
 
@@ -373,34 +326,21 @@ def render_event(e: Event,
         REPORTS=report_text
     )
     headline_html = HEAD_HEADLINE_TEMPLATE.format(
-        URL=event_url(e, page),
+        URL=event_url(e, chapter),
         TIME=time_str,
         HEADLINE=headline
     )
     return event_html, headline_html
 
-# required signature when replacing default_page_allocator
-PageAllocator = Callable[[Event], Optional[Chapter]]
 
-def render_all_events(page_allocator: PageAllocator = default_page_allocator,
-                      color_fn: ColorFn = default_color_fn,
-                      plugin_managers: Sequence[Manager] = tuple()) -> (List[str], Dict[Chapter, List[str]]):
+def render_all_events(page_allocator: PageAllocator = hooked_page_allocator) -> (List[str], Dict[Chapter, List[str]]):
     """
     Produces renderings of all events, sorted into pages according to `page_allocator`.
 
     Args:
         page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the title and
             navbar entry of the page the event is to be rendered on, or `None` if the event should be skipped.
-            E.g. an event in week 2 would be mapped to
-            Chapter("Week 2 News", NavbarEntry("week02.html", "Week 2 Reports", 2)).
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
-        plugin_managers (Sequence[Manager]): Sequence of additional, newly-initialised Managers that will be
-            passed into `color_fn` along with a CompetencyManager, DeathManager, and WantedManager.
-
-            Defaults to an empty tuple in which case only the managers just named will be used.
-
-            Events are added to these managers in chronological order.
+            E.g. an event in week 2 would be mapped to Chapter("Week 2 News", NavbarEntry("week02.html", "Week 2 News", 2))
 
     Returns:
         A tuple of: a list of strings where each element is the HTML rendering of one day's headlines, and a dict
@@ -408,6 +348,7 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
     """
     events = list(EVENTS_DATABASE.events.values())
     events.sort(key=lambda event: event.datetime)
+
     start_datetime = get_game_start()
 
     # maps chapter (news week) to day-of-week to list of reports
@@ -415,15 +356,14 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
     # days are 0-indexed (fun, huh?)
     events_for_chapter = {}
     headlines_for_day = {}
-    competency_manager = CompetencyManager(start_datetime)
-    death_manager = DeathManager()
-    wanted_manager = WantedManager()
-    plugin_managers = (competency_manager, death_manager, wanted_manager, *(plugin_managers or tuple()))
+
+    color_fn_generator = aggregate_color_fn_generator()
+    next(color_fn_generator)
 
     for e in events:
-        # don't skip adding hidden events to managers, in case a player dies in a hidden event, etc.
-        for manager in plugin_managers:
-            manager.add_event(e)
+        # get colour function for this event
+        # do this even if won't render this event because plugins may still need to process hidden events
+        color_fn = color_fn_generator.send(e)
 
         chapter = page_allocator(e)
         if not chapter:
@@ -432,12 +372,13 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
         event_text, headline_text = render_event(
             e,
             chapter.nav_entry.url,
-            color_fn=color_fn,
-            plugin_managers=plugin_managers,
+            color_fn
         )
 
         events_for_chapter.setdefault(chapter, {}).setdefault(e.datetime.date(), []).append(event_text)
         headlines_for_day.setdefault(e.datetime.date(), []).append(headline_text)
+
+    color_fn_generator.close()
 
     chapters = {}
     for (w, d_dict) in events_for_chapter.items():
@@ -463,54 +404,18 @@ def render_all_events(page_allocator: PageAllocator = default_page_allocator,
     return head_days, chapters
 
 
-def generate_navbar(navbar_entries: List[NavbarEntry], filename: str):
-    """
-    Generates a html list of page links, for inclusion into header.html using `w3-include-html`.
-
-    Args:
-        navbar_entries (list(NavbarEntry)): each NavberEntry namedtuple specifies a url, display text, and position.
-            The position is a float value and the entries are rendered from top to bottom in *ascending* order of
-            position.
-        filename (str): the filename to save the list under (in the WEBPAGE_WRITE_LOCATION directory).
-    """
-    with open(WEBPAGE_WRITE_LOCATION / filename, "w+", encoding="utf-8", errors="ignore") as f:
-        f.write("\n".join(
-            LIST_ITEM_TEMPLATE.format(
-                URL=entry.url,
-                DISPLAY=entry.display
-            ) for entry in sorted(navbar_entries, key=lambda e: e.position)
-        ))
-
-
-def generate_news_pages(headlines_path: str,
-                        page_allocator: PageAllocator = default_page_allocator,
-                        color_fn: ColorFn = default_color_fn,
-                        plugin_managers: Sequence[Manager] = tuple(),
-                        news_list_path: str = ""):
+def generate_news_pages(headlines_path: str, news_list_path: str = "",
+                        page_allocator: PageAllocator = hooked_page_allocator):
     """
     Generates news pages sorted according to `page_allocator`.
 
     Args:
         headlines_path (str): filename to save the headlines page under. If empty ("") no headlines page is generated.
-        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the name and title
-            of the page the event is to be rendered on, or `None` if the event should be skipped.
-            E.g. an event in week 2 would be mapped to Chapter("week02", "Week 2 News").
-        color_fn (ColorFn): A function taking a pseudonym, assassin model, event model and a sequence of Managers, and
-            returning a colour hexcode (including #). Defaults to `default_color_fn`.
-        plugin_managers (Sequence[Manager]): Sequence of additional, newly-initialised Managers that will be
-            passed into `color_fn` along with a CompetencyManager, DeathManager, and WantedManager.
-
-            Defaults to an empty tuple in which case only the managers just named will be used.
-
-            Events are added to these managers in chronological order.
-        news_list_path (str): filename to save the list of news pages for the header under. If empty ("") no list is
-            generated.
+        page_allocator (PageAllocator): A function mapping an Event to a `Chapter` namedtuple giving the title and
+            navbar entry of the page the event is to be rendered on, or `None` if the event should be skipped.
+            E.g. an event in week 2 would be mapped to Chapter("Week 2 News", NavbarEntry("week02.html", "Week 2 News", 2))
     """
-    headline_days, chapters = render_all_events(
-        page_allocator=page_allocator,
-        color_fn=color_fn,
-        plugin_managers=plugin_managers
-    )
+    headline_days, chapters = render_all_events(page_allocator)
 
     news_navbar_entries = []
 
@@ -522,6 +427,7 @@ def generate_news_pages(headlines_path: str,
         )
         with open(WEBPAGE_WRITE_LOCATION / headlines_path, "w+", encoding="utf-8", errors="ignore") as F:
             F.write(head_page_text)
+
         news_navbar_entries.append(NavbarEntry(headlines_path, "Headlines", -1))
 
     # generate news pages

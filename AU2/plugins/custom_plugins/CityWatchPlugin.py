@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict
+from typing import Dict, List, Optional, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -14,13 +14,15 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, ColorFnGenerator, ConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CityWatchRankManager import DEFAULT_RANKS, CityWatchRankManager, DEFAULT_CITY_WATCH_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, CITY_WATCH_KILLS_RANKUP_DEFAULT
 from AU2.plugins.util.DeathManager import DeathManager
+from AU2.plugins.util.colors import DEAD_CITY_WATCH_COLS, CITY_WATCH_COLS
 from AU2.plugins.util.date_utils import get_now_dt, PRETTY_DATETIME_FORMAT
+from AU2.plugins.util.navbar import NavbarEntry
 from AU2.plugins.util.render_utils import event_url
 
 CITY_WATCH_TABLE_TEMPLATE = """
@@ -109,6 +111,24 @@ class CityWatchPlugin(AbstractPlugin):
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]['id']] = data
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        yield_next = None
+        while True:
+            e = yield yield_next
+
+            def color_fn(assassin: Assassin, pseudonym: str) -> Optional[Tuple[float, str]]:
+                """Special colouring for city watch"""
+                if assassin.is_city_watch:
+                    ind = sum(ord(c) for c in pseudonym)
+                    if any(victim == assassin.identifier for _, victim in e.kills):
+                        # case where city watch member died in event
+                        return 5, DEAD_CITY_WATCH_COLS[ind % len(DEAD_CITY_WATCH_COLS)]
+                    else:
+                        # live city watch
+                        return 1, CITY_WATCH_COLS[ind % len(CITY_WATCH_COLS)]
+
+            yield_next = color_fn
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         return [

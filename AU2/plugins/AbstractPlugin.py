@@ -1,8 +1,11 @@
-from typing import Any, Callable, List, NamedTuple, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Generator, List, NamedTuple, Optional, Tuple, Type, TypeVar, Union
 
 from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
+from AU2.plugins.util.navbar import NavbarEntry
+
+ColorFnGenerator = Generator[Callable[[Assassin, str], Optional[Tuple[float, str]]], Event, None]
 
 T = TypeVar("T")
 
@@ -111,8 +114,6 @@ class HookedExport:
 
 
 AttributePairTableRow = Tuple[str, str]
-NavbarEntry = NamedTuple("NavbarEntry", (("url", str), ("display", str), ("position", float)))
-
 
 
 class AbstractPlugin:
@@ -197,6 +198,30 @@ class AbstractPlugin:
                 4: Stats
         """
         return []
+
+    def colour_fn_generator(self) -> ColorFnGenerator:
+        """
+        Allows plugins to affect the colouring of assassin pseudonyms.
+        For reference, the priority values for each situation are:
+            6: wanted (with different colours for city watch and full players)
+            5: dead city watch (only when CityWatchPlugin enabled)
+            4: dead
+            3: inco
+            2: hardcoded pseudonym-based colours
+            1.5: teams (only when MayWeekUtilitiesPlugin enabled)
+            1: city watch (only when CityWatchPlugin enabled)
+
+        Yields:
+            Callable[[Assassin, int], Optional[Tuple[float, str]]]: A function taking an assassin model and pseudonym
+                as input and returning either
+                    - a tuple of a float-valued priority and colour hexcode, or
+                    - `None` to ignore this plugin.
+
+        Receives:
+            Event: events are sent to the generator in chronological order
+        """
+        while True:
+            yield lambda a, p: None
 
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         """
