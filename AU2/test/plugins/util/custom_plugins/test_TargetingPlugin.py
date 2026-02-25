@@ -211,3 +211,38 @@ class TestTargetingPlugin:
         targs = plugin.compute_targets([])
         assert_valid_targets(len(game.get_remaining_players()), targs)
         assert_seeds_respected(targs, seeds)
+
+    @plugin_test
+    def test_incremental(self):
+        num_players = 20
+        p = some_players(num_players)
+        game = MockGame().having_assassins(p)
+
+        plugin = TargetingPlugin()
+
+        # create a team so that it is the new algo being used
+        team_size = 4
+        teams = [[x + " identifier" for x in p[:team_size]]]
+        plugin.answer_set_teams({
+            plugin.html_ids["Teams"]: teams
+        })
+
+        seeds = [p[0] + " identifier", p[num_players-1] + " identifier"]
+        plugin.answer_set_seeds({
+            plugin.html_ids["Seeds"]: seeds
+        })
+
+        # check initial targets ok
+        targs = plugin.compute_targets([])
+        assert_valid_targets(len(game.get_remaining_players()), targs)
+        assert_teams_respected(targs, teams)
+        assert_seeds_respected(targs, seeds)
+
+        game.assassin(p[0]).kills(p[team_size])
+
+        # check updating targets ok
+        targs2 = plugin.compute_targets([])
+        assert_valid_targets(len(game.get_remaining_players()), targs2)
+        assert_teams_respected(targs2, teams)
+        assert_seeds_respected(targs2, seeds)
+        assert (p[team_size] + " identifier") not in targs2
