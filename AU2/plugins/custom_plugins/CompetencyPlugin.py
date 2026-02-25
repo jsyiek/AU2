@@ -293,10 +293,25 @@ class CompetencyPlugin(AbstractPlugin):
                 Event(
                     assassins={j: 0 for j in i} | {umpire: 0},
                     datetime=htmlResponse[self.html_ids['Datetime']],
-                    headline=f"Gigabolt stage {idx+1}" if (idx or not headline) else headline,
+                    headline=f"Gigabolt stage {idx+1}",
                     reports={},
                     kills=[(umpire, j) for j in i],
-                    pluginState={"PageGeneratorPlugin": {"hidden_event": bool(idx) or not headline}}
+                    pluginState={
+                        "PageGeneratorPlugin": {"hidden_event": True},
+                        # for forwards-compatibility: we might want to treat gigabolt kills separately
+                        # e.g. on the stats page
+                        self.identifier: {"is_gigabolt": True},
+                    }
+                )
+            )
+        # have a separate event for the headline,
+        # as we want all the kills to be in hidden events so that they can be excluded from the kill graph
+        if headline:
+            EVENTS_DATABASE.add(
+                Event(
+                    datetime=htmlResponse[self.html_ids['Datetime']],
+                    headline=headline,
+                    assassins={}, reports=[], kills=[],
                 )
             )
 
