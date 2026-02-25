@@ -1,0 +1,536 @@
+# Taken from https://github.com/snarktank/ai-pr-review - thanks!!
+name: AI PR Review 
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+env:
+  # Change to APPROVE / REQUEST_CHANGES / COMMENT
+  REVIEW_EVENT: COMMENT
+  # Configure which CLI to run for the review. Default is amp execute mode.
+  REVIEW_CLI_BIN: claude
+  REVIEW_CLI_ARGS: -p --output-format json --max-turns 3
+  # Tweak to your liking  
+  SYSTEM_PROMPT: |
+    Review this patch like a senior engineer.
+    Prioritize correctness, security, performance, readability, and tests.
+    Be concise and constructive. Group related issues.
+    Make use of the suggestions syntax for code alterations. 
+    If a AGENT.md or CLAUDE.md file exists, make sure the code complies with it.
+
+jobs:
+  review:
+    if: github.event.label.name == 'AI-Review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: ai-pr-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify tools
+        run: |
+          node -v
+          npm -v
+          jq --version
+          curl --version
+
+      - name: Install review CLI if missing (defaults to amp)
+        run: |
+          set -euo pipefail
+          if ! command -v "$REVIEW_CLI_BIN" >/dev/null 2>&1; then
+            if [ "$REVIEW_CLI_BIN" = "amp" ]; then
+              echo "Installing latest amp via npm..."
+              npm install -g @sourcegraph/amp@latest || {
+                echo "npm install failed; trying curl installer for latest..." >&2
+                curl -fsSL https://ampcode.com/install.sh | bash
+              }
+              command -v amp >/dev/null 2>&1 || { echo "amp not found after install" >&2; exit 1; }
+              amp --version
+            elif [ "$REVIEW_CLI_BIN" = "claude" ]; then
+              echo "Installing claude via npm..."
+              npm install -g @anthropic-ai/claude-code
+              command -v claude >/dev/null 2>&1 || { echo "claude not found after install" >&2; exit 1; }
+              claude --version || true
+            else
+              echo "Configured REVIEW_CLI_BIN=$REVIEW_CLI_BIN not found on PATH. Please ensure it is preinstalled." >&2
+              exit 1
+            fi
+          else
+            "$REVIEW_CLI_BIN" --version || true
+          fi
+
+
+      - name: Gather PR context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Set for this step and export for later steps
+          PR="${{ github.event.pull_request.number }}"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          echo "PR=$PR" >> "$GITHUB_ENV"
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+
+          # Use explicit repo + PR number in detached HEAD context
+          gh pr view "$PR" --repo "${{ github.repository }}" --json number,title,body,author,baseRefName,headRefName,url > pr.json
+          gh pr diff "$PR" --repo "${{ github.repository }}" --patch > diff.patch
+
+      - name: Run AI review
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AMP_API_KEY: ${{ secrets.AMP_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          # Map AI_API_KEY to vendor-specific vars when missing
+          export AMP_API_KEY="${AMP_API_KEY:-${AI_API_KEY:-}}"
+          export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${AI_API_KEY:-}}"
+          # Mask API keys in logs just in case
+          if [ -n "${AI_API_KEY:-}" ]; then echo "::add-mask::${AI_API_KEY}"; fi
+          if [ -n "${AMP_API_KEY:-}" ]; then echo "::add-mask::${AMP_API_KEY}"; fi
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then echo "::add-mask::${ANTHROPIC_API_KEY}"; fi
+
+          # Compose the instruction sent to cli (XML output with example)
+          INSTRUCTION=$(cat <<'EOF'
+          You are performing a single-pass human-style PR review.
+
+          Inputs:
+          - You will receive a unified diff (the PR patch) via stdin.
+          - Comment only on added lines; avoid spam.
+
+          Output format - XML with this exact structure:
+
+          <review>
+            <summary>Overall assessment in 2-3 sentences. Focus on correctness, security, and readability.</summary>
+            <comments>
+              <comment>
+                <file>path/to/file.ext</file>
+                <line>123</line>
+                <body>Your comment about this specific line</body>
+              </comment>
+              <!-- Add more comment blocks as needed, or leave empty if no specific issues -->
+              <!-- IMPORTANT: The <line> must be the actual line number in the NEW version of the file (the number shown after the + in hunk headers like @@ -10,5 +15,8 @@). The line must fall within a diff hunk. Only comment on lines that were added (+ prefixed) or are within hunk context. -->
+            </comments>
+            <status>
+              <state>success</state> <!-- or "failure" if issues need fixing before merge -->
+              <description>Brief reason (under 120 chars)</description>
+            </status>
+          </review>
+
+          Example good response:
+          <review>
+            <summary>This PR adds user authentication with proper input validation. The implementation looks solid overall with good error handling.</summary>
+            <comments>
+              <comment>
+                <file>auth.js</file>
+                <line>45</line>
+                <body>Consider using bcrypt.compare() instead of === for password comparison to prevent timing attacks.</body>
+              </comment>
+            </comments>
+            <status>
+              <state>success</state>
+              <description>LGTM with minor security suggestion</description>
+            </status>
+          </review>
+          EOF
+          )
+
+          # Run CLI in execute mode with retries for malformed/empty output
+          echo "Running AI review..."
+          echo "Command: $REVIEW_CLI_BIN $REVIEW_CLI_ARGS"
+          echo "Diff size: $(wc -c < diff.patch) bytes"
+          
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES..."
+            
+            if cat diff.patch | timeout 300 "$REVIEW_CLI_BIN" $REVIEW_CLI_ARGS "${SYSTEM_PROMPT}
+
+          ${INSTRUCTION}" > ai_output.xml; then
+              # Check if output contains valid XML with required elements
+              if grep -q "<review>" ai_output.xml && grep -q "<summary>" ai_output.xml && grep -q "</review>" ai_output.xml; then
+                echo "Valid XML review received"
+                break
+              else
+                echo "Invalid or empty XML received, retrying..."
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+              fi
+            else
+              echo "AI call failed, retrying..."
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+            fi
+            
+            # Add delay between retries
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              echo "Waiting 5 seconds before retry..."
+              sleep 5
+            fi
+          done
+          
+          # If all retries failed, create fallback response
+          if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            echo "All 5 retry attempts failed, creating fallback response"
+            cat > ai_output.xml <<'FALLBACK'
+          <review>
+            <summary>AI review failed after multiple attempts.</summary>
+            <comments></comments>
+            <status>
+              <state>success</state>
+              <description>AI Review completed with fallback</description>
+            </status>
+          </review>
+          FALLBACK
+          fi
+
+          echo "AI review completed"
+          echo "--- XML Output ---"
+          cat ai_output.xml
+          echo -e "\n--- End XML Output ---"
+
+          # Extract sections using Node.js for reliable parsing
+          echo "Using Node.js for XML parsing..."
+          node -e "
+          const fs = require('fs');
+          try {
+            const xmlText = fs.readFileSync('ai_output.xml', 'utf8');
+            
+            // Extract summary
+            const summaryMatch = xmlText.match(/<summary>([\s\S]*?)<\/summary>/);
+            const summary = summaryMatch ? summaryMatch[1].trim() : 'No summary found';
+            fs.writeFileSync('summary.txt', summary);
+            
+            // Extract state  
+            const stateMatch = xmlText.match(/<state>([\s\S]*?)<\/state>/);
+            const state = stateMatch ? stateMatch[1].trim() : 'success';
+            fs.writeFileSync('state.txt', state);
+            
+            // Extract description
+            const descMatch = xmlText.match(/<description>([\s\S]*?)<\/description>/);
+            const desc = descMatch ? descMatch[1].trim() : 'AI Review completed';
+            fs.writeFileSync('description.txt', desc);
+            
+          } catch (error) {
+            fs.writeFileSync('summary.txt', 'XML parsing failed');
+            fs.writeFileSync('state.txt', 'success');
+            fs.writeFileSync('description.txt', 'AI Review completed');
+          }
+          "
+
+          # Convert summary to markdown for review body
+          echo "## Summary" > review.md
+          cat summary.txt >> review.md
+
+          # Extract inline comments for GitHub API
+          echo "[]" > comments.json
+          if grep -q "<comment>" ai_output.xml; then
+            echo "Processing inline comments for GitHub API..."
+            
+            # Use absolute line numbers with side (much more reliable than positions)
+            echo "Extracting comments with absolute line numbers..."
+            
+            node -e "
+            const fs = require('fs');
+
+            try {
+              // --- Parse diff.patch to build valid line numbers per file ---
+              const diffText = fs.readFileSync('diff.patch', 'utf8');
+              const diffLines = diffText.split('\n');
+              const validLines = {}; // { filePath: Set of valid RIGHT-side line numbers }
+              let currentFile = null;
+              let newLineNum = 0;
+
+              for (const line of diffLines) {
+                // Detect file path from +++ header
+                const fileMatch = line.match(/^\+\+\+ b\/(.+)/);
+                if (fileMatch) {
+                  currentFile = fileMatch[1];
+                  if (!validLines[currentFile]) validLines[currentFile] = new Set();
+                  continue;
+                }
+                // Parse hunk header
+                const hunkMatch = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+                if (hunkMatch) {
+                  newLineNum = parseInt(hunkMatch[1]);
+                  continue;
+                }
+                if (!currentFile) continue;
+                // Context line (in both old and new)
+                // or added line (only in new)
+                if (line.startsWith(' ') || line.startsWith('+')) {
+                  validLines[currentFile].add(newLineNum);
+                  newLineNum++;
+                }
+              }
+
+              // Save valid lines map for potential retry use
+              const validLinesMap = {};
+              for (const [file, lineSet] of Object.entries(validLines)) {
+                validLinesMap[file] = [...lineSet].sort((a, b) => a - b);
+              }
+              fs.writeFileSync('valid_lines_map.json', JSON.stringify(validLinesMap));
+
+              // --- Extract and validate AI comments ---
+              const xmlText = fs.readFileSync('ai_output.xml', 'utf8');
+              const validComments = [];
+              const invalidComments = [];
+
+              const commentBlocks = xmlText.match(/<comment>[\s\S]*?<\/comment>/g) || [];
+
+              for (const block of commentBlocks) {
+                const fileMatch = block.match(/<file>(.*?)<\/file>/);
+                const lineMatch = block.match(/<line>(.*?)<\/line>/);
+                const bodyMatch = block.match(/<body>([\s\S]*?)<\/body>/);
+
+                if (fileMatch && lineMatch && bodyMatch) {
+                  const file = fileMatch[1].trim();
+                  const line = parseInt(lineMatch[1].trim());
+                  const body = bodyMatch[1].trim();
+
+                  const comment = {
+                    path: file,
+                    line: line,
+                    side: 'RIGHT',
+                    body: body
+                  };
+
+                  // Validate against diff
+                  const fileLines = validLines[file];
+                  if (fileLines && fileLines.has(line)) {
+                    validComments.push(comment);
+                  } else {
+                    comment.reason = !fileLines
+                      ? 'file not found in diff'
+                      : 'line ' + line + ' is not within any diff hunk';
+                    invalidComments.push(comment);
+                  }
+                }
+              }
+
+              console.log('Valid comments: ' + validComments.length + ', Invalid comments: ' + invalidComments.length);
+
+              fs.writeFileSync('comments.json', JSON.stringify(validComments));
+              fs.writeFileSync('invalid_comments.json', JSON.stringify(invalidComments));
+
+            } catch (error) {
+              console.error('Comment extraction/validation error: ' + error.message);
+              fs.writeFileSync('comments.json', '[]');
+              fs.writeFileSync('invalid_comments.json', '[]');
+              fs.writeFileSync('valid_lines_map.json', '{}');
+            }
+            "
+            
+            echo "Generated comments JSON:"
+            cat comments.json
+
+            # --- Retry loop: correct invalid comments ---
+            VALIDATION_RETRIES=0
+            MAX_VALIDATION_RETRIES=2
+
+            while [ $VALIDATION_RETRIES -lt $MAX_VALIDATION_RETRIES ]; do
+              INVALID_COUNT=$(node -e "try { const d=JSON.parse(require('fs').readFileSync('invalid_comments.json','utf8')); console.log(d.length); } catch(e) { console.log('0'); }")
+              # Default to 0 if node output was non-numeric (e.g. unexpected warnings on stdout)
+              case "$INVALID_COUNT" in ''|*[!0-9]*) INVALID_COUNT=0 ;; esac
+              if [ "$INVALID_COUNT" -eq 0 ]; then
+                echo "All comments are valid, no correction needed."
+                break
+              fi
+              VALIDATION_RETRIES=$((VALIDATION_RETRIES + 1))
+              echo "Found $INVALID_COUNT invalid comments. Correction attempt $VALIDATION_RETRIES of $MAX_VALIDATION_RETRIES..."
+
+              # Build correction prompt and write to file (avoids shell escaping issues with AI-generated content)
+              if ! node -e "
+              const fs = require('fs');
+              try {
+                const invalid = JSON.parse(fs.readFileSync('invalid_comments.json', 'utf8'));
+                const validMap = JSON.parse(fs.readFileSync('valid_lines_map.json', 'utf8'));
+
+                let prompt = 'Some of your review comments have invalid line numbers that do not fall within any diff hunk. Please correct ONLY these comments.\n\n';
+                prompt += 'INVALID COMMENTS:\n';
+                for (const c of invalid) {
+                  prompt += '- File: ' + c.path + ', Line: ' + c.line + ', Reason: ' + c.reason + '\n';
+                  prompt += '  Body: ' + c.body + '\n';
+                }
+                prompt += '\nVALID LINE NUMBERS PER FILE:\n';
+                const affectedFiles = [...new Set(invalid.map(c => c.path))];
+                for (const file of affectedFiles) {
+                  const lines = validMap[file];
+                  if (lines) {
+                    prompt += '- ' + file + ': ' + lines.join(', ') + '\n';
+                  } else {
+                    prompt += '- ' + file + ': NOT IN DIFF (file was not changed)\n';
+                  }
+                }
+                prompt += '\nOutput ONLY corrected <comment> blocks in the same XML format. Pick the closest valid line number for each comment. If a file is not in the diff, drop that comment entirely.\n';
+                prompt += 'Format:\n<comments>\n  <comment>\n    <file>path</file>\n    <line>NUMBER</line>\n    <body>comment text</body>\n  </comment>\n</comments>';
+                fs.writeFileSync('correction_prompt.txt', prompt);
+              } catch(e) {
+                console.error('Failed to build correction prompt: ' + e.message);
+                process.exit(1);
+              }
+              "; then
+                echo "Failed to build correction prompt, skipping retry."
+                break
+              fi
+
+              echo "Sending correction prompt to AI..."
+              if cat correction_prompt.txt | timeout 120 "$REVIEW_CLI_BIN" $REVIEW_CLI_ARGS "$SYSTEM_PROMPT" > correction_output.xml 2>/dev/null; then
+                echo "Correction response received:"
+                cat correction_output.xml
+
+                # Parse corrected comments and validate them
+                node -e "
+                const fs = require('fs');
+                try {
+                  const correctionText = fs.readFileSync('correction_output.xml', 'utf8');
+                  const validMap = JSON.parse(fs.readFileSync('valid_lines_map.json', 'utf8'));
+                  const existingValid = JSON.parse(fs.readFileSync('comments.json', 'utf8'));
+
+                  const validLines = {};
+                  for (const [file, lines] of Object.entries(validMap)) {
+                    validLines[file] = new Set(lines);
+                  }
+
+                  const newValid = [];
+                  const stillInvalid = [];
+                  const blocks = correctionText.match(/<comment>[\s\S]*?<\/comment>/g) || [];
+
+                  for (const block of blocks) {
+                    const fileMatch = block.match(/<file>(.*?)<\/file>/);
+                    const lineMatch = block.match(/<line>(.*?)<\/line>/);
+                    const bodyMatch = block.match(/<body>([\s\S]*?)<\/body>/);
+
+                    if (fileMatch && lineMatch && bodyMatch) {
+                      const file = fileMatch[1].trim();
+                      const line = parseInt(lineMatch[1].trim());
+                      const body = bodyMatch[1].trim();
+                      const comment = { path: file, line, side: 'RIGHT', body };
+
+                      const fileSet = validLines[file];
+                      if (fileSet && fileSet.has(line)) {
+                        newValid.push(comment);
+                      } else {
+                        comment.reason = !fileSet ? 'file not found in diff' : 'line ' + line + ' is not within any diff hunk';
+                        stillInvalid.push(comment);
+                      }
+                    }
+                  }
+
+                  // Merge newly valid comments with existing valid ones
+                  const allValid = [...existingValid, ...newValid];
+                  fs.writeFileSync('comments.json', JSON.stringify(allValid));
+                  fs.writeFileSync('invalid_comments.json', JSON.stringify(stillInvalid));
+                  console.log('After correction: ' + newValid.length + ' newly valid, ' + stillInvalid.length + ' still invalid');
+                } catch(e) {
+                  console.error('Failed to parse correction output: ' + e.message);
+                  // Clear invalid so the loop exits — we keep whatever valid comments we already have
+                  fs.writeFileSync('invalid_comments.json', '[]');
+                }
+                "
+              else
+                echo "Correction AI call failed, skipping retry."
+                break
+              fi
+            done
+
+            # Final summary
+            FINAL_VALID=$(node -e "try { console.log(JSON.parse(require('fs').readFileSync('comments.json','utf8')).length); } catch(e) { console.log('0'); }")
+            FINAL_INVALID=$(node -e "try { console.log(JSON.parse(require('fs').readFileSync('invalid_comments.json','utf8')).length); } catch(e) { console.log('0'); }")
+            echo "Final result: $FINAL_VALID valid comments, $FINAL_INVALID dropped invalid comments"
+          fi
+
+          # Create status JSON
+          STATE=$(cat state.txt)
+          DESC=$(cat description.txt)
+          echo "{\"state\":\"$STATE\",\"description\":\"$DESC\"}" > status.json
+
+      - name: Post PR review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Guard: ensure required files exist with sensible defaults
+          if [ ! -s review.md ]; then
+            echo "## Summary" > review.md
+            echo "AI review completed (no summary available)." >> review.md
+          fi
+          if [ ! -s comments.json ]; then
+            echo "[]" > comments.json
+          fi
+
+          # Build review payload with body + comments array
+          jq -n \
+            --arg event "${REVIEW_EVENT}" \
+            --arg body "$(cat review.md)" \
+            --argjson comments "$(cat comments.json)" \
+            '{ event: $event, body: $body, comments: $comments }' > review_payload.json
+
+          # Post the review, with fallback to summary-only if inline comments cause a 422
+          if gh api \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${{ github.repository }}/pulls/$PR/reviews" \
+            --input review_payload.json; then
+            echo "Review posted successfully with inline comments."
+          else
+            echo "Review post failed (likely 422 from invalid inline comments). Retrying with summary only..."
+            jq -n \
+              --arg event "${REVIEW_EVENT}" \
+              --arg body "$(cat review.md)" \
+              '{ event: $event, body: $body, comments: [] }' > review_payload_fallback.json
+
+            gh api \
+              -X POST \
+              -H "Accept: application/vnd.github+json" \
+              "repos/${{ github.repository }}/pulls/$PR/reviews" \
+              --input review_payload_fallback.json
+            echo "Fallback review posted with summary only (no inline comments)."
+          fi
+
+      - name: Set commit status from AI StatusJSON
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Guard: create a default status if missing
+          if [ ! -f status.json ]; then
+            echo '{"state":"success","description":"AI Review completed"}' > status.json
+          fi
+          STATE=$(jq -r '.state // "success"' status.json)
+          DESC=$(jq -r '.description // "AI Review completed"' status.json)
+          SHA="${{ github.event.pull_request.head.sha }}"
+          gh api \
+            -X POST \
+            repos/${{ github.repository }}/statuses/${SHA} \
+            -f state="$STATE" \
+            -f context="AI PR Review" \
+            -f description="$DESC"
+
+      - name: Remove AI-Review label
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --remove-label "AI-Review"

@@ -1,0 +1,124 @@
+name: Release AU2
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      target_branch:
+        description: "Branch to release from"
+        required: true
+        default: master
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUMP: ${{ inputs.bump || 'patch' }}
+      TARGET_BRANCH: ${{ inputs.target_branch || github.head_ref || 'master' }}
+      IS_DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Calculate new version
+        run: |
+          python3 << 'PYEOF'
+          import os, re, subprocess
+
+          # Read current version from setup.py
+          with open("setup.py") as f:
+              content = f.read()
+          m = re.search(r"version='(\d+)\.(\d+)\.(\d+)'", content)
+          if not m:
+              raise SystemExit("Could not parse version from setup.py")
+          major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+
+          bump = os.environ["BUMP"]
+          if bump == "major":
+              major += 1
+              minor = 0
+              patch = 0
+          elif bump == "minor":
+              minor += 1
+              patch = 0
+          elif bump == "patch":
+              patch += 1
+
+          # Dedup: keep incrementing if tag already exists
+          while True:
+              version = f"{major}.{minor}.{patch}"
+              tag = f"v{version}"
+              result = subprocess.run(
+                  ["gh", "release", "view", tag],
+                  capture_output=True, text=True
+              )
+              if result.returncode != 0:
+                  # Tag does not exist — we can use it
+                  break
+              print(f"Tag {tag} already exists, trying next...")
+              if bump == "major":
+                  major += 1
+              elif bump == "minor":
+                  minor += 1
+              else:
+                  patch += 1
+
+          print(f"Selected version: {version} (tag: {tag})")
+
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"VERSION={version}\n")
+              env.write(f"TAG={tag}\n")
+          PYEOF
+
+      - name: Update version in setup.py
+        if: env.IS_DISPATCH == 'true'
+        run: |
+          sed -i "s/version='.*'/version='$VERSION'/" setup.py
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add setup.py
+          git commit -m "Bump version to $VERSION"
+          git push origin HEAD:${{ env.TARGET_BRANCH }}
+
+      - name: Install dependencies
+        run: pip install pytz
+
+      - name: Run packager
+        run: |
+          python -m AU2.frontends.au2_packager \
+            --version-name "$VERSION" \
+            --dest "${{ runner.temp }}/release"
+          ls -lh "${{ runner.temp }}/release/au2-v${VERSION}.zip"
+
+      - name: Create GitHub Release
+        if: env.IS_DISPATCH == 'true'
+        run: |
+          LATEST_FLAG=""
+          if [ "${{ env.TARGET_BRANCH }}" = "master" ]; then
+            LATEST_FLAG="--latest"
+          fi
+          gh release create "$TAG" \
+            "${{ runner.temp }}/release/au2-v${VERSION}.zip" \
+            --title "AU2 $TAG" \
+            --generate-notes \
+            --target ${{ env.TARGET_BRANCH }} \
+            $LATEST_FLAG
