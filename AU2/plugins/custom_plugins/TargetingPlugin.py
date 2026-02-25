@@ -143,8 +143,7 @@ class TargetingPlugin(AbstractPlugin):
             )
         ]
 
-        for param in self.targeting_parameters:
-            self.set_targeting_param(param.name, param.default_value)
+        self.tp_defaults = {param.name: param.default_value for param in self.targeting_parameters}
 
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
@@ -163,7 +162,8 @@ class TargetingPlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("targeting_params", {})[name] = val
 
     def get_targeting_param(self, name: str) -> int:
-        return GENERIC_STATE_DATABASE.arb_state[self.identifier]["targeting_params"][name]
+        return GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("targeting_params", {})\
+            .setdefault(name, self.tp_defaults[name])
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         if self.get_last_emailed_event() > -1:
