@@ -52,9 +52,9 @@ class ChainGenerator:
     targeting_graph: Dict[str, Set[str]]
     player_teammate_mapping: Dict[str, Set[str]]
 
-    broke_team_constraint = False
-    broke_triangle_constraint = False
-    broke_mutual_constraint = False
+    broke_team_constraint: bool = False
+    broke_triangle_constraint: bool = False
+    broke_mutual_constraint: bool = False
 
     def check_constraints(self, next_p: str, curr_p: str, prev_p: str,
                           no_triangles=True, no_teammates=True, no_mutuals=True) -> bool:
@@ -153,19 +153,23 @@ class ChainGenerator:
             # finally if even that fails we allow mutual targeting
             if len(remaining_players) == remaining_before:
                 if not enforce_teams:
-                    remaining_players = self.lengthen_chain(no_teammates=False)
+                    remaining_players = self.lengthen_chain(chain, remaining_players, no_teammates=False)
                     self.broke_team_constraint = True
                 else:
                     raise FailedToCreateChainException()
                 if len(remaining_players) == remaining_before:
                     if not enforce_no_triangles:
-                        remaining_players = self.lengthen_chain(no_triangles=False, no_teammates=False)
+                        remaining_players = self.lengthen_chain(chain, remaining_players,
+                                                                no_triangles=False, no_teammates=False)
                         self.broke_triangle_constraint = True
                     else:
                         raise FailedToCreateChainException()
                     if len(remaining_players) == remaining_before:
                         if enforce_no_mutuals:
-                            remaining_players = self.lengthen_chain(no_triangles=False, no_teammates=False, no_mutuals=False)
+                            remaining_players = self.lengthen_chain(chain, remaining_players,
+                                                                    no_triangles=False,
+                                                                    no_teammates=False,
+                                                                    no_mutuals=False)
                             self.broke_mutual_constraint = True
                         else:
                             raise FailedToCreateChainException()
@@ -186,7 +190,8 @@ class ChainGenerator:
         return chain
 
     def reset(self):
-        self.targeting_graph = {}
+        """Called when initial graph generation is re-attempted 'from scratch'"""
+        self.targeting_graph.clear()
         self.broke_triangle_constraint = False
         self.broke_team_constraint = False
         self.broke_mutual_constraint = False
@@ -571,7 +576,6 @@ class TargetingPlugin(AbstractPlugin):
 
         # generate initial targets via "chains"
         TARGETS_PER_PLAYER = self.get_targeting_param("targets_per_player")
-        targeting_graph = {}
 
         # controls how quickly to give up on enforcing constraints (rather than restarting from scratch)
         RELAXATION_THRESHOLD = self.get_targeting_param("relaxation_threshold")
@@ -586,7 +590,7 @@ class TargetingPlugin(AbstractPlugin):
 
         chain_generator = ChainGenerator(
             players=players,
-            targeting_graph=targeting_graph,
+            targeting_graph={},
             player_teammate_mapping=player_teammate_mapping
         )
 
@@ -619,15 +623,21 @@ class TargetingPlugin(AbstractPlugin):
             return {}
 
         if chain_generator.broke_team_constraint:
-            response.append(f"[TARGETING] WARNING: Could not enforce constraint of no intra-team targets in initial graph.")
+            response.append(Label(
+                "[TARGETING] WARNING: Could not enforce constraint of no intra-team targets in initial graph."
+            ))
         if chain_generator.broke_triangle_constraint:
-            response.append(f"[TARGETING] WARNING: Could not enforce constraint of no triangles in initial graph.")
+            response.append(Label(
+                "[TARGETING] WARNING: Could not enforce constraint of no triangles in initial graph."
+            ))
         if chain_generator.broke_mutual_constraint:
-            response.append(f"[TARGETING] WARNING: Could not enforce constraint of no mutual targets in initial graph.")
+            response.append(Label(
+                "[TARGETING] WARNING: Could not enforce constraint of no mutual targets in initial graph."
+            ))
 
         # convert sets of targets into lists...
         targeting_graph = {
-            p: list(targets) for p, targets in targeting_graph.items()
+            p: list(targets) for p, targets in chain_generator.targeting_graph.items()
         }
         return self._process_graph_updates(targeting_graph, response, max_event, set(player_seeds), teams)
 
