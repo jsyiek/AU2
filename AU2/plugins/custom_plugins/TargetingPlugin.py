@@ -168,7 +168,7 @@ class ChainGenerator:
         # constraints hold with targets on either end of the list, so we check here.
         if not (
                 self.check_constraints(chain[0], chain[-1], chain[-2])
-                and self.check_constraints(chain[1], chain[0], chain[-2])
+                and self.check_constraints(chain[1], chain[0], chain[-1])
         ):
             raise FailedToCreateChainException()
 
