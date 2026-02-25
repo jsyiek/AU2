@@ -52,6 +52,10 @@ class ChainGenerator:
     targeting_graph: Dict[str, Set[str]]
     player_teammate_mapping: Dict[str, Set[str]]
 
+    broke_team_constraint = False
+    broke_triangle_constraint = False
+    broke_mutual_constraint = False
+
     def check_constraints(self, next_p: str, curr_p: str, prev_p: str,
                           no_triangles=True, no_teammates=True, no_mutuals=True) -> bool:
         """
@@ -149,17 +153,20 @@ class ChainGenerator:
             # finally if even that fails we allow mutual targeting
             if len(remaining_players) == remaining_before:
                 if not enforce_teams:
-                    remaining_players = self.lengthen_chain(no_triangles=False)
+                    remaining_players = self.lengthen_chain(no_teammates=False)
+                    self.broke_team_constraint = True
                 else:
                     raise FailedToCreateChainException()
                 if len(remaining_players) == remaining_before:
                     if not enforce_no_triangles:
                         remaining_players = self.lengthen_chain(no_triangles=False, no_teammates=False)
+                        self.broke_triangle_constraint = True
                     else:
                         raise FailedToCreateChainException()
                     if len(remaining_players) == remaining_before:
                         if enforce_no_mutuals:
                             remaining_players = self.lengthen_chain(no_triangles=False, no_teammates=False, no_mutuals=False)
+                            self.broke_mutual_constraint = True
                         else:
                             raise FailedToCreateChainException()
 
@@ -180,6 +187,9 @@ class ChainGenerator:
 
     def reset(self):
         self.targeting_graph = {}
+        self.broke_triangle_constraint = False
+        self.broke_team_constraint = False
+        self.broke_mutual_constraint = False
 
 
 @dataclasses.dataclass
@@ -592,7 +602,6 @@ class TargetingPlugin(AbstractPlugin):
                                         enforce_no_triangles=enforce_constraints and (consecutive_fails < NO_TRIANGLES_THRESHOLD),
                                         enforce_no_mutuals=enforce_constraints and (consecutive_fails < NO_MUTALS_THRESHOLD)
                 ))
-                # TODO: message informing user about broken constraints...
                 consecutive_fails = 0
                 if len(chains) == TARGETS_PER_PLAYER:
                     break
@@ -608,6 +617,14 @@ class TargetingPlugin(AbstractPlugin):
                       "tries. Aborting.")
             )
             return {}
+
+        if chain_generator.broke_team_constraint:
+            response.append(f"[TARGETING] WARNING: Could not enforce constraint of no intra-team targets in initial graph.")
+        if chain_generator.broke_triangle_constraint:
+            response.append(f"[TARGETING] WARNING: Could not enforce constraint of no triangles in initial graph.")
+        if chain_generator.broke_mutual_constraint:
+            response.append(f"[TARGETING] WARNING: Could not enforce constraint of no mutual targets in initial graph.")
+
         # convert sets of targets into lists...
         targeting_graph = {
             p: list(targets) for p, targets in targeting_graph.items()
