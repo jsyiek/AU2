@@ -1,3 +1,4 @@
+import dataclasses
 import itertools
 import random
 from typing import Dict, List, Iterable, Sequence, Set, Tuple
@@ -45,6 +46,12 @@ def filter_to_targetable(idents: Iterable[str]) -> List[str]:
     return [ident for ident in idents if not ASSASSINS_DATABASE.get(ident).is_city_watch]
 
 
+@dataclasses.dataclass
+class TargetingParameter:
+    name: str
+    default_value: int
+    description: str
+
 @registered_plugin
 class TargetingPlugin(AbstractPlugin):
     """
@@ -79,7 +86,7 @@ class TargetingPlugin(AbstractPlugin):
                 self.answer_set_random_seed,
                 self.danger_explanation
             ),
-            # TODO: DebugConfigExport only accessible in 'developer mode'
+            # TODO: DebugConfigExports only accessible in 'developer mode'
             DangerousConfigExport(
                 "targeting_disable_initial_seeding",
                 "Targeting Graph -> Seed only for updates",
@@ -87,7 +94,57 @@ class TargetingPlugin(AbstractPlugin):
                 self.answer_set_initial_seeding,
                 self.danger_explanation
             ),
+            DangerousConfigExport(
+                "targeting_set_advanced_params",
+                "Targeting Graph -> Advanced parameters",
+                self.ask_set_targeting_params,
+                self.answer_set_targeting_params,
+                self.danger_explanation
+            ),
         ]
+
+        self.targeting_parameters = [
+            TargetingParameter(
+                name="targets_per_player",
+                default_value=3,
+                description="Number of targets per player (= number of players targeting each player also)",
+            ),
+            TargetingParameter(
+                name="no_teams_threshold",
+                default_value=10000,
+                description="Number of consecutive failures to create a chain before allowing players to have a TEAMMATE"
+                            " as a target or allowing a SEED to have another SEED as a target",
+            ),
+            TargetingParameter(
+                name="no_triangles_threshold",
+                default_value=20000,
+                description="Number of consecutive failures to create a chain before allowing TRIANGLES in the targeting graph",
+            ),
+            TargetingParameter(
+                name="no_mutuals_threshold",
+                default_value=30000,
+                description="Number of consecutive failures to create a chain before allowing two players to have EACH OTHER as targets",
+            ),
+            TargetingParameter(
+                name="start_over_threshold",
+                default_value=40000,
+                description="Number of consecutive failures to create a chain before STARTING FROM SCRATCH",
+            ),
+            TargetingParameter(
+                name="relaxation_threshold",
+                default_value=100000,
+                description="Number of attempts to create chains before relaxing ALL constraints EXCEPT each player "
+                            "having the same number of targets as the number of people targeting them",
+            ),
+            TargetingParameter(
+                name="max_tries",
+                default_value=200000,
+                description="Number of attempts to create chains before giving up"
+            )
+        ]
+
+        for param in self.targeting_parameters:
+            self.set_targeting_param(param.name, param.default_value)
 
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
@@ -97,7 +154,16 @@ class TargetingPlugin(AbstractPlugin):
             "Skip Setup": self.identifier + "_skip_setup",
         }
 
+        self.html_ids.update(
+            {param.name: self.identifier + "_" + param.name.lower() for param in self.targeting_parameters})
+
         Assassin.__last_emailed_targets = self.assassin_property("last_emailed_targets", (), store_default=False)
+
+    def set_targeting_param(self, name: str, val: int):
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("targeting_params", {})[name] = val
+
+    def get_targeting_param(self, name: str) -> int:
+        return GENERIC_STATE_DATABASE.arb_state[self.identifier]["targeting_params"][name]
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         if self.get_last_emailed_event() > -1:
@@ -259,6 +325,24 @@ class TargetingPlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["use_seeds_for_updates_only"] = use_seeds_for_updates_only
         answer = "won't" if use_seeds_for_updates_only else "will"
         return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
+
+    def ask_set_targeting_params(self) -> List[HTMLComponent]:
+        return [
+            IntegerEntry(
+                title=param.description,
+                default=self.get_targeting_param(param.name),
+                identifier=self.html_ids[param.name]
+            ) for param in self.targeting_parameters
+        ]
+
+    def answer_set_targeting_params(self, html_response) -> List[HTMLComponent]:
+        for param in self.targeting_parameters:
+            self.set_targeting_param(param.name, html_response[self.html_ids[param.name]])
+
+        return [
+            Label(title=f"Parameter {param.name} set to {html_response[self.html_ids[param.name]]}")
+            for param in self.targeting_parameters
+        ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
         graph = self.compute_targets([]) # we don't care about any issues that arise
@@ -460,25 +544,23 @@ class TargetingPlugin(AbstractPlugin):
             return chain
 
         # generate initial targets via "chains"
-        TARGETS_PER_PLAYER = 3
+        TARGETS_PER_PLAYER = self.get_targeting_param("targets_per_player")
         targeting_graph = {}
 
-        MAX_TRIES = 200000
-
         # controls how quickly to give up on enforcing constraints (rather than restarting from scratch)
-        RELAXATION_THRESHOLD = 100000
+        RELAXATION_THRESHOLD = self.get_targeting_param("relaxation_threshold")
 
         # controls how many times to try to generate a new chain before restarting from scratch
-        START_OVER_THRESHOLD = 40000
+        START_OVER_THRESHOLD = self.get_targeting_param("start_over_threshold")
 
         # controls how many times to try to enforce each constraint
-        NO_TEAMS_THRESHOLD = 10000
-        NO_TRIANGLES_THRESHOLD = 20000
-        NO_MUTALS_THRESHOLD = 30000
+        NO_TEAMS_THRESHOLD = self.get_targeting_param("no_teams_threshold")
+        NO_TRIANGLES_THRESHOLD = self.get_targeting_param("no_triangles_threshold")
+        NO_MUTALS_THRESHOLD = self.get_targeting_param("no_mutuals_threshold")
 
         consecutive_fails = 0
         chains = []
-        for i in range(MAX_TRIES):
+        for i in range(self.get_targeting_param("max_tries")):
             try:
                 enforce_constraints = i < RELAXATION_THRESHOLD
                 chains.append(new_chain(targeting_graph,
