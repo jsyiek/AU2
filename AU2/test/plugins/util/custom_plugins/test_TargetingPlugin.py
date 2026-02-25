@@ -1,3 +1,4 @@
+import itertools
 import time
 
 from typing import Dict, List
@@ -7,20 +8,19 @@ from AU2.plugins.custom_plugins.TargetingPlugin import TargetingPlugin
 from AU2.test.test_utils import plugin_test, some_players, MockGame
 
 
-def valid_targets(num_players, targets):
+def assert_valid_targets(num_players, targets):
     assert len(targets) == num_players
     assert all(len(t) == 3 for t in targets.values())
-    return True
 
 
-def teams_respected(targets: Dict[str, List[str]], teams: List[List[str]])l:
+def assert_teams_respected(targets: Dict[str, List[str]], teams: List[List[str]]):
     for team in teams:
         for member in team:
             for target in targets.get(member, ()):
                 assert target not in team
 
 
-def seeds_respected(targets: Dict[str, List[str]], seeds: List[str]):
+def assert_seeds_respected(targets: Dict[str, List[str]], seeds: List[str]):
     for (seed1, seed2) in itertools.combinations(seeds, 2):
         assert seed1 not in targets[seed2]
         assert seed2 not in targets[seed1]
@@ -48,7 +48,7 @@ class TestTargetingPlugin:
 
         plugin = TargetingPlugin()
         targets = plugin.compute_targets([])
-        assert valid_targets(num_players, targets)
+        assert_valid_targets(num_players, targets)
 
         game.assassin(p[0]).kills(p[1]).then() \
             .assassin(p[2]).kills(p[3]).then() \
@@ -56,7 +56,7 @@ class TestTargetingPlugin:
             .assassin(p[6]).kills(p[7])
 
         targets = plugin.compute_targets([])
-        assert valid_targets(num_players - 4, targets)
+        assert_valid_targets(num_players - 4, targets)
 
     @plugin_test
     def test_lots_of_deaths(self):
@@ -66,13 +66,13 @@ class TestTargetingPlugin:
 
         plugin = TargetingPlugin()
         targets = plugin.compute_targets([])
-        assert valid_targets(num_players, targets)
+        assert_valid_targets(num_players, targets)
 
         for i in range(100):
             game.assassin(p[2 * i]).kills(p[2 * i + 1])
 
         targets = plugin.compute_targets([])
-        assert valid_targets(num_players - 100, targets)
+        assert_valid_targets(num_players - 100, targets)
 
     @plugin_test
     def test_92_5_percent_deaths(self):
@@ -85,7 +85,7 @@ class TestTargetingPlugin:
 
         plugin = TargetingPlugin()
         targets = plugin.compute_targets([])
-        assert valid_targets(num_players, targets)
+        assert_valid_targets(num_players, targets)
 
         it = 0
         for i in range(185):
@@ -96,7 +96,7 @@ class TestTargetingPlugin:
             game.assassin(targeter).kills(victim)
 
         targets = plugin.compute_targets([])
-        assert valid_targets(num_players - 185, targets)
+        assert_valid_targets(num_players - 185, targets)
 
     @plugin_test
     def test_ignores_city_watch(self):
@@ -112,7 +112,7 @@ class TestTargetingPlugin:
         targets = plugin.compute_targets([])
 
         # 5 city watch, 1 full player dead
-        assert valid_targets(num_players - 5 - 1, targets)
+        assert_valid_targets(num_players - 5 - 1, targets)
 
     @plugin_test
     def test_no_crash_when_double_kill(self):
@@ -141,7 +141,7 @@ class TestTargetingPlugin:
         targets = plugin.compute_targets([])
         perf = time.perf_counter() - start
 
-        assert valid_targets(num_players - kills, targets)
+        assert_valid_targets(num_players - kills, targets)
 
         # test passes only if calculation took a reasonable amount of time
         assert perf < 1.0
@@ -164,15 +164,15 @@ class TestTargetingPlugin:
             # check that initial graph respects teams
             targs = plugin.compute_targets([])
 
-            assert valid_targets(num_players, targs)
-            assert teams_respected(targs, teams)
+            assert_valid_targets(num_players, targs)
+            assert_teams_respected(targs, teams)
 
             # add a moderate number of deaths and check teams still respected
             for i in range(50):
                 game.assassin(p[i]).kills(p[num_players-1-i])
             targs = plugin.compute_targets([])
-            assert valid_targets(len(game.get_remaining_players()), targs)
-            assert teams_respected(targs, teams)
+            assert_valid_targets(len(game.get_remaining_players()), targs)
+            assert_teams_respected(targs, teams)
 
     @plugin_test
     def test_mentors(self):
@@ -193,21 +193,21 @@ class TestTargetingPlugin:
 
         # check initial targets
         targs = plugin.compute_targets([])
-        assert valid_targets(num_players, targs)
-        assert teams_respected(targs, teams)
-        assert seeds_respected(targs, seeds)
+        assert_valid_targets(num_players, targs)
+        assert_teams_respected(targs, teams)
+        assert_seeds_respected(targs, seeds)
 
         # add a moderate number of deaths and check teams still respected
         for i in range(50):
             game.assassin(p[i]).kills(p[num_players - 1 - i])
         targs = plugin.compute_targets([])
-        assert valid_targets(len(game.get_remaining_players()), targs)
-        assert teams_respected(targs, teams)
-        assert seeds_respected(targs, seeds)
+        assert_valid_targets(len(game.get_remaining_players()), targs)
+        assert_teams_respected(targs, teams)
+        assert_seeds_respected(targs, seeds)
 
         # add many more deaths and check seeds still respected (but accept if other teams aren't)
         for i in range(100):
             game.assassin(p[i]).kills(p[num_players - 1 - i])
         targs = plugin.compute_targets([])
-        assert valid_targets(len(game.get_remaining_players()), targs)
-        assert seeds_respected(targs, seeds)
+        assert_valid_targets(len(game.get_remaining_players()), targs)
+        assert_seeds_respected(targs, seeds)
