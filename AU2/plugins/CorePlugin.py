@@ -171,14 +171,14 @@ class CorePlugin(AbstractPlugin):
                 "Assassin -> Update",
                 self.ask_core_plugin_update_assassin,
                 self.answer_core_plugin_update_assassin,
-                ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
+                (ASSASSINS_DATABASE.get_display_name_ident_pairs,)
             ),
             Export(
                 "core_assassin_update_pseudonyms",
                 "Assassin -> Update Pseudonyms",
                 self.ask_core_plugin_update_pseudonyms,
                 self.answer_core_plugin_update_pseudonyms,
-                (ASSASSINS_DATABASE.get_identifiers,)
+                (ASSASSINS_DATABASE.get_display_name_ident_pairs,)
             ),
             Export(
                 "core_assassin_summary",

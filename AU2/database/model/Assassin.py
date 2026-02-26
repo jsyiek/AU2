@@ -65,6 +65,12 @@ class Assassin(PersistentFile):
     def snapshot(self) -> str:
         return f"{self.real_name} ({self._secret_id})"
 
+    def display_name(self, pseudonym_truncation = 15) -> str:
+        all_pseudonyms = self.all_pseudonyms(lambda x: x)
+        dotdotdot = "..." if len(all_pseudonyms) > pseudonym_truncation else ""
+        return (f"({self._secret_id}) {self.real_name} ({all_pseudonyms[:pseudonym_truncation]}{dotdotdot})"
+               f"{' [city watch]' if self.is_city_watch else ''}")
+
     def clone(self, **changes):
         """
         Creates a clone of this assassin with a new identifier and specified changes.
