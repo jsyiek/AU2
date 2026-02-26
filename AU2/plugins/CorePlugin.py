@@ -10,7 +10,7 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.database.model.database_utils import refresh_databases
-from AU2.html_components import HTMLComponent
+from AU2.html_components import HTMLComponent, HTMLResponse
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
@@ -22,6 +22,7 @@ from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.HiddenDatetime import HiddenDatetime
 from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -32,8 +33,7 @@ from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTex
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
-    AttributePairTableRow, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, Export, ConfigExport, HookedExport
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
@@ -189,8 +189,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 "core_event_create_event",
                 "Event -> Create",
-                self.ask_core_plugin_create_event,
-                self.answer_core_plugin_create_event
+                self.ask_core_plugin_event_dependencies,
+                (self.ask_core_plugin_create_or_update_event, self.answer_core_plugin_create_event)
             ),
             Export(
                 "core_event_delete_event",
@@ -208,8 +208,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 "core_event_update_event",
                 "Event -> Update",
-                self.ask_core_plugin_update_event,
-                self.answer_core_plugin_update_event,
+                self.ask_core_plugin_event_dependencies,
+                (self.ask_core_plugin_create_or_update_event, self.answer_core_plugin_update_event),
                 (self.gather_events,)
             ),
             Export(
@@ -234,9 +234,8 @@ class CorePlugin(AbstractPlugin):
             Export(
                 self.CONFIG_PARAMETER_EXPORT,
                 "Plugin config -> Plugin-specific parameters",
-                self.ask_config,
-                self.answer_config,
-                (self.gather_config_options,)
+                lambda: [self.gather_config_options()],
+                (self.ask_config, self.answer_config),
             ),
             Export(
                 identifier="core_plugin_reset_database",
@@ -439,61 +438,64 @@ class CorePlugin(AbstractPlugin):
         assassin.is_city_watch = htmlResponse[self.html_ids["City Watch"]]
         return [Label("[CORE] Success!")]
 
-    def on_event_request_create(self):
-        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs()
-        html = [
-            Dependency(
-                dependentOn=self.event_html_ids["Assassin Pseudonym"],
-                htmlComponents=[
-                    AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
-                    *self.ask_core_plugin_update_reports(assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
-                    Dependency(
-                        dependentOn=self.event_html_ids["Kills"],
-                        htmlComponents=[
-                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills")
-                        ]
-                    )
-                ]
-            ),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
-            HtmlEntry(self.event_html_ids["Headline"], "Headline"),
-        ]
-        return html
-
-    def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        self.answer_core_plugin_update_reports(htmlResponse, e)
-        return [Label("[CORE] Success!")]
-
-    def on_event_request_update(self, e: Event):
+    def on_event_dependencies(self, e: Optional[Event]) -> List[HTMLComponent]:
         # include hidden assassins if they are already in the event,
         # so that the umpire doesn't accidentally remove them from the event
-        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs(include_hidden=lambda a: a.identifier in e.assassins)
-        html = [
-            HiddenTextbox(self.HTML_SECRET_ID, e.identifier),
+        assassins = ASSASSINS_DATABASE.get_ident_pseudonym_pairs(
+            include_hidden=lambda a: e and a.identifier in e.assassins)
+        return [
             Dependency(
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
-                    AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
-                    *self.ask_core_plugin_update_reports(e.identifier, assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
+                    AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection",
+                                          assassins, e.assassins if e else {}),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
-                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Kills"], "Kills", e.kills)
+                            AssassinDependentKillEntry(self.event_html_ids["Assassin Pseudonym"],
+                                                       self.event_html_ids["Kills"], "Kills", e.kills if e else [])
                         ]
                     )
                 ]
             ),
-            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
-            HtmlEntry(self.event_html_ids["Headline"], "Headline", e.headline),
+            DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event",
+                          e.datetime if e else get_now_dt()),
         ]
-        return html
 
-    def on_event_update(self, event: Event, htmlResponse: Dict) -> List[HTMLComponent]:
-        event.assassins = htmlResponse[self.event_html_ids["Assassin Pseudonym"]]
-        event.datetime = htmlResponse[self.event_html_ids["Datetime"]]
-        event.headline = htmlResponse[self.event_html_ids["Headline"]]
-        self.answer_core_plugin_update_reports(htmlResponse, event)
-        event.kills = htmlResponse[self.event_html_ids["Kills"]]
+    def on_event_request_create_or_update(self, e: Optional[Event], html_response: HTMLResponse) -> List[HTMLComponent]:
+        # for compatibility provide the `Dependency`s that AssassinDependent and KillDependent components rely on,
+        # but replace the actual components depended on with HiddenJSON components giving the response to the components
+        # from the previous stage, ask_core_plugin_event_dependencies
+        return [
+            HiddenDatetime(self.event_html_ids["Datetime"],
+                           html_response[self.event_html_ids["Datetime"]]),
+            Dependency(
+                dependentOn=self.event_html_ids["Assassin Pseudonym"],
+                htmlComponents=[
+                    HiddenJSON(self.event_html_ids["Assassin Pseudonym"],
+                               html_response[self.event_html_ids["Assassin Pseudonym"]]),
+                    *self.ask_core_plugin_update_reports(
+                        e.identifier if e else "",
+                        assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]
+                    ),
+                    Dependency(
+                        dependentOn=self.event_html_ids["Kills"],
+                        htmlComponents=[
+                            HiddenJSON(self.event_html_ids["Kills"],
+                                       html_response[self.event_html_ids["Kills"]]),
+                        ]
+                    )
+                ]
+            ),
+            HtmlEntry(self.event_html_ids["Headline"], "Headline", e.headline if e else ""),
+        ]
+
+    def on_event_create_or_update(self, event: Event, html_response: HTMLResponse) -> List[HTMLComponent]:
+        event.assassins = html_response[self.event_html_ids["Assassin Pseudonym"]]
+        event.datetime = html_response[self.event_html_ids["Datetime"]]
+        event.headline = html_response[self.event_html_ids["Headline"]]
+        self.answer_core_plugin_update_reports(html_response, event)
+        event.kills = html_response[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
@@ -686,10 +688,31 @@ class CorePlugin(AbstractPlugin):
             Label(f"[CORE] Successfully updated {ident}'s pseudonyms.")
         ]
 
-    def ask_core_plugin_create_event(self):
-        components = []
+    def ask_core_plugin_event_dependencies(self, e_id: str = "") -> List[HTMLComponent]:
+        """
+        ask function of both "Event -> Create" and "Event -> Update"
+        Produces components the response to which later Event -> Create/Update components depend on in the backend
+        """
+        e = EVENTS_DATABASE.get(e_id) if e_id else None
+        components = [
+            HiddenTextbox(self.HTML_SECRET_ID, e_id),
+        ]
         for p in PLUGINS:
-            components += p.on_event_request_create()
+            components += p.on_event_dependencies(e)
+        return components
+
+    def ask_core_plugin_create_or_update_event(self, html_response: HTMLResponse) -> List[HTMLComponent]:
+        e_id = html_response[self.HTML_SECRET_ID]
+        event = EVENTS_DATABASE.get(e_id) if e_id else None
+        # for compatibility provide the `Dependency`s that AssassinDependent and KillDependent components rely on,
+        # but replace the actual components depended on with HiddenJSON components giving the response to the components
+        # from the previous stage, ask_core_plugin_event_dependencies
+        components = [
+            HiddenTextbox(self.HTML_SECRET_ID, e_id),
+        ]
+        for p in PLUGINS:
+            components += p.on_event_request_create_or_update(event, html_response)
+            components += p.on_event_request_update(event) if event else p.on_event_request_create()
         return components
 
     def answer_core_plugin_create_event(self, html_response_args: Dict):
@@ -699,16 +722,10 @@ class CorePlugin(AbstractPlugin):
         event = Event(**params)
         return_components = []
         for p in PLUGINS:
+            return_components += p.on_event_create_or_update(event, html_response_args)
             return_components += p.on_event_create(event, html_response_args)
         EVENTS_DATABASE.add(event)
         return return_components
-
-    def ask_core_plugin_update_event(self, event_id: str):
-        event = EVENTS_DATABASE.get(event_id)
-        components = []
-        for p in PLUGINS:
-            components += p.on_event_request_update(event)
-        return components
 
     def answer_core_plugin_update_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
@@ -716,6 +733,7 @@ class CorePlugin(AbstractPlugin):
         event.pluginState["sanity_checks"] = []
         components = []
         for p in PLUGINS:
+            components += p.on_event_create_or_update(event, html_response_args)
             components += p.on_event_update(event, html_response_args)
         return components
 
@@ -926,10 +944,11 @@ class CorePlugin(AbstractPlugin):
                                  title="",
                                  config_options=config_options)
 
-    def ask_config(self, config_option: ConfigExport):
+    def ask_config(self, html_response: HTMLResponse) -> List[HTMLComponent]:
         """
         Opens the menu for a chosen config option
         """
+        config_option = html_response["config_option"]
         if isinstance(config_option, ConfigExport):
             return [
                 HiddenTextbox(

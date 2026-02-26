@@ -1,18 +1,19 @@
 import os
-from typing import List, Dict
+from typing import Dict, List, Optional
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
-from AU2.html_components import HTMLComponent
+from AU2.html_components import HTMLComponent, HTMLResponse
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
+from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
@@ -225,51 +226,30 @@ class CityWatchPlugin(AbstractPlugin):
             self.gsdb_set(i, i in answer)
         return [Label("[CITY WATCH] Success!")]
 
-    def on_event_request_create(self) -> List[HTMLComponent]:
-        # TODO Make a selector with city watch filtering
+    def on_event_request_create_or_update(self, e: Optional[Event], html_response: HTMLResponse) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
             return []
+        CITY_WATCH_COMPONENT_ID = "CityWatchPlugin_assassin_pseudonym"
         return [
             Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
+                dependentOn=CITY_WATCH_COMPONENT_ID,
                 htmlComponents=[
+                    # filter to city watch, for now keeping the rank-up UI intact, so we do this by replacing the
+                    # component that they depend on with one containing filtered assassins
+                    HiddenJSON(CITY_WATCH_COMPONENT_ID,
+                               {k: v for k, v in html_response["CorePlugin_assassin_pseudonym"].items()
+                                if ASSASSINS_DATABASE.get(k).is_city_watch}),
                     AssassinDependentIntegerEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
+                        pseudonym_list_identifier=CITY_WATCH_COMPONENT_ID,
                         identifier=self.html_ids["Relative Rank"],
                         title="Select players to adjust City Watch rank (relative to current rank)",
-                        default={}
+                        default=e.pluginState.get(self.identifier, {}) if e else {}
                     )
                 ]
             )
         ]
 
-    def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
-        if not self.gsdb_get("Manual Rank"):
-            return [Label("[CITY WATCH] Didn't need to do anything")]
-
-        for player_id, relative_rank in htmlResponse[self.html_ids["Relative Rank"]].items():
-            e.pluginState.setdefault(self.identifier, {})[player_id] = relative_rank
-        return [Label("[CITY WATCH] Success!")]
-
-    def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
-        # TODO Make a selector with city watch filtering
-        if not self.gsdb_get("Manual Rank"):
-            return []
-        return [
-            Dependency(
-                dependentOn="CorePlugin_assassin_pseudonym",
-                htmlComponents=[
-                    AssassinDependentIntegerEntry(
-                        pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Relative Rank"],
-                        title="Select players to adjust City Watch rank (relative to current rank)",
-                        default=e.pluginState.get(self.identifier, {})
-                    )
-                ]
-            )
-        ]
-
-    def on_event_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
+    def on_event_create_or_update(self, e: Event, htmlResponse) -> List[HTMLComponent]:
         if not self.gsdb_get("Manual Rank"):
             return [Label("[CITY WATCH] Didn't need to do anything")]
 
