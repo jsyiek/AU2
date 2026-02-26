@@ -96,6 +96,9 @@ class UIConfigPlugin(AbstractPlugin):
         def filter_input_dropdown(component, l):
             component.options = [o for o in component.options if o in l or o == component.selected]
 
+        def filter_tuple_input_dropdown(component, l):
+            component.options = [o for o in component.options if o[0] in l or o == component.selected]
+
         def steal_options(old_comp, new_comp):
             new_comp.component.options = old_comp.options
             new_comp.component.defaults = old_comp.defaults
@@ -149,8 +152,8 @@ class UIConfigPlugin(AbstractPlugin):
                         options=[]
                     ),
                     title="Enter assassin names to search for",
-                    accessor=lambda component: sorted(component.options),
-                    setter=filter_input_dropdown
+                    accessor=lambda component: [t[0] for t in component.options],
+                    setter=filter_tuple_input_dropdown
                 ),
                 enabled_for=EnabledFor(call=Call.ASSASSIN_STATUS, hooks=tuple()),
                 replacement_effects=steal_input_dropdown_options

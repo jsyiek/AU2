@@ -320,7 +320,7 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(
                 self.html_ids["Assassins"],
                 title="Select assassin to show status for",
-                options=ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda _: True))
+                options=ASSASSINS_DATABASE.get_display_name_ident_pairs(include_hidden=True))
         ] + sum((p.on_request_assassin_summary() for p in PLUGINS), start=[])
 
     def answer_core_plugin_summary_assassin(self, htmlResponse) -> List[HTMLComponent]:
