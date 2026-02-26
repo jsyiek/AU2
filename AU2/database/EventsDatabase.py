@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -22,11 +22,11 @@ class EventsDatabase(PersistentFile):
         """
         self.events[event.identifier] = event
 
-    def get(self, identifier: str):
+    def get(self, identifier: str) -> Optional[Event]:
         """
-        Fetches an event given an identifier
+        Fetches an event given an identifier, if it exists, otherwise returns None
         """
-        return self.events[identifier]
+        return self.events.get(identifier, None)
 
     def _refresh(self):
         """

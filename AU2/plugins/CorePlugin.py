@@ -2,7 +2,7 @@ import glob
 import os.path
 
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Tuple, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -30,14 +30,16 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.plugins import CUSTOM_PLUGINS_DIR
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
-    AttributePairTableRow
+    AttributePairTableRow, NavbarEntry
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
 from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
 from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.render_utils import generate_navbar
 
 AVAILABLE_PLUGINS = {}
 
@@ -90,6 +92,7 @@ GAME_TYPE_PLUGIN_MAP = {
     #     "WantedPlugin": True,
     # }
 }
+BOUNTY_PLUGINS = ("BountyNewsPlugin", "BountyPlugin")
 
 
 T = TypeVar("T")
@@ -174,6 +177,13 @@ class CorePlugin(AbstractPlugin):
                 ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
             ),
             Export(
+                "core_assassin_update_pseudonyms",
+                "Assassin -> Update Pseudonyms",
+                self.ask_core_plugin_update_pseudonyms,
+                self.answer_core_plugin_update_pseudonyms,
+                (ASSASSINS_DATABASE.get_identifiers,)
+            ),
+            Export(
                 "core_assassin_summary",
                 "Assassin -> Summary",
                 self.ask_core_plugin_summary_assassin,
@@ -203,6 +213,13 @@ class CorePlugin(AbstractPlugin):
                 "Event -> Update",
                 self.ask_core_plugin_update_event,
                 self.answer_core_plugin_update_event,
+                (self.gather_events,)
+            ),
+            Export(
+                "core_event_update_reports",
+                "Event -> Update Reports",
+                self.ask_core_plugin_update_reports,
+                self.answer_core_plugin_update_reports,
                 (self.gather_events,)
             ),
             Export(
@@ -254,7 +271,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
         self.config_exports = [
-            DangerousConfigExport(
+            ConfigExport(
                 "core_plugin_set_game_start",
                 "CorePlugin -> Set game start",
                 self.ask_set_game_start,
@@ -331,21 +348,22 @@ class CorePlugin(AbstractPlugin):
             ("Deaths", ", ".join(kill[1] for kill in event.kills))
         ]
 
-        snapshot = lambda a: f"{a.real_name} ({a._secret_id})"
         for (i, ident) in enumerate(event.assassins):
             a = ASSASSINS_DATABASE.get(ident)
             pseudonym = a.get_pseudonym(event.assassins[ident])
-            response.append((f"Participant {i+1}", f"{snapshot(a)} as {pseudonym}"))
+            response.append((f"Participant {i+1}", f"{a.snapshot()} as {pseudonym}"))
 
         for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
             a = ASSASSINS_DATABASE.get(ident)
+            if pseudonym_idx is None:
+                pseudonym_idx = event.assassins[ident]
             pseudonym = a.get_pseudonym(pseudonym_idx)
-            response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
+            response.append((f"Report {i+1}", f"{a.snapshot()} as {pseudonym}"))
 
         for (i, (killer_id, victim_id)) in enumerate(event.kills):
             killer = ASSASSINS_DATABASE.get(killer_id)
             victim = ASSASSINS_DATABASE.get(victim_id)
-            response.append((f"Kill {i+1}", f"{snapshot(killer)} kills {snapshot(victim)}"))
+            response.append((f"Kill {i+1}", f"{killer.snapshot()} kills {victim.snapshot()}"))
         return response
 
     def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:
@@ -389,7 +407,7 @@ class CorePlugin(AbstractPlugin):
         )
 
         html = [
-            NamedSmallTextbox(self.html_ids["Pseudonym"], "Initial Pseudonym"),
+            HtmlEntry(self.html_ids["Pseudonym"], "Initial Pseudonym", soft=True, short=True),
             NamedSmallTextbox(self.html_ids["Real Name"], "Real Name"),
             NamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns"),
             NamedSmallTextbox(self.html_ids["Email"], "Email", type_="email"),
@@ -414,10 +432,7 @@ class CorePlugin(AbstractPlugin):
         )
         html = [
             HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
-            EditablePseudonymList(
-                self.html_ids["Pseudonym"], "Edit Pseudonyms",
-                (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
-            ),
+            *self.ask_core_plugin_update_pseudonyms(assassin.identifier),
             DefaultNamedSmallTextbox(self.html_ids["Real Name"], "Real Name", assassin.real_name),
             DefaultNamedSmallTextbox(self.html_ids["Pronouns"], "Pronouns", assassin.pronouns),
             DefaultNamedSmallTextbox(self.html_ids["Email"], "Email", assassin.email, type_="email"),
@@ -432,12 +447,7 @@ class CorePlugin(AbstractPlugin):
         return html
 
     def on_assassin_update(self, assassin: Assassin, htmlResponse: Dict) -> List[HTMLComponent]:
-        # process updates to the assassin's pseudonyms
-        pseudonym_updates = htmlResponse[self.html_ids["Pseudonym"]]
-        [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
-        [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
-        [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
-        # set other attributes
+        self.answer_core_plugin_update_pseudonyms(htmlResponse)
         assassin.real_name = htmlResponse[self.html_ids["Real Name"]]
         assassin.pronouns = htmlResponse[self.html_ids["Pronouns"]]
         assassin.email = htmlResponse[self.html_ids["Email"]]
@@ -455,7 +465,7 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports"),
+                    *self.ask_core_plugin_update_reports(assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
@@ -465,11 +475,12 @@ class CorePlugin(AbstractPlugin):
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event"),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline"),
+            HtmlEntry(self.event_html_ids["Headline"], "Headline"),
         ]
         return html
 
-    def on_event_create(self, _: Event, htmlResponse) -> List[HTMLComponent]:
+    def on_event_create(self, e: Event, htmlResponse) -> List[HTMLComponent]:
+        self.answer_core_plugin_update_reports(htmlResponse, e)
         return [Label("[CORE] Success!")]
 
     def on_event_request_update(self, e: Event):
@@ -482,7 +493,7 @@ class CorePlugin(AbstractPlugin):
                 dependentOn=self.event_html_ids["Assassin Pseudonym"],
                 htmlComponents=[
                     AssassinPseudonymPair(self.event_html_ids["Assassin Pseudonym"], "Assassin Pseudonym Selection", assassins, e.assassins),
-                    AssassinDependentReportEntry(self.event_html_ids["Assassin Pseudonym"], self.event_html_ids["Reports"], "Reports", e.reports),
+                    *self.ask_core_plugin_update_reports(e.identifier, assassin_pseudonyms_identifier=self.event_html_ids["Assassin Pseudonym"]),
                     Dependency(
                         dependentOn=self.event_html_ids["Kills"],
                         htmlComponents=[
@@ -492,7 +503,7 @@ class CorePlugin(AbstractPlugin):
                 ]
             ),
             DatetimeEntry(self.event_html_ids["Datetime"], "Enter date/time of event", e.datetime),
-            LargeTextEntry(self.event_html_ids["Headline"], "Headline", e.headline),
+            HtmlEntry(self.event_html_ids["Headline"], "Headline", e.headline),
         ]
         return html
 
@@ -500,7 +511,7 @@ class CorePlugin(AbstractPlugin):
         event.assassins = htmlResponse[self.event_html_ids["Assassin Pseudonym"]]
         event.datetime = htmlResponse[self.event_html_ids["Datetime"]]
         event.headline = htmlResponse[self.event_html_ids["Headline"]]
-        event.reports = htmlResponse[self.event_html_ids["Reports"]]
+        self.answer_core_plugin_update_reports(htmlResponse, event)
         event.kills = htmlResponse[self.event_html_ids["Kills"]]
         return [Label("[CORE] Success!")]
 
@@ -672,6 +683,28 @@ class CorePlugin(AbstractPlugin):
             return_components += p.on_assassin_update(assassin, html_response_args)
         return return_components
 
+    def ask_core_plugin_update_pseudonyms(self, assassin_id: str):
+        assassin = ASSASSINS_DATABASE.get(assassin_id)
+        return [
+            HiddenTextbox(self.HTML_SECRET_ID, assassin.identifier),
+            EditablePseudonymList(
+                self.html_ids["Pseudonym"], "Edit Pseudonyms",
+                (PseudonymData(p, assassin.get_pseudonym_validity(i)) for i, p in enumerate(assassin.pseudonyms))
+            ),
+        ]
+
+    def answer_core_plugin_update_pseudonyms(self, html_response: Dict):
+        ident = html_response[self.HTML_SECRET_ID]
+        assassin = ASSASSINS_DATABASE.get(ident)
+        # process updates to the assassin's pseudonyms
+        pseudonym_updates = html_response[self.html_ids["Pseudonym"]]
+        [assassin.add_pseudonym(u.text, u.valid_from) for u in pseudonym_updates.new_values]
+        [assassin.edit_pseudonym(i, v.text, v.valid_from) for i, v in pseudonym_updates.edited.items()]
+        [assassin.delete_pseudonym(i) for i in pseudonym_updates.deleted_indices]
+        return [
+            Label(f"[CORE] Successfully updated {ident}'s pseudonyms.")
+        ]
+
     def ask_core_plugin_create_event(self):
         components = []
         for p in PLUGINS:
@@ -704,6 +737,45 @@ class CorePlugin(AbstractPlugin):
         for p in PLUGINS:
             components += p.on_event_update(event, html_response_args)
         return components
+
+    def ask_core_plugin_update_reports(self, event_id: str = "", assassin_pseudonyms_identifier: str = "") -> List[HTMLComponent]:
+        """
+        Export for updating the reports in an event.
+        If assassin_pseudonyms_identifier this returns only the AssassinDependentReportEntry component, for use in
+        Event -> Create and Event -> Update, otherwise it returns the components necessary to function as a standalone
+        export.
+        """
+        FALLBACK_ID = self.event_html_ids["Assassin Pseudonym"]
+        event = EVENTS_DATABASE.get(event_id)
+        component = AssassinDependentReportEntry(
+            pseudonym_list_identifier=assassin_pseudonyms_identifier or FALLBACK_ID,
+            identifier=self.event_html_ids["Reports"],
+            title="Reports",
+            assassins=ASSASSINS_DATABASE.get_ident_pseudonym_pairs(include_hidden=True),
+            default=event.reports if event else []
+        )
+        if assassin_pseudonyms_identifier:
+            return [component]
+        else:
+            return [
+                HiddenTextbox(self.HTML_SECRET_ID, event_id),
+                Dependency(
+                    dependentOn=FALLBACK_ID,
+                    htmlComponents=[
+                        HiddenJSON(FALLBACK_ID, event.assassins),
+                        component
+                    ]
+                ),
+            ]
+
+    def answer_core_plugin_update_reports(self, html_response: Dict, event: Optional[Event] = None) -> List[HTMLComponent]:
+        if not event:
+            ident = html_response[self.HTML_SECRET_ID]
+            event = EVENTS_DATABASE.get(ident)
+        event.reports = html_response[self.event_html_ids["Reports"]]
+        return [
+            Label("[CORE] Successfully updated reports.")
+        ]
 
     def gather_events(self) -> List[Tuple[str, str]]:
         # headline is truncated because `inquirer` doesn't deal with overlong options well
@@ -826,8 +898,13 @@ class CorePlugin(AbstractPlugin):
                 SANITY_CHECKS[sanity_check_id].mark(e)
 
         if actually_generate_pages:  # useful for unit testing
+            navbar_entries = []
             for p in PLUGINS:
-                components += p.on_page_generate(html_response_args)
+                components += p.on_page_generate(html_response_args, navbar_entries)
+
+            generate_navbar(navbar_entries, "page-list.html")
+            components += [Label("[CORE] Successfully generated page list!")]
+
         return components
 
     def ask_custom_hook(self, hook: str) -> List[HTMLComponent]:
@@ -1005,6 +1082,23 @@ class CorePlugin(AbstractPlugin):
         for plugin in PLUGINS:
             components += plugin.on_request_setup_game(game_type)
 
+        # also ask which bounty style to use.
+        # TODO: merge bounty plugins??
+        components += [
+            Label("AU2 has two different plugins for setting bounties."),
+            Label("'BountyNewsPlugin' is the allows you to mark certain events as bounties, "
+                  "causing them to be rendered on the page bounty-news.html. See May Week 2025 in the archive for an "
+                  "example."),
+            Label("'BountyPlugin' on the other hand displays bounties in a table, on the page bounties.html. "
+                  "See Lent 2025 in the archive for an example."),
+            SelectorList(
+                self.identifier + "_bounty_style",
+                "Select which bounty plugin(s) to use",
+                list(BOUNTY_PLUGINS),
+                [x for x in BOUNTY_PLUGINS if PLUGINS[x].enabled],
+            ),
+        ]
+
         return components
 
     def answer_setup_game(self, htmlResponse) -> List[HTMLComponent]:
@@ -1016,4 +1110,17 @@ class CorePlugin(AbstractPlugin):
         components = []
         for plugin in PLUGINS:
             components += plugin.on_setup_game(htmlResponse)
+
+        # enable selected bounty plugin
+        to_enable = htmlResponse[self.identifier + "_bounty_style"]
+        to_disable = [x for x in BOUNTY_PLUGINS if x not in to_enable]
+        for p in to_enable:
+            PLUGINS[p].enabled = True
+        if to_enable:
+            components += [Label(f"[CORE] Enabled {' and '.join(to_enable)}")]
+        for p in to_disable:
+            PLUGINS[p].enabled = False
+        if to_disable:
+            components += [Label(f"[CORE] Disabled {' and '.join(to_disable)}")]
+
         return components

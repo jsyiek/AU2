@@ -1,19 +1,20 @@
 import itertools
 import random
-from typing import Tuple, Dict, List, Set
+import time
+from typing import Dict, Iterable, List, Set, Tuple
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, DangerousConfigExport, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, DangerousConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -39,6 +40,12 @@ class FailedToCreateChainException(Exception):
     pass
 
 
+def filter_to_targetable(idents: Iterable[str]) -> List[str]:
+    """Filters an iterable of assassin identifiers to a list of only those that are involved in targeting,
+    i.e. full players"""
+    return [ident for ident in idents if not ASSASSINS_DATABASE.get(ident).is_city_watch]
+
+
 @registered_plugin
 class TargetingPlugin(AbstractPlugin):
     """
@@ -57,21 +64,24 @@ class TargetingPlugin(AbstractPlugin):
                 "targeting_set_player_seeds",
                 "Targeting Graph -> Set player seeds",
                 self.ask_set_seeds,
-                self.answer_set_seeds
+                self.answer_set_seeds,
+                self.danger_explanation
             ),
             DangerousConfigExport(
                 "targeting_set_random_seed",
                 "Targeting Graph -> Set random seed",
                 self.ask_set_random_seed,
-                self.answer_set_random_seed
+                self.answer_set_random_seed,
+                self.danger_explanation
             ),
             # TODO: DebugConfigExport only accessible in 'developer mode'
             DangerousConfigExport(
                 "targeting_disable_initial_seeding",
                 "Targeting Graph -> Seed only for updates",
                 self.ask_set_initial_seeding,
-                self.answer_set_initial_seeding
-            )
+                self.answer_set_initial_seeding,
+                self.danger_explanation
+            ),
         ]
 
         self.html_ids = {
@@ -80,6 +90,8 @@ class TargetingPlugin(AbstractPlugin):
             "Initial Seeding": self.identifier + "_initial_seeding",
             "Skip Setup": self.identifier + "_skip_setup",
         }
+
+        Assassin.__last_emailed_targets = self.assassin_property("last_emailed_targets", (), store_default=False)
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         if self.get_last_emailed_event() > -1:
@@ -110,8 +122,6 @@ class TargetingPlugin(AbstractPlugin):
             # if graph computation time becomes an issue, we could yield the `last_graph` and then compute
             # current_graph without needing to recompute
             response = []
-            last_emailed_event = self.get_last_emailed_event()
-            last_graph = self.compute_targets(response, max_event=last_emailed_event)
             current_graph = self.compute_targets(response)
 
             if not current_graph:
@@ -143,18 +153,21 @@ class TargetingPlugin(AbstractPlugin):
 
                 # only send email if targets for this user have changed
                 targets_changed = any(
-                    a not in current_graph[assassin.identifier] for a in last_graph[assassin.identifier])
-                targets_changed |= len(current_graph[assassin.identifier]) != len(last_graph[assassin.identifier])
-                targets_changed |= last_emailed_event == -1  # we haven't emailed anything yet
+                    a not in current_graph[assassin.identifier] for a in assassin.__last_emailed_targets)
+                targets_changed |= len(current_graph[assassin.identifier]) != len(assassin.__last_emailed_targets)
 
                 email.add_content(
                     plugin_name="TargetingPlugin",
                     content=email_content,
                     require_send=targets_changed
                 )
+                # record the emailed targets, if emails are actually being sent.
+                # the component is named confusingly. Here, True means *do* send emails!
+                if htmlResponse.get("SRCFPlugin_dry_run", True):
+                    assassin.__last_emailed_targets = current_graph[assassin.identifier]
 
-            # only record the event up to which targets were emailed if emails will actually be sent
-            # the component is named confusingly. here, True = *do* send emails!
+            # we still record the last emailed event because it's useful for detecting whether any emails have been sent
+            # out
             if EVENTS_DATABASE.events and htmlResponse.get("SRCFPlugin_dry_run", True):
                 max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
                 GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
@@ -163,8 +176,25 @@ class TargetingPlugin(AbstractPlugin):
 
     def on_data_hook(self, hook: str, data):
         if hook == "WantedPlugin_targeting_graph":
-            max_event = data.get("secret_id", 100000000000000001) - 1  # - 1 needed to not include the current event
-            data["targeting_graph"] = self.compute_targets([], max_event)
+            # note: targeting graph is only requested when using Event -> Create
+            graph = {
+                assassin.identifier: assassin.__last_emailed_targets
+                for assassin in ASSASSINS_DATABASE.get_filtered(include=lambda a: a.__last_emailed_targets,
+                                                                include_hidden=True)
+            }
+
+            # backwards compatibility for a smoother transition during live game
+            if not graph:
+                graph = self.compute_targets([])
+
+            data["targeting_graph"] = graph
+
+    def danger_explanation(self) -> str:
+        if int(GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("last_emailed_event", -1)) > -1:
+            return ("Targets have already been sent out to players. "
+                   "Changing targeting settings will change players' targets!")
+        else:
+            ""
 
     def ask_set_seeds(self):
         return [
@@ -173,7 +203,7 @@ class TargetingPlugin(AbstractPlugin):
             SelectorList(
                 identifier=self.html_ids["Seeds"],
                 title="Choose which assassins should be seeded",
-                options=sorted(list(ASSASSINS_DATABASE.assassins)),
+                options=sorted(filter_to_targetable(ASSASSINS_DATABASE.assassins)),
                 defaults=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
             )
         ]
@@ -219,8 +249,22 @@ class TargetingPlugin(AbstractPlugin):
             response: List[AttributePairTableRow] = []
             if assassin.identifier not in graph:
                 continue
-            for (i, target) in enumerate(graph[assassin.identifier]):
-                response.append((f"Target {i+1}", target))
+            old_targets = set(assassin.__last_emailed_targets)
+            current_targets = set(graph[assassin.identifier])
+            new_targets = set()
+            i = 0
+            for target in current_targets:
+                if target in old_targets:
+                    i += 1
+                    response.append((f"Target {i}", target))
+                    old_targets.discard(target)
+                else:
+                    new_targets.add(target)
+            for target in new_targets:
+                i += 1
+                response.append((f"Target {i} (NEW)", target))
+                if old_targets:
+                    response.append((f"Target {i} (OLD)", old_targets.pop()))
 
             num_attackers = 0
             for (attacker, targets) in graph.items():
@@ -252,7 +296,7 @@ class TargetingPlugin(AbstractPlugin):
         random.seed(self.seed)
 
         # collect all targetable assassins
-        players = [a for (a, model) in ASSASSINS_DATABASE.assassins.items() if not model.is_city_watch]
+        players = filter_to_targetable(ASSASSINS_DATABASE.assassins)
 
         # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
         # last long anyway.
@@ -266,7 +310,7 @@ class TargetingPlugin(AbstractPlugin):
         claimed_combos = set()
 
         # We must respect any seeding constraints.
-        player_seeds = [p for p in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])]
+        player_seeds = filter_to_targetable(GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", []))
 
         use_seeds_for_updates_only = GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(
             "use_seeds_for_updates_only", False)
@@ -355,10 +399,8 @@ class TargetingPlugin(AbstractPlugin):
             if int(e._Event__secret_id) > max_event:
                 break
 
-            deaths = [victim for (_, victim) in e.kills]
+            deaths = filter_to_targetable((victim for (_, victim) in e.kills))
 
-            # filter out city watch
-            deaths = [d for d in deaths if not ASSASSINS_DATABASE.get(d).is_city_watch]
             if not deaths:
                 continue
 
