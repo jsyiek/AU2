@@ -89,6 +89,10 @@ class UIConfigPlugin(AbstractPlugin):
         def filter_options(component, l):
             component.options = [o for o in component.options if o in l or o in component.defaults]
 
+        def filter_tuple_options(component, l):
+            """Setter functions for when options are tuples (display, value)"""
+            component.options = [o for o in component.options if o[0] in l or o in component.defaults]
+
         def filter_input_dropdown(component, l):
             component.options = [o for o in component.options if o in l or o == component.selected]
 
@@ -129,8 +133,8 @@ class UIConfigPlugin(AbstractPlugin):
                         options=[]
                     ),
                     title="Enter assassin names to search for",
-                    accessor=lambda component: sorted(component.options),
-                    setter=filter_options
+                    accessor=lambda component: [t[0] for t in component.options],  # the options in this case are tuples (display name, identifier)
+                    setter=filter_tuple_options
                 ),
                 enabled_for=EnabledFor(call=Call.NONE, hooks=("CorePlugin_hide_assassins",)),
                 replacement_effects=steal_options

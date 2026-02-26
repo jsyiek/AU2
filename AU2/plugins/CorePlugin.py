@@ -498,7 +498,7 @@ class CorePlugin(AbstractPlugin):
 
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["hide_assassins"]:
-            assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda x: True)
+            assassins = ASSASSINS_DATABASE.get_display_name_ident_pairs(include_hidden=lambda x: True)
             hidden_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda x: False, include_hidden=lambda x: True)
             components = [SelectorList(identifier=self.html_ids["Hidden Assassins"],
                                        title="Select assassins to hide",
