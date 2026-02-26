@@ -212,8 +212,8 @@ class TargetingPlugin(AbstractPlugin):
         answer = "won't" if use_seeds_for_updates_only else "will"
         return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
 
-    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
-        graph = self.compute_targets([]) # we don't care about any issues that arise
+    def render_assassins_summaries(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+        graph = self.compute_targets([])  # we don't care about any issues that arise
         out = {}
         for assassin in assassins:
             response: List[AttributePairTableRow] = []

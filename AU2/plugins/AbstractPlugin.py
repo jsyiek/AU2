@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, List, Tuple, TypeVar, Union
 
 from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -195,24 +195,26 @@ class AbstractPlugin:
     def on_request_event_summary(self) -> List[HTMLComponent]:
         return []
 
-    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+    def render_assassin_summary(self, _: Assassin) -> List[AttributePairTableRow]:
         """
-        Display any information about selected ASSASSINS that is managed by this plugin
+        Display any information about an ASSASSIN that is managed by this plugin
+        """
+        return []
 
-        Args:
-            assassins (list[Assassin]): list of assassins to produce information about
+    def render_assassins_summaries(self, _: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+        """
+        Display information about MULTIPLE assassins. Used for attributes that require processing of events
 
         Returns:
-            dict[str, list[AttributePairTableRow]]: a dict mapping assassin identifiers to a list of table rows (pairs
-                of strings)
+            dict[str, list[AttributePairTableRow]: a mapping from assassin identifiers to lists of summary table rows
         """
         return {}
 
-    def render_event_summary(self, _: List[Event]) -> Dict[str, List[AttributePairTableRow]]:
+    def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
         """
-        Display any information about selected EVENTS that is managed by this plugin
+        Display any information about an EVENT that is managed by this plugin
         """
-        return {}
+        return []
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         """

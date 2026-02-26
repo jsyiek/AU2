@@ -138,24 +138,21 @@ class WantedPlugin(AbstractPlugin):
         e.pluginState[self.identifier] = htmlResponse[self.event_html_ids["Wanted"]]
         return [Label("[WANTED] Success!")]
 
-    def render_event_summary(self, events: List[Event]) -> Dict[str, List[AttributePairTableRow]]:
-        out = {}
-        for event in events:
-            results = []
-            for playerID in event.pluginState.get(self.identifier, ()):
-                a = ASSASSINS_DATABASE.get(playerID)
-                sec_id = a._secret_id
-                name = a.real_name.split(" ")
-                if len(name) > 0:
-                    name = name[0]
-                else:
-                    name = "<no name...?!>"
-                duration, crime, redemption = event.pluginState[self.identifier][playerID]
-                results.append((f"Wanted duration ({name} {sec_id})", str(duration) + " days"))
-                results.append((f"Wanted crime ({name} {sec_id})", crime))
-                results.append((f"Wanted redemption ({name} {sec_id})", redemption))
-            out[event.identifier] = results
-        return out
+    def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
+        results = []
+        for playerID in event.pluginState.get(self.identifier, ()):
+            a = ASSASSINS_DATABASE.get(playerID)
+            sec_id = a._secret_id
+            name = a.real_name.split(" ")
+            if len(name) > 0:
+                name = name[0]
+            else:
+                name = "<no name...?!>"
+            duration, crime, redemption = event.pluginState[self.identifier][playerID]
+            results.append((f"Wanted duration ({name} {sec_id})", str(duration) + " days"))
+            results.append((f"Wanted crime ({name} {sec_id})", crime))
+            results.append((f"Wanted redemption ({name} {sec_id})", redemption))
+        return results
 
     def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
         messages = []

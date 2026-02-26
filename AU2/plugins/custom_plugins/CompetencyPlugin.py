@@ -522,7 +522,7 @@ class CompetencyPlugin(AbstractPlugin):
             default=default
         )]
 
-    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+    def render_assassins_summaries(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
         infos = get_player_infos()
         out = {}
         for assassin in assassins:

@@ -2,7 +2,7 @@ import glob
 import os.path
 
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple, TypeVar
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -90,6 +90,9 @@ GAME_TYPE_PLUGIN_MAP = {
     #     "WantedPlugin": True,
     # }
 }
+
+
+T = TypeVar("T")
 
 
 @registered_plugin
@@ -277,25 +280,22 @@ class CorePlugin(AbstractPlugin):
             )
         ]
 
-    def render_assassin_summary(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
-        out = {}
-        for assassin in assassins:
-            player_type = assassin.is_city_watch and "City Watch" or "Full Player"
-            hidden = assassin.hidden and "HIDDEN" or ""
-            out[assassin.identifier] = [
-                ("ID", str(assassin._secret_id)),
-                ("Type", f"{hidden} {player_type}"),
-                ("Name", assassin.real_name),
-                *((f"Pseudonym {i} [P{assassin._secret_id}_{i}]", p)
-                    for i, p in enumerate(assassin.pseudonyms) if p),
-                ("Pronouns", assassin.pronouns),
-                ("Email", assassin.email),
-                ("Address", assassin.address),
-                ("Water status", assassin.water_status),
-                ("College", assassin.college),
-                ("Notes", assassin.notes)
-            ]
-        return out
+    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+        player_type = assassin.is_city_watch and "City Watch" or "Full Player"
+        hidden = assassin.hidden and "HIDDEN" or ""
+        return [
+            ("ID", str(assassin._secret_id)),
+            ("Type", f"{hidden} {player_type}"),
+            ("Name", assassin.real_name),
+            *((f"Pseudonym {i} [P{assassin._secret_id}_{i}]", p)
+                for i, p in enumerate(assassin.pseudonyms) if p),
+            ("Pronouns", assassin.pronouns),
+            ("Email", assassin.email),
+            ("Address", assassin.address),
+            ("Water status", assassin.water_status),
+            ("College", assassin.college),
+            ("Notes", assassin.notes)
+        ]
 
     # CorePlugin can't be disabled
     def enabled(self) -> bool:
@@ -312,37 +312,41 @@ class CorePlugin(AbstractPlugin):
     def answer_core_plugin_summary_assassin(self, htmlResponse) -> List[HTMLComponent]:
         idents = htmlResponse[self.html_ids["Assassins"]]
         assassins = [ASSASSINS_DATABASE.get(ident) for ident in idents]
-        return self._answer_rendering(assassins, lambda p, a: p.render_assassin_summary(a))
 
-    def render_event_summary(self, events: List[Event]) -> Dict[str, List[AttributePairTableRow]]:
+        def renderer(plugin: AbstractPlugin, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+            """For a given plugin, calls render_assassin_summary for each assassin the user wants information on and
+            merges this with the grouped summaries from render_assassins_summaries"""
+            grouped = plugin.render_assassins_summaries(assassins)
+            for a in assassins:
+                grouped.setdefault(a.identifier, []).extend(plugin.render_assassin_summary(a))
+            return grouped
+
+        return self._answer_rendering(assassins, renderer)
+
+    def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
+        response = [
+            ("ID", str(event._Event__secret_id)),
+            ("Headline", event.headline),
+            ("Date/time", event.datetime),
+            ("Deaths", ", ".join(kill[1] for kill in event.kills))
+        ]
+
         snapshot = lambda a: f"{a.real_name} ({a._secret_id})"
+        for (i, ident) in enumerate(event.assassins):
+            a = ASSASSINS_DATABASE.get(ident)
+            pseudonym = a.get_pseudonym(event.assassins[ident])
+            response.append((f"Participant {i+1}", f"{snapshot(a)} as {pseudonym}"))
 
-        out = {}
-        for event in events:
-            response = [
-                ("ID", str(event._Event__secret_id)),
-                ("Headline", event.headline),
-                ("Date/time", event.datetime),
-                ("Deaths", ", ".join(kill[1] for kill in event.kills))
-            ]
+        for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
+            a = ASSASSINS_DATABASE.get(ident)
+            pseudonym = a.get_pseudonym(pseudonym_idx)
+            response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
 
-            for (i, ident) in enumerate(event.assassins):
-                a = ASSASSINS_DATABASE.get(ident)
-                pseudonym = a.get_pseudonym(event.assassins[ident])
-                response.append((f"Participant {i+1}", f"{snapshot(a)} as {pseudonym}"))
-
-            for (i, (ident, pseudonym_idx, _)) in enumerate(event.reports):
-                a = ASSASSINS_DATABASE.get(ident)
-                pseudonym = a.get_pseudonym(pseudonym_idx)
-                response.append((f"Report {i+1}", f"{snapshot(a)} as {pseudonym}"))
-
-            for (i, (killer_id, victim_id)) in enumerate(event.kills):
-                killer = ASSASSINS_DATABASE.get(killer_id)
-                victim = ASSASSINS_DATABASE.get(victim_id)
-                response.append((f"Kill {i+1}", f"{snapshot(killer)} kills {snapshot(victim)}"))
-
-            out[event.identifier] = response
-        return out
+        for (i, (killer_id, victim_id)) in enumerate(event.kills):
+            killer = ASSASSINS_DATABASE.get(killer_id)
+            victim = ASSASSINS_DATABASE.get(victim_id)
+            response.append((f"Kill {i+1}", f"{snapshot(killer)} kills {snapshot(victim)}"))
+        return response
 
     def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:
         return [
@@ -356,11 +360,13 @@ class CorePlugin(AbstractPlugin):
     def answer_core_plugin_summary_event(self, htmlResponse) -> List[HTMLComponent]:
         idents = htmlResponse[self.html_ids["Events"]]
         events = [EVENTS_DATABASE.get(ident) for ident in idents]
-        return self._answer_rendering(events, lambda p, e: p.render_event_summary(e))
+        return self._answer_rendering(events, lambda p, events_: {e.identifier: p.render_event_summary(e) for e in events_})
 
-    def _answer_rendering(self, objs: List[object],
-                          renderer: Callable[[AbstractPlugin, List[object]], Dict[str, List[AttributePairTableRow]]]
-                          ) -> List[HTMLComponent]:
+    def _answer_rendering(
+            self,
+            objs: List[T],
+            renderer: Callable[[AbstractPlugin, List[T]], Dict[str, List[AttributePairTableRow]]] = lambda _1, _2: {}
+        ) -> List[HTMLComponent]:
         # merge info from all plugins together
         results: Dict[str, List[Tuple[str, str]]] = renderer(self, objs)
         for p in PLUGINS:
