@@ -1,0 +1,61 @@
+name: Tests
+
+on:
+  pull_request:
+
+permissions:
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.12']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -e .
+
+      - name: Run tests
+        run: pytest AU2/test/ -v --junitxml=test-results.xml
+
+      - name: Comment with failed tests
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(python3 -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('test-results.xml')
+          failures = []
+          for tc in tree.iter('testcase'):
+              fail = tc.find('failure')
+              if fail is not None:
+                  name = tc.get('classname', '') + '::' + tc.get('name', '')
+                  msg = fail.get('message', '').split('\n')[0]
+                  failures.append((name, msg))
+          if failures:
+              lines = ['## Test Failures (Python ${{ matrix.python-version }})', '', '\`\`\`']
+              max_name = max(len(f[0]) for f in failures)
+              for name, msg in failures:
+                  lines.append(name.ljust(max_name) + '   ' + msg)
+              lines.append('\`\`\`')
+              print('\n'.join(lines))
+          ")
+          if [ -n "$BODY" ]; then
+            gh pr comment ${{ github.event.pull_request.number }} --body "$BODY"
+          fi

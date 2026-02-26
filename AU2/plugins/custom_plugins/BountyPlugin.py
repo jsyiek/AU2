@@ -12,7 +12,7 @@ from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import Defaul
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.DerivativeComponents.SearchableInputDropdown import SearchableInputDropdown
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
@@ -27,6 +27,8 @@ TABLE_TEMPLATE = """
 ROW_TEMPLATE = """
 <tr><td>{TARGET_NAME}</td><td>{PLACER_NAME}</td><td>{CRIME}</td><td>{REWARD}</td></tr>
 """
+
+BOUNTIES_NAVBAR_ENTRY = NavbarEntry("bounties.html", "Bounties", -1)
 
 BOUNTIES_PAGE_TEMPLATE: str
 with open(os.path.join(ROOT_DIR, "plugins", "custom_plugins", "html_templates", "bounties.html"), "r", encoding="utf-8",
@@ -149,7 +151,7 @@ class BountyPlugin(AbstractPlugin):
             )
         ]
 
-    def on_page_generate(self, _) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         bounties_dict = GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("bounties", {})
         bounties = [Bounty.from_id_and_dict(identifier, bounties_dict[identifier]) for identifier in bounties_dict]
         bounties = [b for b in bounties if b.active]
@@ -171,8 +173,9 @@ class BountyPlugin(AbstractPlugin):
                     )
                 )
             table_str = TABLE_TEMPLATE.format(ROWS="\n".join(rows))
+            navbar_entries.append(BOUNTIES_NAVBAR_ENTRY)
 
-        with open(os.path.join(WEBPAGE_WRITE_LOCATION, "bounties.html"), "w+", encoding="utf-8") as F:
+        with open(WEBPAGE_WRITE_LOCATION / BOUNTIES_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(
                 BOUNTIES_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,

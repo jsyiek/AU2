@@ -21,7 +21,7 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, ConfigExport, Export, AttributePairTableRow
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
@@ -44,6 +44,8 @@ PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
                          "<td {CREW_COLOR}>{POINTS}</td>"
                          "<td {CREW_COLOR}>{MULTIPLIER}</td>"
                          "{TEAM_ENTRY}</tr>")
+
+MAYWEEK_PLAYERS_NAVBAR_ENTRY = NavbarEntry("mw-players.html", "Players", -2)
 
 MAYWEEK_PLAYERS_TEMPLATE_PATH = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "may_week_utils_players.html"
 with open(MAYWEEK_PLAYERS_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -411,14 +413,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
         response = []
 
-        snapshot = lambda a: f"{a.real_name} ({a._secret_id})" # TODO: move to common library location
-
         if self.gsdb_get("Enable Teams?", False):
             team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
             team_str = self.get_cosmetic_name("Teams").capitalize()
             for i, (a_id, t_id) in enumerate(self.eps_get(event, "Team Changes", {}).items()):
                 a = ASSASSINS_DATABASE.get(a_id)
-                change_str = f"{snapshot(a)} " + (
+                change_str = f"{a.snapshot()} " + (
                     f"joins {team_names[t_id]}" if t_id is not None
                     else "goes it alone"
                 )
@@ -426,17 +426,17 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             for i, (killer_id, victim_id) in enumerate(self.eps_get(event, "Kills as Team", [])):
                 killer = ASSASSINS_DATABASE.get(killer_id)
                 victim = ASSASSINS_DATABASE.get(victim_id)
-                response.append((f"{team_str} Kill {i+1} ", f"{snapshot(killer)} kills {snapshot(victim)}"))
+                response.append((f"{team_str} Kill {i+1} ", f"{killer.snapshot()} kills {victim.snapshot()}"))
 
         multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
         for i, (old_owner, receiver) in enumerate(self.eps_get(event, "Multiplier Transfers", [])):
-            a1 = snapshot(ASSASSINS_DATABASE.get(old_owner)) if old_owner is not None else "None"
-            a2 = snapshot(ASSASSINS_DATABASE.get(receiver)) if receiver is not None else "None"
+            a1 = ASSASSINS_DATABASE.get(old_owner).snapshot() if old_owner is not None else "None"
+            a2 = ASSASSINS_DATABASE.get(receiver).snapshot() if receiver is not None else "None"
             response.append((f"{multiplier_str} Transfer {i+1}", f"{a1} -> {a2}"))
 
         for i, (a_id, points) in enumerate(self.eps_get(event, "BS Points", {}).items()):
             a = ASSASSINS_DATABASE.get(a_id)
-            response.append((f"BS Points for {snapshot(a)}", f"{points}"))
+            response.append((f"BS Points for {a.snapshot()}", f"{points}"))
 
         return response
 
@@ -653,7 +653,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         return scores
 
-    def on_page_generate(self, htmlResponse) -> List[HTMLComponent]:
+    def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         """
         Generates player info page and may week news page.
 
@@ -715,7 +715,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 )
             )
 
-        with open(WEBPAGE_WRITE_LOCATION / "mw-players.html", "w+", encoding="utf-8") as F:
+        if player_rows or pseudonym_rows:
+            navbar_entries.append(MAYWEEK_PLAYERS_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / MAYWEEK_PLAYERS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
             F.write(MAYWEEK_PLAYERS_TEMPLATE.format(
                 PSEUDONYM_ROWS = "\n".join(pseudonym_rows),
                 PLAYER_ROWS = "\n".join(player_rows),
@@ -747,13 +750,14 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # fallback for individual
             return get_color(pseudonym)
 
-        MAYWEEK_CHAPTER = Chapter("mw-news", "May Week News")
+        MAYWEEK_CHAPTER = Chapter("May Week News", NavbarEntry("mw-news.html", "Reports", 0))
 
         generate_news_pages(
             headlines_path="mw-head.html",
             page_allocator=lambda e: MAYWEEK_CHAPTER if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) else None,
             color_fn=mw_color_fn,
-            plugin_managers=(self.TeamManager() for _ in range(teams_enabled))
+            plugin_managers=(self.TeamManager() for _ in range(teams_enabled)),
+            news_list_path="mw-news-list.html",
         )
 
         return [Label("[MAY WEEK] Success!")]
