@@ -200,7 +200,7 @@ def render(html_component, dependency_context={}):
             inquirer.Checkbox(
                 name="q",
                 message="Choose which assassins are in this event",
-                choices=assassins,
+                choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(assassins),
                 default=list(html_component.default.keys())
             )]
         chosen_assassins = inquirer_prompt_with_abort(q)["q"]
@@ -212,7 +212,7 @@ def render(html_component, dependency_context={}):
                 q = [
                     inquirer.List(
                         name="q",
-                        message=f"{escape_format_braces(player)}: Choose pseudonym",
+                        message=f"{escape_format_braces(ASSASSINS_DATABASE.get(player).display_name())}: Choose pseudonym",
                         choices=choices,
                         default=html_component.default.get(player, choices[-1])
                     )]
@@ -221,7 +221,7 @@ def render(html_component, dependency_context={}):
                 pseudonym_index = choices[0][1]
             pseudonym = values[pseudonym_index]
             mappings[player] = pseudonym_index
-            print(f"Using {player}: {pseudonym}")
+            print(f"Using {ASSASSINS_DATABASE.get(player).snapshot()}: {pseudonym}")
         return {html_component.identifier: mappings}
 
     # dependent component
@@ -348,9 +348,11 @@ def render(html_component, dependency_context={}):
         potential_kills = {}
         defaults = []
         for a1 in assassins:
+            a1_model = ASSASSINS_DATABASE.get(a1)
             for a2 in assassins:
+                a2_model = ASSASSINS_DATABASE.get(a2)
                 if a1 != a2:
-                    key = f"{a1} kills {a2}"
+                    key = f"{a1_model.snapshot()} kills {a2_model.snapshot()}"
                     potential_kills[key] = (a1, a2)
                     if (a1, a2) in html_component.default:
                         defaults.append(key)
@@ -438,12 +440,14 @@ def render(html_component, dependency_context={}):
         if html_component.kill_entry_identifier in dependency_context and html_component.targeting_graph:
             kills = dependency_context[html_component.kill_entry_identifier]
             for (killer, victim) in kills:
+                killer_disp = ASSASSINS_DATABASE.get(killer).snapshot()
+                victim_disp = ASSASSINS_DATABASE.get(victim).snapshot()
                 if victim in html_component.targeting_graph.get(killer, []):
-                    print(f"{killer} has {victim} as a target.")
+                    print(f"{killer_disp} has {victim_disp} as a target.")
                 elif killer in html_component.targeting_graph.get(victim, []):
-                    print(f"{killer} is a target of {victim}.")
+                    print(f"{killer_disp} is a target of {victim_disp}.")
                 else:
-                    print(f"{killer} does not have {victim} as a target nor targeter; this may be an illicit kill.")
+                    print(f"{killer_disp} does not have {victim_disp} as a target nor targeter; this may be an illicit kill.")
 
         dependent = html_component.pseudonym_list_identifier
         assert (dependent in dependency_context)
@@ -454,7 +458,7 @@ def render(html_component, dependency_context={}):
         q = [inquirer.Checkbox(
             name="q",
             message=escape_format_braces(html_component.title),
-            choices=list(assassins_mapping.keys()),
+            choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(assassins_mapping),
             default=list(html_component.default.keys())  # default: Dict[str, int]
         )]
         assassins = inquirer_prompt_with_abort(q)["q"]
@@ -465,20 +469,21 @@ def render(html_component, dependency_context={}):
             print("    =0 sets them as NOT WANTED")
             print("    <0 removes any mention of wantedness from this event")
         for a in assassins:
+            a_disp = ASSASSINS_DATABASE.get(a).display_name()
             q = [
                 inquirer.Text(
                     name="duration",
-                    message=f"WANTED DURATION for: {escape_format_braces(a)} ",
+                    message=f"WANTED DURATION for: {escape_format_braces(a_disp)} ",
                     default=html_component.default.get(a, ("", "", ""))[0],
                     validate=integer_validator
                 ), inquirer.Text(
                     name="crime",
-                    message=f"CRIME for: {escape_format_braces(a)}",
+                    message=f"CRIME for: {escape_format_braces(a_disp)}",
                     default=escape_format_braces(html_component.default.get(a, ("", "", ""))[1]),
                     ignore=lambda x: int(x["duration"]) <= 0
                 ), inquirer.Text(
                     name="redemption",
-                    message=f"REDEMPTION for: {escape_format_braces(a)}",
+                    message=f"REDEMPTION for: {escape_format_braces(a_disp)}",
                     default=escape_format_braces(html_component.default.get(a, ("", "", ""))[2]),
                     ignore=lambda x: int(x["duration"]) <= 0
                 )]
@@ -494,11 +499,10 @@ def render(html_component, dependency_context={}):
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: [], "skip": True}
-        assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
-            choices=assassins,
+            choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(assassins_mapping),
             default=html_component.default
         )]
         return inquirer_prompt_with_abort(q)
@@ -510,11 +514,10 @@ def render(html_component, dependency_context={}):
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
-        assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
             message=escape_format_braces(html_component.title),
-            choices=assassins,
+            choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(assassins_mapping),
             default=list(html_component.default.keys())
         )]
         selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
@@ -522,7 +525,7 @@ def render(html_component, dependency_context={}):
         for a in selected_assassins:
             q.append(inquirer.Text(
                 name=a,
-                message=f"Value for {escape_format_braces(a)}",
+                message=f"Value for {escape_format_braces(ASSASSINS_DATABASE.get(a).display_name())}",
                 default=html_component.default.get(a, None),
                 validate=float_validator
             ))
@@ -536,11 +539,10 @@ def render(html_component, dependency_context={}):
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
-        assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
             message=escape_format_braces(html_component.title),
-            choices=assassins,
+            choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(assassins_mapping),
             default=list(html_component.default.keys())
         )]
         selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
@@ -549,7 +551,7 @@ def render(html_component, dependency_context={}):
             val_if_exists = html_component.default.get(a, None)
             q.append(inquirer.Text(
                 name=a,
-                message=f"Value for {escape_format_braces(a)}",
+                message=f"Value for {escape_format_braces(ASSASSINS_DATABASE.get(a).display_name())}",
                 default=val_if_exists if val_if_exists is not None else html_component.global_default,
                 validate=integer_validator
             ))
@@ -563,11 +565,10 @@ def render(html_component, dependency_context={}):
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
-        assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
             message=escape_format_braces(html_component.title),
-            choices=assassins,
+            choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(assassins_mapping),
             default=list(html_component.default.keys())
         )]
         selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
@@ -575,7 +576,7 @@ def render(html_component, dependency_context={}):
         for a in selected_assassins:
             q.append(inquirer.Text(
                 name=a,
-                message=f"Value for {escape_format_braces(a)}",
+                message=f"Value for {escape_format_braces(ASSASSINS_DATABASE.get(a).display_name())}",
                 default=escape_format_braces(html_component.default.get(a, ""))
             ))
         points = {}
@@ -590,11 +591,10 @@ def render(html_component, dependency_context={}):
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
             return {html_component.identifier: {}, "skip": True}
-        assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
             message=escape_format_braces(html_component.title),
-            choices=assassins,
+            choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(assassins_mapping),
             default=list(html_component.default.keys())
         )]
         selected_assassins = inquirer_prompt_with_abort(q)["assassins"]
@@ -602,7 +602,7 @@ def render(html_component, dependency_context={}):
         for a in selected_assassins:
             q.append(inquirer.List(
                 name=a,
-                message=f"Value for {escape_format_braces(a)}",
+                message=f"Value for {escape_format_braces(ASSASSINS_DATABASE.get(a).display_name())}",
                 choices=html_component.options,
                 default=html_component.default.get(a)))
         return {html_component.identifier: inquirer_prompt_with_abort(q) if q else {}}
@@ -856,7 +856,7 @@ def render(html_component, dependency_context={}):
                 inquirer.Checkbox(
                     name=html_component.identifier,
                     message="Select assassins to send an email:",
-                    choices=html_component.assassins
+                    choices=ASSASSINS_DATABASE.idents_to_disp_ident_pairs(html_component.assassins)
                 )
             ]
             return inquirer_prompt_with_abort(q)

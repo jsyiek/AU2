@@ -2,7 +2,7 @@ import os
 
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Dict, List, Callable, Tuple, Union
+from typing import Callable, Dict, Iterable, List, Tuple, Union
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.model import PersistentFile, Assassin
@@ -82,6 +82,9 @@ class AssassinsDatabase(PersistentFile):
         """
         return [a.identifier for a in self.get_filtered(include=include, include_hidden=include_hidden, key=key)]
 
+    def idents_to_disp_ident_pairs(self, idents: Iterable[str]) -> List[Tuple[str, str]]:
+        return [(self.get(ident).display_name(), ident) for ident in idents]
+
     def get_display_name_ident_pairs(self, *,
                         include: Callable[[Assassin], bool] = lambda x: True,
                         include_hidden: Union[Callable[[Assassin], bool], bool] = False,
@@ -97,7 +100,8 @@ class AssassinsDatabase(PersistentFile):
 
     def get_ident_pseudonym_pairs(self, *,
                      include: Callable[[Assassin], bool] = lambda x: True,
-                     include_hidden: Union[Callable[[Assassin], bool], bool] = False) -> List[Tuple[str, List[str]]]:
+                     include_hidden: Union[Callable[[Assassin], bool], bool] = False,
+                     key=lambda a: a.real_name.lower()) -> List[Tuple[str, List[str]]]:
         """
         Parameters: same as `get_filtered`
 
