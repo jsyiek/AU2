@@ -67,7 +67,7 @@ class TestCompetencyPlugin:
         """
         event = dummy_event()
         plugin = CompetencyPlugin()
-        plugin.on_event_create(
+        plugin.on_event_create_or_update(
             event,
             {plugin.html_ids["Competency"]: {"a1": 5, "a2": 7}}
         )
@@ -83,7 +83,7 @@ class TestCompetencyPlugin:
         event = dummy_event()
         plugin = CompetencyPlugin()
         event.pluginState = {plugin.html_ids["Competency"]: {"a1": 3}, "foobar": "foobar"}
-        plugin.on_event_update(
+        plugin.on_event_create_or_update(
             event,
             {plugin.html_ids["Competency"]: {"a1": 5, "a2": 7}}
         )
