@@ -387,9 +387,11 @@ def render(html_component, dependency_context={}):
         owners = [a for a in html_component.owners if a in assassins]
         receivers = [a for a in assassins if a not in owners]
         for a1 in itertools.chain(owners, [None]):
+            a1_disp = ASSASSINS_DATABASE.get(a1).snapshot() if a1 else "None"
             for a2 in itertools.chain(receivers, [None]):
+                a2_disp = ASSASSINS_DATABASE.get(a2).snapshot() if a2 else "None"
                 if a1 != a2:
-                    key = f"{a1} --> {a2}"
+                    key = f"{a1_disp} --> {a2_disp}"
                     potential_transfers[key] = (a1, a2)
                     if (a1, a2) in html_component.default:
                         defaults.append(key)
@@ -414,7 +416,7 @@ def render(html_component, dependency_context={}):
         mapping = {}
         defaults = []
         for (a1, a2) in kills:
-            key = f"{a1} kills {a2}"
+            key = f"{ASSASSINS_DATABASE.get(a1).snapshot()} kills {ASSASSINS_DATABASE.get(a2).snapshot()}"
             mapping[key] = (a1, a2)
             if (a1, a2) in html_component.default:
                 defaults.append(key)
