@@ -144,7 +144,7 @@ class CityWatchPlugin(AbstractPlugin):
         return [Label(f"[CITY WATCH] Resurrected {ident} as {new_assassin.identifier}.")]
 
     def ask_set_special_ranks(self):
-        all_city_watch = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_city_watch]
+        all_city_watch = ASSASSINS_DATABASE.get_display_name_ident_pairs(include=lambda a: a.is_city_watch, include_hidden=True)
         return [
             Label("This only affects the displayed rank on the website"),
             SelectorList(

@@ -257,8 +257,8 @@ class ScoringPlugin(AbstractPlugin):
 
     def gather_assassins_and_bonuses(self) -> List[Tuple[str, str]]:
         """Lists assassins with their bonuses"""
-        return [(f"{ident} -- {self.aps_get(ident, 'Bonus')}", ident)
-                for ident in ASSASSINS_DATABASE.get_identifiers()]
+        return [(f"{disp} -- {self.aps_get(ident, 'Bonus')}", ident)
+                for disp, ident in ASSASSINS_DATABASE.get_display_name_ident_pairs()]
 
     def ask_set_bonuses(self, ident: str) -> List[HTMLComponent]:
         current_bonus = self.aps_get(ident, "Bonus")
