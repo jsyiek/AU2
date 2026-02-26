@@ -242,35 +242,39 @@ class TargetingPlugin(AbstractPlugin):
         answer = "won't" if use_seeds_for_updates_only else "will"
         return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
 
-    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        graph = self.compute_targets([]) # we don't care about any issues that arise
-        response: List[AttributePairTableRow] = []
-        if assassin.identifier not in graph:
-            return []
-        old_targets = set(assassin.__last_emailed_targets)
-        current_targets = set(graph[assassin.identifier])
-        new_targets = set()
-        i = 0
-        for target in current_targets:
-            if target in old_targets:
+    def render_assassins_summaries(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+        graph = self.compute_targets([])  # we don't care about any issues that arise
+        out = {}
+        for assassin in assassins:
+            response: List[AttributePairTableRow] = []
+            if assassin.identifier not in graph:
+                continue
+            old_targets = set(assassin.__last_emailed_targets)
+            current_targets = set(graph[assassin.identifier])
+            new_targets = set()
+            i = 0
+            for target in current_targets:
+                if target in old_targets:
+                    i += 1
+                    response.append((f"Target {i}", target))
+                    old_targets.discard(target)
+                else:
+                    new_targets.add(target)
+            for target in new_targets:
                 i += 1
-                response.append((f"Target {i}", target))
-                old_targets.discard(target)
-            else:
-                new_targets.add(target)
-        for target in new_targets:
-            i += 1
-            response.append((f"Target {i} (NEW)", target))
-            if old_targets:
-                response.append((f"Target {i} (OLD)", old_targets.pop()))
+                response.append((f"Target {i} (NEW)", target))
+                if old_targets:
+                    response.append((f"Target {i} (OLD)", old_targets.pop()))
 
-        num_attackers = 0
-        for (attacker, targets) in graph.items():
-            if assassin.identifier in targets:
-                response.append((f"Attacker {num_attackers+1}", attacker))
-                num_attackers += 1
+            num_attackers = 0
+            for (attacker, targets) in graph.items():
+                if assassin.identifier in targets:
+                    response.append((f"Attacker {num_attackers+1}", attacker))
+                    num_attackers += 1
 
-        return response
+            out[assassin.identifier] = response
+
+        return out
 
     @property
     def seed(self):

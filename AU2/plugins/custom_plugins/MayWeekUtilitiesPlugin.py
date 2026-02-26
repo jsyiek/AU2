@@ -389,7 +389,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             )
         ]
 
-    def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
+    def render_assassins_summaries(self, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
         team_str = self.get_cosmetic_name("Teams").capitalize()
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
         teams_enabled = self.gsdb_get("Enable Teams?", False)
@@ -399,16 +399,17 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         multiplier_owners = self.get_multiplier_owners()
         multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
 
-        team = team_manager.member_to_team[assassin.identifier]
-        team_name = team_names[team] if team is not None else "(Individual)"
-
-        return [
-            ("Score", scores[assassin.identifier]),
-            # will render as plural, but eh
-            *((team_str, team_name) for _ in range(teams_enabled)),
-            (f"Has {multiplier_str}", "Y" if assassin.identifier in multiplier_owners else "N"),
-            (f"Benefits from {multiplier_str}", "Y" if assassin.identifier in multiplier_beneficiaries else "N")
-        ]
+        out = {}
+        for assassin in assassins:
+            team = team_manager.member_to_team[assassin.identifier]
+            team_name = team_names[team] if team is not None else "(Individual)"
+            out[assassin.identifier] = [
+                ("Score", scores[assassin.identifier]),
+                # will render as plural, but eh
+                *((team_str, team_name) for _ in range(teams_enabled)),
+                (f"Has {multiplier_str}", "Y" if assassin.identifier in multiplier_owners else "N"),
+                (f"Benefits from {multiplier_str}", "Y" if assassin.identifier in multiplier_beneficiaries else "N")
+            ]
 
     def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
         response = []

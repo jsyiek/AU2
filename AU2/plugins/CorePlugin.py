@@ -2,7 +2,7 @@ import glob
 import os.path
 
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -93,6 +93,9 @@ GAME_TYPE_PLUGIN_MAP = {
     # }
 }
 BOUNTY_PLUGINS = ("BountyNewsPlugin", "BountyPlugin")
+
+
+T = TypeVar("T")
 
 
 @registered_plugin
@@ -295,7 +298,7 @@ class CorePlugin(AbstractPlugin):
         ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        player_type = assassin.is_city_watch and "City Watch" or "Player"
+        player_type = assassin.is_city_watch and "City Watch" or "Full Player"
         hidden = assassin.hidden and "HIDDEN" or ""
         return [
             ("ID", str(assassin._secret_id)),
@@ -317,16 +320,25 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_summary_assassin(self):
         return [
-            InputWithDropDown(
+            SelectorList(
                 self.html_ids["Assassins"],
-                title="Select assassin to show status for",
+                title="Select assassins to show status for",
                 options=ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda _: True))
         ] + sum((p.on_request_assassin_summary() for p in PLUGINS), start=[])
 
     def answer_core_plugin_summary_assassin(self, htmlResponse) -> List[HTMLComponent]:
-        ident = htmlResponse[self.html_ids["Assassins"]]
-        assassin = ASSASSINS_DATABASE.get(ident)
-        return self._answer_rendering(assassin, lambda p, a: p.render_assassin_summary(a))
+        idents = htmlResponse[self.html_ids["Assassins"]]
+        assassins = [ASSASSINS_DATABASE.get(ident) for ident in idents]
+
+        def renderer(plugin: AbstractPlugin, assassins: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+            """For a given plugin, calls render_assassin_summary for each assassin the user wants information on and
+            merges this with the grouped summaries from render_assassins_summaries"""
+            grouped = plugin.render_assassins_summaries(assassins)
+            for a in assassins:
+                grouped.setdefault(a.identifier, []).extend(plugin.render_assassin_summary(a))
+            return grouped
+
+        return self._answer_rendering(assassins, renderer)
 
     def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
         response = [
@@ -356,7 +368,7 @@ class CorePlugin(AbstractPlugin):
 
     def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:
         return [
-            InputWithDropDown(
+            SelectorList(
                 self.html_ids["Events"],
                 title="Select events to show status for",
                 options=self.gather_events()
@@ -364,21 +376,28 @@ class CorePlugin(AbstractPlugin):
         ] + sum((p.on_request_event_summary() for p in PLUGINS), start=[])
 
     def answer_core_plugin_summary_event(self, htmlResponse) -> List[HTMLComponent]:
-        ident = htmlResponse[self.html_ids["Events"]]
-        event = EVENTS_DATABASE.get(ident)
-        return self._answer_rendering(event, lambda p, e: p.render_event_summary(e))
+        idents = htmlResponse[self.html_ids["Events"]]
+        events = [EVENTS_DATABASE.get(ident) for ident in idents]
+        return self._answer_rendering(events, lambda p, events_: {e.identifier: p.render_event_summary(e) for e in events_})
 
-    def _answer_rendering(self, obj: object, renderer: Callable[[AbstractPlugin, object], List[AttributePairTableRow]]) -> List[HTMLComponent]:
-        results: List[Tuple[str, str]] = renderer(self, obj)
+    def _answer_rendering(
+            self,
+            objs: List[T],
+            renderer: Callable[[AbstractPlugin, List[T]], Dict[str, List[AttributePairTableRow]]] = lambda _1, _2: {}
+        ) -> List[HTMLComponent]:
+        # merge info from all plugins together
+        results: Dict[str, List[Tuple[str, str]]] = renderer(self, objs)
         for p in PLUGINS:
             if isinstance(p, CorePlugin):
                 continue
-            results += renderer(p, obj)
+            p_results = renderer(p, objs)
+            for k, v in p_results.items():
+                results.setdefault(k, []).extend(v)
         headings = (
             "Attribute" + " "*25,
             "Value" + " "*80
         )
-        return [Table(results, headings=headings)]
+        return [Table(obj_info, headings=headings) for obj_info in results.values()]
 
     def on_assassin_request_create(self):
         # use this to detect whether the game has started or not, since sending the first email is the point when
