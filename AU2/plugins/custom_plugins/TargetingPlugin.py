@@ -829,6 +829,24 @@ class TargetingPlugin(AbstractPlugin):
                     player_teams,
                     allow_mutual_team_targets=True,
                     allow_mutual_seed_targets=True,
+                    allow_triangles=True
+                )
+
+                if success:
+                    response.append(
+                        Label("[TARGETING] WARNING: The targeting graph contains a triangle due to an unavoidable graph collapse."))
+                    continue
+
+                success = self.update_graph(
+                    response,
+                    targeting_graph,
+                    targeters_graph,
+                    deaths,
+                    player_seeds_set,
+                    player_teams,
+                    allow_mutual_team_targets=True,
+                    allow_mutual_seed_targets=True,
+                    allow_triangles=True,
                     allow_mutual_targets=True
                 )
 
@@ -854,6 +872,7 @@ class TargetingPlugin(AbstractPlugin):
             player_teams: Sequence[Set[str]] = (),
             allow_mutual_team_targets: bool = False,
             allow_mutual_seed_targets: bool = False,
+            allow_triangles: bool = False,
             allow_mutual_targets: bool = False,
             limit_checks=1000000
     ) -> bool:
@@ -931,8 +950,8 @@ class TargetingPlugin(AbstractPlugin):
             # (a triangle is any targeting of players (eg) Vendetta, OHare, and O-Ren Ishii such that
             # Vendetta targets OHare targets O-Ren Ishii targets Vendetta
             # V -> OH -> OR -> V)
-            # Ignore conditions: allow_mutual_targets=True
-            if not allow_mutual_targets:
+            # Ignore conditions: allow_triangles=True
+            if not allow_triangles:
                 # precondition: assume triangle elimination has been performed up to this point.
                 # While triangle elimination originated with the previous AU, Peter has a good description of it:
                 # "only check the targets of the newly assigned targets' targets,
