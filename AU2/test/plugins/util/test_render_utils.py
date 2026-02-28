@@ -54,3 +54,18 @@ class TestRenderUtils:
             "Including:\n\n"
             "Leaving newlines as-is."
         )
+
+        event2 = game.assassin(p[0]).is_involved_in_event(
+            headline="<i>**Test markdown-html interraction**</i>, *<b>both ways around</b>*",
+        ).with_report(p[0], 0, "Here is an image:\n\n![alt text](test.png)")\
+        .with_report(p[1], 0, "Take a look at the [incos](inco.html) page!")
+
+
+        headline2, reports2 = render_headline_and_reports(event2.model(), (), dummy_color_fn)
+
+        assert headline2 == "<i><strong>Test markdown-html interraction</strong></i>, <em><b>both ways around</b></em>"
+        assert reports2[(p[0] + " identifier", 0)] == (
+            "<p>Here is an image:</p>\n"
+            "<p><img alt=\"alt text\" src=\"test.png\" /></p>"
+        )
+        assert reports2[(p[1] + " identifier", 0)] == "<p>Take a look at the <a href=\"inco.html\">incos</a> page!</p>"
