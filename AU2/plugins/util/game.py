@@ -13,15 +13,16 @@ HTML_REPORT_PREFIX = "<!--HTML-->"
 
 def soft_escape(string: str) -> str:
     """
-    Escapes html and adds <br /> to newlines only if not prefixed by HTML_REPORT_PREFIX
+    Escapes html only if not prefixed by HTML_REPORT_PREFIX
     """
 
     # umpires may regret allowing this
     # supposing you are a clever player who has found this and the umpire does not know...
     # please spare the umpire any headaches
     # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
+    string = string.strip()
     if not string.startswith(HTML_REPORT_PREFIX):
-        return escape(string).replace("\n", "<br />\n")
+        return escape(string)
     return string
 
 

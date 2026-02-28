@@ -3,6 +3,8 @@ inquirer
 datetime
 paramiko
 tabulate
+markdown
+py-gfm
 html5lib
 colorama  # optional -- only needed if using an old Windows terminal
 pyvis  # optional -- only needed when generating graph visualisations
