@@ -59,11 +59,17 @@ class Assassin(PersistentFile):
 
         # Don't move this out of __post_init__
         if not self.identifier:
-            dotdotdot = "..." if len(self.pseudonyms[0]) > 15 else ""
-            self.identifier = f"{self.real_name} ({self.pseudonyms[0][:15]}{dotdotdot}){' [city watch]' if self.is_city_watch else ''} ID: {self._secret_id}"
+            self.identifier = self.display_name()
 
     def snapshot(self) -> str:
         return f"{self.real_name} ({self._secret_id})"
+
+    def display_name(self, pseudonym_truncation: int = 15) -> str:
+        all_pseudonyms = self.all_pseudonyms(lambda x: x)
+        dotdotdot = "..." if len(all_pseudonyms) > pseudonym_truncation else ""
+        attrs = ', '.join((*('city watch' for _ in range(self.is_city_watch)), *('HIDDEN' for _ in range(self.hidden))))
+        return (f"{self.real_name} ({all_pseudonyms[:pseudonym_truncation]}{dotdotdot})"
+               f"{f' [{attrs}]' if attrs else ''} ID: {self._secret_id}")
 
     def clone(self, **changes):
         """

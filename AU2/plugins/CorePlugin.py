@@ -171,14 +171,14 @@ class CorePlugin(AbstractPlugin):
                 "Assassin -> Update",
                 self.ask_core_plugin_update_assassin,
                 self.answer_core_plugin_update_assassin,
-                ((lambda: ASSASSINS_DATABASE.get_identifiers()),)
+                (ASSASSINS_DATABASE.get_display_name_ident_pairs,)
             ),
             Export(
                 "core_assassin_update_pseudonyms",
                 "Assassin -> Update Pseudonyms",
                 self.ask_core_plugin_update_pseudonyms,
                 self.answer_core_plugin_update_pseudonyms,
-                (ASSASSINS_DATABASE.get_identifiers,)
+                (ASSASSINS_DATABASE.get_display_name_ident_pairs,)
             ),
             Export(
                 "core_assassin_summary",
@@ -320,7 +320,7 @@ class CorePlugin(AbstractPlugin):
             InputWithDropDown(
                 self.html_ids["Assassins"],
                 title="Select assassin to show status for",
-                options=ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda _: True))
+                options=ASSASSINS_DATABASE.get_display_name_ident_pairs(include_hidden=True))
         ] + sum((p.on_request_assassin_summary() for p in PLUGINS), start=[])
 
     def answer_core_plugin_summary_assassin(self, htmlResponse) -> List[HTMLComponent]:
@@ -498,7 +498,7 @@ class CorePlugin(AbstractPlugin):
 
     def on_request_hook_respond(self, hook: str) -> List[HTMLComponent]:
         if hook == self.hooks["hide_assassins"]:
-            assassins = ASSASSINS_DATABASE.get_identifiers(include_hidden=lambda x: True)
+            assassins = ASSASSINS_DATABASE.get_display_name_ident_pairs(include_hidden=lambda x: True)
             hidden_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda x: False, include_hidden=lambda x: True)
             components = [SelectorList(identifier=self.html_ids["Hidden Assassins"],
                                        title="Select assassins to hide",
