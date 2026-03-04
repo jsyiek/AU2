@@ -231,7 +231,7 @@ class WantedPlugin(AbstractPlugin):
             tables.append(
                 CITY_WATCH_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if wanted_player_deaths or wanted_player_deaths:
+        if wanted_player_deaths or wanted_city_watch_deaths:
             tables.append(DEAD_WANTED_INTRO_TEXT)
         if wanted_player_deaths:
             rows = []
