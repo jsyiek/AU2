@@ -399,17 +399,20 @@ class CompetencyPlugin(AbstractPlugin):
                 else:
                     deadline_str = competency_manager.deadlines[recipient.identifier].strftime("%Y-%m-%d %H:%M")
                     content = f"Your competence deadline is at: {deadline_str}"
+
+                new_competency_ts = competency_manager.deadlines[recipient.identifier].timestamp()
+
                 email.add_content(
                     self.identifier,
                     content=content,
-                    require_send=recipient.__last_emailed_competency != competency_manager.deadlines[recipient.identifier]
+                    require_send=recipient.__last_emailed_competency != new_competency_ts
                 )
 
                 # only record emailed competency if emails will actually be sent
                 # the component is named confusingly. here, True = *do* send emails!
                 # TODO: would be good to be able to do this *after* emails sent...
                 if htmlResponse.get("SRCFPlugin_dry_run", True):
-                    recipient.__last_emailed_competency = competency_manager.deadlines[recipient.identifier]
+                    recipient.__last_emailed_competency = new_competency_ts
 
         return []
 
