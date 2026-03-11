@@ -1,7 +1,7 @@
+import dataclasses
 import itertools
 import random
-import time
-from typing import Dict, Iterable, List, Set, Tuple
+from typing import Dict, List, Iterable, Sequence, Set, Tuple
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
@@ -9,12 +9,12 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
-from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, DangerousConfigExport
+from AU2.html_components.SpecialComponents.TeamsEditor import TeamsEditor
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, DangerousConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -46,6 +46,164 @@ def filter_to_targetable(idents: Iterable[str]) -> List[str]:
     return [ident for ident in idents if not ASSASSINS_DATABASE.get(ident).is_city_watch]
 
 
+@dataclasses.dataclass
+class ChainGenerator:
+    players: List[str]
+    targeting_graph: Dict[str, Set[str]]
+    player_teammate_mapping: Dict[str, Set[str]]
+
+    broke_team_constraint: bool = False
+    broke_triangle_constraint: bool = False
+    broke_mutual_constraint: bool = False
+
+    def check_constraints(self, next_p: str, curr_p: str, prev_p: str,
+                          no_triangles=True, no_teammates=True, no_mutuals=True) -> bool:
+        """
+        Checks whether adding the targeting relation curr_p -> next_p would violate any targeting constraints.
+
+        Args:
+            next_p (str): Identifier of the next assassin we want to add to the current chain
+            curr_p (str): Identifier of the most recent assassin added to the current chain
+            prev_p (str): Identifier of the assassin added to the current chain before curr_p
+            no_triangles (bool): Whether to enforce the constraint of no triangles in the targeting graph
+            no_teammates (bool): Whether to enforce the constraint of teammates (including seeds) not targeting
+                each other
+            no_mutuals (bool): Whether to enforce the constraint of players not having each other as targets.
+
+        Returns:
+            bool: True if all constraints are satisfied, otherwise False.
+        """
+        has_duplicate = next_p in self.targeting_graph.get(curr_p, set())
+        if has_duplicate:
+            return False
+
+        if no_mutuals:
+            has_mutual_targets = curr_p in self.targeting_graph.get(next_p, set())
+            if has_mutual_targets:
+                return False
+
+        if no_teammates:
+            has_intra_team_target = next_p in self.player_teammate_mapping.get(curr_p, set())
+            if has_intra_team_target:
+                return False
+
+        if no_triangles:
+            # detect situations where
+            # prev_p -> curr_p
+            # and next_p -> prev_p
+            # so adding the targeting relation curr_p -> next_p would create a triangle
+            # this is separate to the following condition because the prev_p -> curr_p targeting relation
+            # will not have been added to targeting_graph at this point!
+            prev_p_is_target_of_next_p = prev_p in self.targeting_graph.get(next_p, set())
+            if prev_p_is_target_of_next_p:
+                return False
+
+            # detects situations where one of the existing targets of next_p has curr_p as a target,
+            # and so adding the targeting relation curr_p -> next_p would create a triangle
+            curr_p_is_target_of_one_of_next_p_s_targets = any(
+                curr_p in self.targeting_graph.get(next_p_targ, set())
+                for next_p_targ in self.targeting_graph.get(next_p, set())
+            )
+            if curr_p_is_target_of_one_of_next_p_s_targets:
+                return False
+
+        # if none of the above conditions fail then the constraints are satisfied (for now)
+        return True
+
+    def lengthen_chain(self,
+                       chain: List[str],
+                       remaining_players: List[str],
+                       no_triangles=True,
+                       no_teammates=True,
+                       no_mutuals=True) -> List[str]:
+        """Extends the chain subject to specified constraints,
+        returning players that weren't added due to failing a constraint."""
+        unused_players = []
+        for next_p in remaining_players:
+            curr_p = chain[-1] if len(chain) > 0 else None
+            prev_p = chain[-2] if len(chain) > 1 else None
+            if self.check_constraints(next_p, curr_p, prev_p,
+                                 no_triangles=no_triangles, no_teammates=no_teammates, no_mutuals=no_mutuals):
+                chain.append(next_p)
+            else:
+                unused_players.append(next_p)
+                # constraints are only relaxed to prevent an impasse
+                # thus, once the chain is lengthened they should be enforced again
+                no_teammates, no_mutuals, no_triangles = True, True, True
+        return unused_players
+
+    def new_chain(self,
+                  enforce_no_triangles: bool = True,
+                  enforce_teams: bool = True,
+                  enforce_no_mutuals: bool = True) -> List[str]:
+        """Generate chain that satisfies constraints"""
+
+        # shuffle list of players
+        remaining_players = list(self.players)
+        random.shuffle(remaining_players)
+
+        chain = []
+
+        while remaining_players:
+            remaining_before = len(remaining_players)
+            remaining_players = self.lengthen_chain(chain, remaining_players)
+            # gradually relax constraints if allowed and necessary
+            # first we allow triangles in the targeting graph
+            # then if this doesn't help, we allow teammates to target each other
+            # finally if even that fails we allow mutual targeting
+            if len(remaining_players) == remaining_before:
+                if not enforce_teams:
+                    remaining_players = self.lengthen_chain(chain, remaining_players, no_teammates=False)
+                    self.broke_team_constraint = True
+                else:
+                    raise FailedToCreateChainException()
+                if len(remaining_players) == remaining_before:
+                    if not enforce_no_triangles:
+                        remaining_players = self.lengthen_chain(chain, remaining_players,
+                                                                no_triangles=False, no_teammates=False)
+                        self.broke_triangle_constraint = True
+                    else:
+                        raise FailedToCreateChainException()
+                    if len(remaining_players) == remaining_before:
+                        if enforce_no_mutuals:
+                            remaining_players = self.lengthen_chain(chain, remaining_players,
+                                                                    no_triangles=False,
+                                                                    no_teammates=False,
+                                                                    no_mutuals=False)
+                            self.broke_mutual_constraint = True
+                        else:
+                            raise FailedToCreateChainException()
+
+        # The chain is represented as a terminating list, but actually
+        # represents something cyclical. Our earlier checks don't enforce
+        # constraints hold with targets on either end of the list, so we check here.
+        if not (
+                self.check_constraints(chain[0], chain[-1], chain[-2])
+                and self.check_constraints(chain[1], chain[0], chain[-1])
+        ):
+            raise FailedToCreateChainException()
+
+        # save the new edges
+        for (targeter, targetee) in zip(chain, itertools.chain(chain[1:], [chain[0]])):
+            self.targeting_graph.setdefault(targeter, set()).add(targetee)
+
+        return chain
+
+    def reset(self):
+        """Called when initial graph generation is re-attempted 'from scratch'"""
+        self.targeting_graph.clear()
+        self.broke_triangle_constraint = False
+        self.broke_team_constraint = False
+        self.broke_mutual_constraint = False
+
+
+@dataclasses.dataclass
+class TargetingParameter:
+    name: str
+    default_value: int
+    description: str
+
+
 @registered_plugin
 class TargetingPlugin(AbstractPlugin):
     """
@@ -68,13 +226,19 @@ class TargetingPlugin(AbstractPlugin):
                 self.danger_explanation
             ),
             DangerousConfigExport(
+                "targeting_set_teams",
+                "Targeting Graph -> Set teams",
+                self.ask_set_teams,
+                self.answer_set_teams
+            ),
+            DangerousConfigExport(
                 "targeting_set_random_seed",
                 "Targeting Graph -> Set random seed",
                 self.ask_set_random_seed,
                 self.answer_set_random_seed,
                 self.danger_explanation
             ),
-            # TODO: DebugConfigExport only accessible in 'developer mode'
+            # TODO: DebugConfigExports only accessible in 'developer mode'
             DangerousConfigExport(
                 "targeting_disable_initial_seeding",
                 "Targeting Graph -> Seed only for updates",
@@ -82,16 +246,76 @@ class TargetingPlugin(AbstractPlugin):
                 self.answer_set_initial_seeding,
                 self.danger_explanation
             ),
+            DangerousConfigExport(
+                "targeting_set_advanced_params",
+                "Targeting Graph -> Advanced parameters",
+                self.ask_set_targeting_params,
+                self.answer_set_targeting_params,
+                self.danger_explanation
+            ),
         ]
+
+        self.targeting_parameters = [
+            TargetingParameter(
+                name="targets_per_player",
+                default_value=3,
+                description="Number of targets per player (= number of players targeting each player also)",
+            ),
+            TargetingParameter(
+                name="no_teams_threshold",
+                default_value=10000,
+                description="Number of consecutive failures to create a chain before allowing players to have a TEAMMATE"
+                            " as a target or allowing a SEED to have another SEED as a target",
+            ),
+            TargetingParameter(
+                name="no_triangles_threshold",
+                default_value=20000,
+                description="Number of consecutive failures to create a chain before allowing TRIANGLES in the targeting graph",
+            ),
+            TargetingParameter(
+                name="no_mutuals_threshold",
+                default_value=30000,
+                description="Number of consecutive failures to create a chain before allowing two players to have EACH OTHER as targets",
+            ),
+            TargetingParameter(
+                name="start_over_threshold",
+                default_value=40000,
+                description="Number of consecutive failures to create a chain before STARTING FROM SCRATCH",
+            ),
+            TargetingParameter(
+                name="relaxation_threshold",
+                default_value=100000,
+                description="Number of attempts to create chains before relaxing ALL constraints EXCEPT each player "
+                            "having the same number of targets as the number of people targeting them",
+            ),
+            TargetingParameter(
+                name="max_tries",
+                default_value=200000,
+                description="Number of attempts to create chains before giving up"
+            )
+        ]
+
+        self.tp_defaults = {param.name: param.default_value for param in self.targeting_parameters}
 
         self.html_ids = {
             "Seeds": self.identifier + "_seeds",
             "Random Seed": self.identifier + "_random_seed",
             "Initial Seeding": self.identifier + "_initial_seeding",
+            "Teams": self.identifier + "_teams",
             "Skip Setup": self.identifier + "_skip_setup",
         }
 
+        self.html_ids.update(
+            {param.name: self.identifier + "_" + param.name.lower() for param in self.targeting_parameters})
+
         Assassin.__last_emailed_targets = self.assassin_property("last_emailed_targets", (), store_default=False)
+
+    def set_targeting_param(self, name: str, val: int):
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("targeting_params", {})[name] = val
+
+    def get_targeting_param(self, name: str) -> int:
+        return GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("targeting_params", {})\
+            .setdefault(name, self.tp_defaults[name])
 
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         if self.get_last_emailed_event() > -1:
@@ -213,6 +437,18 @@ class TargetingPlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["seeds"] = seeds
         return [Label("[TARGETING] Set seeded players")]
 
+    def ask_set_teams(self):
+        return [
+            TeamsEditor(self.html_ids["Teams"], "",
+                        filter_to_targetable(ASSASSINS_DATABASE.assassins),
+                        GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("teams", []))
+        ]
+
+    def answer_set_teams(self, htmlResponse):
+        teams = htmlResponse[self.html_ids["Teams"]]
+        GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["teams"] = teams
+        return [Label("[TARGETING] Success!")]
+
     def ask_set_random_seed(self):
         return [
             IntegerEntry(
@@ -241,6 +477,24 @@ class TargetingPlugin(AbstractPlugin):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["use_seeds_for_updates_only"] = use_seeds_for_updates_only
         answer = "won't" if use_seeds_for_updates_only else "will"
         return [Label(f"[TARGETING] We {answer} use seeds for the initial targeting graph.")]
+
+    def ask_set_targeting_params(self) -> List[HTMLComponent]:
+        return [
+            IntegerEntry(
+                title=param.description,
+                default=self.get_targeting_param(param.name),
+                identifier=self.html_ids[param.name]
+            ) for param in self.targeting_parameters
+        ]
+
+    def answer_set_targeting_params(self, html_response) -> List[HTMLComponent]:
+        for param in self.targeting_parameters:
+            self.set_targeting_param(param.name, html_response[self.html_ids[param.name]])
+
+        return [
+            Label(title=f"Parameter {param.name} set to {html_response[self.html_ids[param.name]]}")
+            for param in self.targeting_parameters
+        ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
         graph = self.compute_targets([]) # we don't care about any issues that arise
@@ -276,8 +530,122 @@ class TargetingPlugin(AbstractPlugin):
     def seed(self):
         return GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault("random_seed", 28082024)
 
-    def compute_targets(self, response, max_event=100000000000000000):
+    def compute_targets(self, response: list, max_event=float("Inf")) -> Dict[str, List[str]]:
         """
+        New graph algorithm that allows for team constraints.
+        Rather than spacing seeds out within each chain, seeds/teammates are simply no longer allowed to have each other
+        as targets.
+        Imagine a nearly-complete graph of all the players where the edges missing are those that connect teammates with
+        each other (where the seeds are counted as a "team"). What we want is three Hamiltonian cycles of this graph
+        such that when put together into a targeting graph they also satisfy the constraints of
+            - no duplicate targets (so that each player has 3 targets and 3 assassins)
+            - no mutual targets (because some players having their targets also trying to kill them is an unfair disadvantage)
+            - no triangles (because killing someone who might have killed someone targeting you is silly)
+        The approach taken here is essentially to take a random walk through the graph subject to these constraints and
+        start over if we hit a dead end. Finding Hamiltonian cycles is an NP problem but we expect the graph to be dense
+        enough that in practice they'll be easy to find. Hence I didn't bother with backtracking, and instead allowed
+        for constraints to be dropped if valid cycles can't be found.
+        """
+
+        teams = [set(t) for t in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("teams", [])]
+        # if teams are not set, use old targeting algo instead
+        if not teams:
+            return self.old_compute_targets(response, max_event)
+
+        # reset the seed for determinism
+        random.seed(self.seed)
+
+        players = filter_to_targetable(ASSASSINS_DATABASE.assassins)
+
+        # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
+        # last long anyway.
+        if len(players) <= 7:
+            response.append(Label("[TARGETING] Refusing to generate a targeting graph (too few full players)."))
+            return {}
+
+        # and also seed constraints, when enabled
+        # (note the seeds are essentially just another team!)
+        player_seeds = {p for p in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])}
+        use_seeds_for_updates_only = GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(
+            "use_seeds_for_updates_only", False)
+        if not use_seeds_for_updates_only:
+            teams.append(player_seeds)
+
+        # player -> teams mapping for checking seeding constraints
+        player_teammate_mapping = {p: {teammate for t in teams for teammate in t if p in t} for p in players}
+
+        # generate initial targets via "chains"
+        TARGETS_PER_PLAYER = self.get_targeting_param("targets_per_player")
+
+        # controls how quickly to give up on enforcing constraints (rather than restarting from scratch)
+        RELAXATION_THRESHOLD = self.get_targeting_param("relaxation_threshold")
+
+        # controls how many times to try to generate a new chain before restarting from scratch
+        START_OVER_THRESHOLD = self.get_targeting_param("start_over_threshold")
+
+        # controls how many times to try to enforce each constraint
+        NO_TEAMS_THRESHOLD = self.get_targeting_param("no_teams_threshold")
+        NO_TRIANGLES_THRESHOLD = self.get_targeting_param("no_triangles_threshold")
+        NO_MUTALS_THRESHOLD = self.get_targeting_param("no_mutuals_threshold")
+
+        chain_generator = ChainGenerator(
+            players=players,
+            targeting_graph={},
+            player_teammate_mapping=player_teammate_mapping
+        )
+
+        MAX_TRIES = self.get_targeting_param("max_tries")
+
+        consecutive_fails = 0
+        chains = []
+        for i in range(MAX_TRIES):
+            try:
+                enforce_constraints = i < RELAXATION_THRESHOLD
+                chains.append(chain_generator.new_chain(
+                                        enforce_teams=enforce_constraints and (consecutive_fails < NO_TEAMS_THRESHOLD),
+                                        enforce_no_triangles=enforce_constraints and (consecutive_fails < NO_TRIANGLES_THRESHOLD),
+                                        enforce_no_mutuals=enforce_constraints and (consecutive_fails < NO_MUTALS_THRESHOLD)
+                ))
+                consecutive_fails = 0
+                if len(chains) == TARGETS_PER_PLAYER:
+                    break
+            except FailedToCreateChainException:
+                consecutive_fails += 1
+                if consecutive_fails >= START_OVER_THRESHOLD:
+                    chains = []
+                    chain_generator.reset()
+                    consecutive_fails = 0
+        else:
+            response.append(
+                Label(f"[TARGETING] CRITICAL: Failed to generate a valid initial targeting graph after {MAX_TRIES} "
+                      "tries. Aborting.")
+            )
+            return {}
+
+        if chain_generator.broke_team_constraint:
+            response.append(Label(
+                "[TARGETING] WARNING: Could not enforce constraint of no intra-team targets in initial graph."
+            ))
+        if chain_generator.broke_triangle_constraint:
+            response.append(Label(
+                "[TARGETING] WARNING: Could not enforce constraint of no triangles in initial graph."
+            ))
+        if chain_generator.broke_mutual_constraint:
+            response.append(Label(
+                "[TARGETING] WARNING: Could not enforce constraint of no mutual targets in initial graph."
+            ))
+
+        # convert sets of targets into lists...
+        targeting_graph = {
+            p: list(targets) for p, targets in chain_generator.targeting_graph.items()
+        }
+        return self._process_graph_updates(targeting_graph, response, max_event, set(player_seeds), teams)
+
+    def old_compute_targets(self, response, max_event=100000000000000000):
+        """
+        OLD TARGETING ALGO (refactored and with chunking of deaths when there are too many deaths per event)
+        Still used when targeting teams aren't set, because it deals with seeds better.
+
         Deterministically computes the targeting graph given current events.
 
         IMPORTANT: If you ever think about editing this function, don't.
@@ -373,13 +741,25 @@ class TargetingPlugin(AbstractPlugin):
         # who the player P is targeting
         targeting_graph = {P: [] for P in players}
 
-        # who targets player P
-        targeters_graph = {P: [] for P in players}
-
         for c in [chain_one, chain_two, chain_three]:
             for (targeter, targetee) in zip(c, c[1:] + [c[0]]):
                 targeting_graph[targeter].append(targetee)
-                targeters_graph[targetee].append(targeter)
+
+        return self._process_graph_updates(targeting_graph, response, max_event, set(player_seeds))
+
+    def _process_graph_updates(
+            self,
+            targeting_graph: Dict[str, List[str]],
+            response: list,
+            max_event = float("Inf"),
+            player_seeds_set: Set[str] = set(),
+            player_teams: Sequence[Set[str]] = ()
+    ) -> Dict[str, List[str]]:
+
+        targeters_graph = {}
+        for p, targets in targeting_graph.items():
+            for t in targets:
+                targeters_graph.setdefault(t, []).append(p)
 
         # counter to what might seem intuitive, events must be sorted by secret ID and not when they occurred in game
         # secret ID is monotonically increasing in order of events being added and can't be changed by the user
@@ -387,9 +767,6 @@ class TargetingPlugin(AbstractPlugin):
         # using secret ID means users can't screw with the determinacy
         events = [e_model for e_model in EVENTS_DATABASE.events.values()]
         events.sort(key=lambda e: e._Event__secret_id)
-
-        # NO USE OF RANDOM AFTER THIS POINT WITHOUT RE-SEEDING (random.seed).
-        player_seeds_set = set(player_seeds)
 
         for e in events:
             if int(e._Event__secret_id) > max_event:
@@ -400,13 +777,15 @@ class TargetingPlugin(AbstractPlugin):
             if not deaths:
                 continue
 
-            # process deaths in chunks, to prevent `update_graph` needing to check too many permutations
-            n = 3
-            subdivided_deaths = [deaths[i:i + n] for i in range(0, len(deaths), n)]
-            for deaths in subdivided_deaths:
+            # the retargeting algo is factorial in the number of deaths per update
+            # so limit to 3 deaths per update
+            CHUNK_SIZE = 3
+            chunked_deaths = [deaths[i:i+CHUNK_SIZE] for i in range(0, len(deaths), CHUNK_SIZE)]
+
+            for deaths in chunked_deaths:
                 # try to fix with triangle elimination
                 # this function has side effects
-                success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set)
+                success = self.update_graph(response, targeting_graph, targeters_graph, deaths, player_seeds_set, player_teams)
                 if success:
                     continue
 
@@ -416,6 +795,23 @@ class TargetingPlugin(AbstractPlugin):
                     targeters_graph,
                     deaths,
                     player_seeds_set,
+                    player_teams,
+                    allow_mutual_team_targets=True
+                )
+
+                if success:
+                    response.append(
+                        Label("[TARGETING] WARNING: Teams have been violated due to an unavoidable graph collapse."))
+                    continue
+
+                success = self.update_graph(
+                    response,
+                    targeting_graph,
+                    targeters_graph,
+                    deaths,
+                    player_seeds_set,
+                    player_teams,
+                    allow_mutual_team_targets=True,
                     allow_mutual_seed_targets=True
                 )
 
@@ -430,7 +826,27 @@ class TargetingPlugin(AbstractPlugin):
                     targeters_graph,
                     deaths,
                     player_seeds_set,
+                    player_teams,
+                    allow_mutual_team_targets=True,
                     allow_mutual_seed_targets=True,
+                    allow_triangles=True
+                )
+
+                if success:
+                    response.append(
+                        Label("[TARGETING] WARNING: The targeting graph contains a triangle due to an unavoidable graph collapse."))
+                    continue
+
+                success = self.update_graph(
+                    response,
+                    targeting_graph,
+                    targeters_graph,
+                    deaths,
+                    player_seeds_set,
+                    player_teams,
+                    allow_mutual_team_targets=True,
+                    allow_mutual_seed_targets=True,
+                    allow_triangles=True,
                     allow_mutual_targets=True
                 )
 
@@ -453,7 +869,10 @@ class TargetingPlugin(AbstractPlugin):
             targeters_graph: Dict[str, List[str]],
             deaths: List[str],
             player_seeds: Set[str],
+            player_teams: Sequence[Set[str]] = (),
+            allow_mutual_team_targets: bool = False,
             allow_mutual_seed_targets: bool = False,
+            allow_triangles: bool = False,
             allow_mutual_targets: bool = False,
             limit_checks=1000000
     ) -> bool:
@@ -531,8 +950,8 @@ class TargetingPlugin(AbstractPlugin):
             # (a triangle is any targeting of players (eg) Vendetta, OHare, and O-Ren Ishii such that
             # Vendetta targets OHare targets O-Ren Ishii targets Vendetta
             # V -> OH -> OR -> V)
-            # Ignore conditions: allow_mutual_targets=True
-            if not allow_mutual_targets:
+            # Ignore conditions: allow_triangles=True
+            if not allow_triangles:
                 # precondition: assume triangle elimination has been performed up to this point.
                 # While triangle elimination originated with the previous AU, Peter has a good description of it:
                 # "only check the targets of the newly assigned targets' targets,
@@ -560,6 +979,13 @@ class TargetingPlugin(AbstractPlugin):
                         break
                 if any_clashes:
                     continue
+
+            # Constraint 6: limit targeting within teams
+            # This is a separate constraint, because seeds take precedence over teams when relaxing constraints
+            if not allow_mutual_team_targets and any(
+                    a in team and b in team for team in player_teams for a, b in new_targets
+            ):
+                continue
 
             # If we reach here without being forced to `continue`, update the graph and return True
             for t in targeters:
