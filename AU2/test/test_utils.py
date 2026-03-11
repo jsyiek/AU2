@@ -1,5 +1,5 @@
 import datetime
-from typing import List, Tuple
+from typing import List, Optional
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -189,6 +189,14 @@ class MockGame:
 
     def assassin_model(self, name) -> Assassin:
         return self.assassin(name).model(name)
+
+    def pcode(self, name, idx: Optional[int] = None) -> str:
+        """Takes a player name and returns their [PX] or [PX_i] pseudonym code"""
+        num_id = self.assassin_model(name)._secret_id
+        if idx is None:
+            return f"[P{num_id}]"
+        else:
+            return f"[P{num_id}_{idx}]"
 
     def add_attempts(self, *names: str, others: List[str] = []):
         """
