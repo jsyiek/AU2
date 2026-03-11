@@ -1,8 +1,11 @@
-from typing import Any, Callable, List, NamedTuple, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, List, NamedTuple, Optional, Sequence, Tuple, TypeVar, Union
 
-from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.html_components import HTMLComponent
+from AU2.database.model import Event, Assassin
+from AU2.html_components import HTMLComponent, HTMLResponse
+
+AskFunction = Callable[[...], Sequence[HTMLComponent]]
+AnswerFunction = Callable[[HTMLResponse], Sequence[HTMLComponent]]
 
 T = TypeVar("T")
 
@@ -11,27 +14,17 @@ class Export:
     Represents an HTML callback
     """
 
-    def __init__(self, identifier: str, display_name: str, ask, answer,
-                 options_functions: Tuple[Callable[
-                     [...],
-                     Union[
-                         List[Union[str, Tuple[str, Any]]],
-                         HTMLComponent
-                     ]
-                 ]] = tuple()):
+    def __init__(self, identifier: str, display_name: str,
+                 ask: AskFunction, answer: Union[AnswerFunction, Sequence[AnswerFunction]],
+                 options_functions: Tuple[Callable[[...], List[Union[str, Tuple[str, Any]]],]] = tuple()):
         """
         Args:
             identifier: internal identifier for the callback
             display_name: html-visible display name
             ask: function that generates a list of HTML components
             answer: function that takes a dictionary of arg -> str and actions the output
-            options_functions: tuple of functions each returning either a HTMLComponent or a list of options;
-                The functions are executed in the order that they appear in this tuple. If a HTMLComponent is returned,
-                this will be rendered, and the result passed as a keyword argument based on the identifier to subsequent
-                functions in the tuple as well as the `ask` function.
-                If a list is returned then we fall back to rendering a selection from the options in that list, and the
-                result is passed as a positional argument to subsequent functions in the tuple as well as the `ask`
-                function.
+            options_functions: tuple of functions each returning a list of options. The selection is passed as a
+                positional argument to subsequent functions in the tuple as well as the `ask` function.
 
         """
         self.identifier = identifier
@@ -146,6 +139,15 @@ class AbstractPlugin:
         GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
+        return []
+
+    def on_event_dependencies(self, _: Optional[Event]) -> List[HTMLComponent]:
+        return []
+
+    def on_event_request_create_or_update(self, _: Optional[Event], html_response: HTMLResponse) -> List[HTMLComponent]:
+        return []
+
+    def on_event_create_or_update(self, _: Event, html_response: HTMLResponse) -> List[HTMLComponent]:
         return []
 
     def on_event_request_create(self) -> List[HTMLComponent]:
