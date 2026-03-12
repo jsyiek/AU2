@@ -18,16 +18,16 @@ from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.render_utils import get_color, render_headline_and_reports, event_url
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
+from AU2.plugins.util.navbar import NavbarEntry
 
 OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
@@ -150,7 +150,7 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
                     value=1 + score_manager.get_conkers(victim_model)
                 )
                 added_nodes.add(victim)
-            headline, _ = render_headline_and_reports(e, plugin_managers=(competency_manager, wanted_manager))
+            headline, _ = render_headline_and_reports(e, color_fn=lambda a, p: "#000000")  # colour doesn't matter here
             plaintext_headline = lxml.html.fromstring(f"<html>{headline}</html>").text_content()
             net.add_edge(killer_searchable, victim_searchable,
                          label=e.datetime.strftime(DATETIME_FORMAT),
@@ -329,15 +329,18 @@ class ScoringPlugin(AbstractPlugin):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
             # note: the link may be broken for may week games... (see https://github.com/jsyiek/AU2/issues/161)
+
             deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
-                      for e in score_manager.get_death_events(p)]
+                      for e in score_manager.get_death_events(p)
+                      if not e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False)]
 
             # players that are tied should be given the same rank
             if (rank == 0 or player_rating(full_players[rank - 1])
                     != player_rating(p)):
                 tied_rank = rank + 1
+
             rows.append(stats_row_template(columns).format(
                 NAME=p.real_name,
                 PSEUDONYMS=p.all_pseudonyms(),

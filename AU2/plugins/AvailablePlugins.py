@@ -1,8 +1,9 @@
-from typing import Any
+from typing import Any, TypeVar
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.plugins.AbstractPlugin import AbstractPlugin
 
+T = TypeVar("T")
 
 class __PluginMap:
     """
@@ -34,10 +35,12 @@ class __PluginMap:
 
         self.plugins = plugins
 
-    def data_hook(self, hook: str, data: Any):
+    def data_hook(self, hook: str, data: T) -> T:
         """
         Get data from plugins using the specified hook. Allows non-core plugins to request data from each other.
         Each plugin modifies `data` as appropriate.
         """
         for p in self:
             p.on_data_hook(hook, data)
+
+        return data
