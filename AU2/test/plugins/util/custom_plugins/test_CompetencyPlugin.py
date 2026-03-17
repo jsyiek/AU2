@@ -102,7 +102,7 @@ class TestCompetencyPlugin:
         game = MockGame().having_assassins(p)
 
         for i in range(5):
-            game.assassin(p[i]).kills(p[i + 5])
+            game.assassin(p[i]).kills(p[i + 5], manual_competency=None)
 
         manager = self.get_manager(game, auto_competency=True, initial_competency_period=0)
         query_date = manager.game_start + datetime.timedelta(days=1, seconds=30)
@@ -124,7 +124,6 @@ class TestCompetencyPlugin:
         Test that attempts grant auto competency properly, especially with multiple.
         Checks whether a player with 0 or 1 attempt is inco, and one with 2, 3, or 2 spread over different events is not
         """
-        # TODO refactor this to use Alexei's MockGame.add_attempts() once that is merged
         p = some_players(5)
         game = (MockGame().having_assassins(p)
                 .add_attempts(p[1])
@@ -238,3 +237,29 @@ class TestCompetencyPlugin:
 
     def test_inco_corpses_manual_competency(self):
         self.test_list_of_inco_corpses(auto_competency=False)
+
+    @plugin_test
+    def test_no_competency_from_double_death(self):
+        """Tests that killing an already-dead player does not grant competency"""
+
+        p = some_players(20)
+        game = MockGame().having_assassins(p)
+
+        # players 0—4 make kills that should count to competency
+        for i in range(5):
+            game.assassin(p[i]).kills(p[i + 5], manual_competency=None)
+
+        # players 10—14 kill the already-dead players 5—9, which does't grant competency
+        for i in range(10, 15):
+            game.assassin(p[i]).kills(p[i - 5], manual_competency=None)
+
+        manager = self.get_manager(game, auto_competency=True, initial_competency_period=0)
+        query_date = manager.game_start + datetime.timedelta(days=1, seconds=30)
+
+        incos = manager.get_incos_at(query_date)
+
+        for i in range(5):
+            assert ASSASSINS_DATABASE.get(p[i] + " identifier") not in incos
+
+        for i in range(10):
+            assert ASSASSINS_DATABASE.get(p[i + 10] + " identifier") in incos
