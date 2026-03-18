@@ -112,7 +112,9 @@ def event_url(e: Event, page: Optional[str] = None) -> str:
     """
     if not page:
         ch = default_page_allocator(e)
-        page = ch.nav_entry.url if ch else ""
+        if not ch:
+            return ""
+        page = ch.nav_entry.url
     return f"{page}#{e._Event__secret_id}"
 
 
