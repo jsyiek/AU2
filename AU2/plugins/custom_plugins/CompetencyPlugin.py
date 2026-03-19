@@ -282,38 +282,19 @@ class CompetencyPlugin(AbstractPlugin):
         # remove lines beginning with '#'
         headline = '\n'.join([i for i in htmlResponse[self.html_ids['Headline']].split('\n') if not i.startswith('#')])
         headline = headline.replace('[num_players]', str(len(deaths)))
-        # TODO Adjust targeting plugin so that it can handle events with many deaths, by retargeting in chunks
-        # I don't want to mess with the targeting plugin mid-game, so making a bunch of events with n kills each works for now
-        # Number of deaths per event:
-        n = 3
-        # Brief testing showed that 5 was too large (and broke targeting). 1 makes an annoying number of events
-        subdivided_deaths = [deaths[i:i + n] for i in range(0, len(deaths), n)]
-        for idx, i in enumerate(subdivided_deaths):
-            EVENTS_DATABASE.add(
-                Event(
-                    assassins={j: 0 for j in i} | {umpire: 0},
-                    datetime=htmlResponse[self.html_ids['Datetime']],
-                    headline=f"Gigabolt stage {idx+1}",
-                    reports={},
-                    kills=[(umpire, j) for j in i],
-                    pluginState={
-                        "PageGeneratorPlugin": {"hidden_event": True},
-                        # for forwards-compatibility: we might want to treat gigabolt kills separately
-                        # e.g. on the stats page
-                        self.identifier: {"is_gigabolt": True},
-                    }
-                )
+        EVENTS_DATABASE.add(
+            Event(
+                assassins={j: 0 for j in deaths} | {umpire: 0},
+                datetime=htmlResponse[self.html_ids['Datetime']],
+                headline=headline or "Gigabolt",
+                reports={},
+                kills=[(umpire, j) for j in deaths],
+                pluginState={
+                    "PageGeneratorPlugin": {"hidden_event": not headline},
+                    self.identifier: {"is_gigabolt": True},
+                }
             )
-        # have a separate event for the headline,
-        # as we want all the kills to be in hidden events so that they can be excluded from the kill graph
-        if headline:
-            EVENTS_DATABASE.add(
-                Event(
-                    datetime=htmlResponse[self.html_ids['Datetime']],
-                    headline=headline,
-                    assassins={}, reports=[], kills=[],
-                )
-            )
+        )
 
         return [Label(f"[COMPETENCY] Gigabolt Success! {len(deaths)} players eliminated")]
 

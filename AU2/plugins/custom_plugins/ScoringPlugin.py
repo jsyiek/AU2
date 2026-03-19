@@ -111,7 +111,8 @@ def generate_killtree_visualiser(events: List[Event],
                                  score_manager: ScoreManager,
                                  node_shape: str = "box",
                                  include_hidden: bool = False,
-                                 graph_seed: Optional[int] = None) -> str:
+                                 graph_seed: Optional[int] = None,
+                                 include_gigabolt: bool = False) -> str:
     # local import because importing pyvis every time impacts performance significantly
     try:
         from pyvis.network import Network
@@ -138,6 +139,9 @@ def generate_killtree_visualiser(events: List[Event],
         wanted_manager.add_event(e)
         # ignore hidden events if so configured
         if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) and not include_hidden:
+            continue
+        # ignore gigabolt kills if so configured
+        if e.pluginState.get("CompetencyPlugin", {}).get("is_gigabolt", False) and not include_gigabolt:
             continue
         for (_, victim) in e.kills:
             if victim not in added_nodes:
@@ -168,6 +172,9 @@ def generate_killtree_visualiser(events: List[Event],
         wanted_manager.add_event(e)
         # ignore hidden events if so configured
         if e.pluginState.get("PageGeneratorPlugin", {}).get("hidden_event", False) and not include_hidden:
+            continue
+        # ignore gigabolt kills if so configured
+        if e.pluginState.get("CompetencyPlugin", {}).get("is_gigabolt", False) and not include_gigabolt:
             continue
         for (killer, victim) in e.kills:
             killer_model = ASSASSINS_DATABASE.get(killer)
@@ -232,6 +239,7 @@ class ScoringPlugin(AbstractPlugin):
             "Stats Order": {'id': self.identifier + "_stats_order", 'default': 'By Kills (London style)'},
             "Graph Seed": {'id': self.identifier + "_killtree_seed", 'default': 156},
             "Include Hidden?": {'id': self.identifier + "_include_hidden_kills_in_graph", 'default': False},
+            "Include Gigabolt?": {'id': self.identifier + "_include_gigabolt_in_graph", 'default': False},
             "Node Shape": {'id': self.identifier + "_node_shape", 'default': "box"},
         }
 
@@ -343,6 +351,11 @@ class ScoringPlugin(AbstractPlugin):
                 self.gsdb_get("Node Shape")
             ),
             Checkbox(
+                self.identifier + "_include_gigabolt",
+                "Include kills from the gigabolt?",
+                self.gsdb_get("Include Gigabolt?")
+            ),
+            Checkbox(
                 self.identifier + "_include_hidden",
                 "Include kills from hidden events?",
                 self.gsdb_get("Include Hidden?")
@@ -356,6 +369,7 @@ class ScoringPlugin(AbstractPlugin):
 
     def answer_set_killtree_config(self, html_response) -> List[HTMLComponent]:
         self.gsdb_set("Node Shape", html_response[self.identifier + "_node_shape"])
+        self.gsdb_set("Include Gigabolt?", html_response[self.identifier + "_include_gigabolt"])
         self.gsdb_set("Include Hidden?", html_response[self.identifier + "_include_hidden"])
         self.gsdb_set("Graph Seed", html_response[self.identifier + "_graph_seed"])
         return [Label("[SCORING] Set kill graph config.")]
@@ -439,7 +453,8 @@ class ScoringPlugin(AbstractPlugin):
                 score_manager,
                 node_shape=self.gsdb_get("Node Shape"),
                 include_hidden=self.gsdb_get("Include Hidden?"),
-                graph_seed=self.gsdb_get("Graph Seed")
+                graph_seed=self.gsdb_get("Graph Seed"),
+                include_gigabolt=self.gsdb_get("Include Gigabolt?"),
             )
             if msg:
                 components.append(Label(f"[WARNING] [SCORING] {msg}"))
