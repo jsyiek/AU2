@@ -39,6 +39,7 @@ from AU2.html_components.HiddenComponent import HiddenComponent
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
 from AU2.html_components.DependentComponents.AssassinDependentKillEntry import AssassinDependentKillEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
+from AU2.html_components.SimpleComponents.OptionalIntegerEntry import OptionalIntegerEntry
 from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
@@ -99,6 +100,18 @@ def integer_validator(_, current):
     try:
         if current is None:
             raise KeyboardInterrupt
+        s = int(current)
+    except ValueError:
+        return False
+    return True
+
+
+def optional_integer_validator(_, current):
+    try:
+        if current is None:
+            raise KeyboardInterrupt
+        if current == "":
+            return True
         s = int(current)
     except ValueError:
         return False
@@ -641,6 +654,16 @@ def render(html_component, dependency_context={}):
         )]
         integer = inquirer_prompt_with_abort(q)["int"]
         return {html_component.identifier: int(integer)}
+
+    elif isinstance(html_component, OptionalIntegerEntry):
+        q = [inquirer.Text(
+            name="int",
+            message=escape_format_braces(html_component.title),
+            default=html_component.default,
+            validate=optional_integer_validator
+        )]
+        integer = inquirer_prompt_with_abort(q)["int"]
+        return {html_component.identifier: None if integer == "" else int(integer)}
 
     elif isinstance(html_component, FloatEntry):
         q = [inquirer.Text(
