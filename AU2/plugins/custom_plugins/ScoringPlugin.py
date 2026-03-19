@@ -16,6 +16,7 @@ from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalD
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, NavbarEntry
@@ -25,7 +26,6 @@ from AU2.plugins.util.render_utils import get_color, render_headline_and_reports
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 
@@ -182,6 +182,8 @@ class ScoringPlugin(AbstractPlugin):
             "Stats Order": self.identifier + "_stats_order",
             "Generate Stats Page?": self.identifier + "_stats_page",
             "Download table-sort.js?": self.identifier + "_download_table_sort_js",
+            "Number of Duellists": self.identifier + "_num_duellists",
+            "Allow Inco Duellists?": self.identifier + "_inco_duellists",
         }
 
         self.plugin_state = {
@@ -191,6 +193,8 @@ class ScoringPlugin(AbstractPlugin):
                 "Real Name", "Pseudonym", "Number of Kills", "Conkers Score"
             ]},
             "Visualise Kills?": {'id': self.identifier + "_visualise_kills", 'default': True},
+            "Number of Duellists": {'id': self.identifier + "_num_duellists", 'default': 4},
+            "Allow Inco Duellists?": {'id': self.identifier + "_inco_duellists", 'default': False},
         }
 
         self.assassin_plugin_state = {
@@ -219,6 +223,12 @@ class ScoringPlugin(AbstractPlugin):
                 "Scoring -> Set formula",
                 self.ask_set_formula,
                 self.answer_set_formula
+            ),
+            ConfigExport(
+                "scoring_duel_conditions",
+                "Scoring -> Set duel eligibility conditions",
+                self.ask_set_duel_conditions,
+                self.answer_set_duel_conditions,
             ),
             # TODO: move this to debug exports if that is implemented (as per https://github.com/jsyiek/AU2/issues/36)
             ConfigExport(
@@ -394,6 +404,29 @@ class ScoringPlugin(AbstractPlugin):
         else:
             self.gsdb_remove("Start")
         return [Label("[SCORING] Set open season start.")]
+
+    def ask_set_duel_conditions(self) -> List[HTMLComponent]:
+        return [
+            IntegerEntry(
+                self.html_ids["Number of Duellists"],
+                "Number of duellists",
+                self.gsdb_get("Number of Duellists"),
+            ),
+            Checkbox(
+                self.html_ids["Allow Inco Duellists?"],
+                "Allow inco duellists?",
+                self.gsdb_get("Allow Inco Duellists?"),
+            )
+        ]
+
+    def answer_set_duel_conditions(self, html_response) -> List[HTMLComponent]:
+        num_duellists = html_response[self.html_ids["Number of Duellists"]]
+        allow_inco = html_response[self.html_ids["Allow Inco Duellists?"]]
+        self.gsdb_set("Number of Duellists", num_duellists)
+        self.gsdb_set("Allow Inco Duellists?", allow_inco)
+        return [
+            Label(f"[SCORING] Set duel eligibility conditions: {num_duellists} top-scoring {'' if allow_inco else 'non-inco '}players.")
+        ]
 
     def ask_set_formula(self):
         # TODO: have a Formula component that validates the formula,
