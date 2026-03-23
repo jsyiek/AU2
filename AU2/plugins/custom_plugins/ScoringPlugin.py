@@ -48,8 +48,6 @@ OTHERS_INTRO_TEXT = """
 <p>The other players who survived Open Season:</p>
 """
 
-STANDINGS_NAVBAR_ENTRY = NavbarEntry("standings.html", "Final Standings", 3)
-
 # note: although it uses a different template, the standings page is saved as openseason.html.
 #       if we start using e.g. jinja for templates the conditional generation can be done in a single template...
 STANDINGS_PAGE_TEMPLATE: str
