@@ -50,6 +50,8 @@ OTHERS_INTRO_TEXT = """
 
 STANDINGS_NAVBAR_ENTRY = NavbarEntry("standings.html", "Final Standings", 3)
 
+# note: although it uses a different template, the standings page is saved as openseason.html.
+#       if we start using e.g. jinja for templates the conditional generation can be done in a single template...
 STANDINGS_PAGE_TEMPLATE: str
 STANDINGS_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "standings.html"
 with open(STANDINGS_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
@@ -517,68 +519,13 @@ Syntax:
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
         open_season_end = get_game_end()
-        if not open_season_start or open_season_start >= get_now_dt() or get_now_dt() >= open_season_end:
+        is_postgame = get_now_dt() >= open_season_end
+        if not open_season_start or open_season_start >= get_now_dt():
             return []
         # also don't generate if formula is invalid
         formula = self.gsdb_get("Formula")
         if not self.formula_is_valid(formula):
             return [Label("[WARNING] [SCORING] Invalid scoring formula -- skipping openseason page!")]
-
-        # need to include hidden assassins so that resurrecting as part of the city watch doesn't stop kills counting
-        score_manager = ScoreManager(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_city_watch,
-                                                                        include_hidden=True),
-                                     formula=formula,
-                                     bonuses={
-                                         ident: self.aps_get(ident, "Bonus")
-                                         for ident in ASSASSINS_DATABASE.get_identifiers(include_hidden=True)
-                                     })
-        events = sorted(EVENTS_DATABASE.events.values(),
-                        key=lambda e: e.datetime)
-        openseason_end = get_game_end() or get_now_dt()
-        for e in events:
-            # stops the duel changing the openseason page
-            if e.datetime > openseason_end:
-                break
-            score_manager.add_event(e)
-
-        table_str = "Something went wrong..."
-        if score_manager.live_assassins:
-            # score_manager caches score, so calling twice is fine!
-            # *negative* of score is used for sorting so that high scorers end up at the top of the page
-            live_assassins = sorted((ASSASSINS_DATABASE.get(ident) for ident in score_manager.live_assassins
-                                     if not ASSASSINS_DATABASE.get(ident).hidden),
-                                    key=lambda a: (-score_manager.get_score(a), a.college.lower(), a.real_name.lower()))
-            rows = []
-            for a in live_assassins:
-                rows.append(
-                    OPENSEASON_ROW_TEMPLATE.format(
-                        NAME=a.real_name,
-                        ADDRESS=a.address,
-                        COLLEGE=a.college,
-                        WATER_STATUS=a.water_status,
-                        NOTES=a.notes,
-                        POINTS=score_manager.get_score(a)
-                    )
-                )
-            table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
-
-        navbar_entries.append(OPENSEASON_NAVBAR_ENTRY)
-
-        with open(WEBPAGE_WRITE_LOCATION / OPENSEASON_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
-            F.write(
-                OPENSEASON_PAGE_TEMPLATE.format(
-                    YEAR=get_now_dt().year,
-                    TABLE=table_str
-                )
-            )
-
-        return [Label("[SCORING] Generated openseason page.")]
-
-    def _generate_standings(self, navbar_entries: List[NavbarEntry]):
-        # don't generate if formula is invalid
-        formula = self.gsdb_get("Formula")
-        if not self.formula_is_valid(formula):
-            return [Label("[WARNING] [SCORING] Invalid scoring formula -- skipping standings!")]
 
         # need to include hidden assassins so that resurrecting as part of the city watch doesn't stop kills counting
         score_manager = ScoreManager(ASSASSINS_DATABASE.get_identifiers(include=lambda a: not a.is_city_watch,
@@ -595,13 +542,13 @@ Syntax:
                         key=lambda e: e.datetime)
         openseason_end = get_game_end() or get_now_dt()
         for e in events:
-            # ignore the duel for standings
+            # stops the duel changing the openseason page
             if e.datetime > openseason_end:
                 break
             score_manager.add_event(e)
             competency_manager.add_event(e)
 
-        table_str = "Something went wrong..."
+        page_content = "Something went wrong..."
         if score_manager.live_assassins:
             # score_manager caches score, so calling twice is fine!
             # *negative* of score is used for sorting so that high scorers end up at the top of the page
@@ -609,70 +556,93 @@ Syntax:
                                      if not ASSASSINS_DATABASE.get(ident).hidden),
                                     key=lambda a: (-score_manager.get_score(a), a.college.lower(), a.real_name.lower()))
 
-            # split into duellists, those excluded due to being inco (if necessary), and others
             num_duellists = self.gsdb_get("Number of Duellists")
             allow_inco = self.gsdb_get("Allow Inco Duellists?")
-            duellists = []
-            excluded_incos = []
-            others = []
-            for a in live_assassins:
-                if len(duellists) < num_duellists:
-                    if allow_inco or not competency_manager.is_inco_at(a, openseason_end):
-                        duellists.append(a)
+
+            if is_postgame:
+                # generate final standings
+                duellists = []
+                excluded_incos = []
+                others = []
+                for a in live_assassins:
+                    if len(duellists) < num_duellists:
+                        if allow_inco or not competency_manager.is_inco_at(a, openseason_end):
+                            duellists.append(a)
+                        else:
+                            excluded_incos.append(a)
                     else:
-                        excluded_incos.append(a)
-                else:
-                    others.append(a)
+                        others.append(a)
 
-            duellist_table_str = STANDINGS_TABLE_TEMPLATE.format(
-                ROWS="\n".join(
-                    STANDINGS_ROW_TEMPLATE.format(
-                        NAME=a.real_name,
-                        COLLEGE=a.college,
-                        POINTS=score_manager.get_score(a),
-                    )
-                    for a in duellists
-                )
-            )
-            excluded_incos_str = ""
-            if excluded_incos:
-                excluded_incos_str = EXLCUDED_INCOS_INTRO_TEXT + STANDINGS_TABLE_TEMPLATE.format(
+                duellist_table_str = STANDINGS_TABLE_TEMPLATE.format(
                     ROWS="\n".join(
                         STANDINGS_ROW_TEMPLATE.format(
                             NAME=a.real_name,
                             COLLEGE=a.college,
                             POINTS=score_manager.get_score(a),
                         )
-                        for a in excluded_incos
+                        for a in duellists
                     )
                 )
-            others_table_str = ""
-            if others:
-                others_table_str = OTHERS_INTRO_TEXT + STANDINGS_TABLE_TEMPLATE.format(
-                    ROWS="\n".join(
-                        STANDINGS_ROW_TEMPLATE.format(
-                            NAME=a.real_name,
-                            COLLEGE=a.college,
-                            POINTS=score_manager.get_score(a),
+                excluded_incos_str = ""
+                if excluded_incos:
+                    excluded_incos_str = EXLCUDED_INCOS_INTRO_TEXT + STANDINGS_TABLE_TEMPLATE.format(
+                        ROWS="\n".join(
+                            STANDINGS_ROW_TEMPLATE.format(
+                                NAME=a.real_name,
+                                COLLEGE=a.college,
+                                POINTS=score_manager.get_score(a),
+                            )
+                            for a in excluded_incos
                         )
-                        for a in others
                     )
-                )
-
-        navbar_entries.append(STANDINGS_NAVBAR_ENTRY)
-
-        with open(WEBPAGE_WRITE_LOCATION / STANDINGS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
-            F.write(
-                STANDINGS_PAGE_TEMPLATE.format(
+                others_table_str = ""
+                if others:
+                    others_table_str = OTHERS_INTRO_TEXT + STANDINGS_TABLE_TEMPLATE.format(
+                        ROWS="\n".join(
+                            STANDINGS_ROW_TEMPLATE.format(
+                                NAME=a.real_name,
+                                COLLEGE=a.college,
+                                POINTS=score_manager.get_score(a),
+                            )
+                            for a in others
+                        )
+                    )
+                page_content = STANDINGS_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,
                     NUM_DUELLISTS=len(duellists),
                     DUELLISTS_TABLE=duellist_table_str,
                     EXCLUDED_INCOS=excluded_incos_str,
                     OTHERS_TABLE=others_table_str,
                 )
-            )
 
-        return [Label("[SCORING] Generated end-of-game standings page.")]
+            else:
+                # generate live open season page
+                rows = []
+                for a in live_assassins:
+                    rows.append(
+                        OPENSEASON_ROW_TEMPLATE.format(
+                            NAME=a.real_name,
+                            ADDRESS=a.address,
+                            COLLEGE=a.college,
+                            WATER_STATUS=a.water_status,
+                            NOTES=a.notes,
+                            POINTS=score_manager.get_score(a)
+                        )
+                    )
+                table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
+                page_content = OPENSEASON_PAGE_TEMPLATE.format(
+                    YEAR=get_now_dt().year,
+                    TABLE=table_str,
+                    NUM_DUELLISTS=num_duellists,
+                    INCO_CONDITION="" if allow_inco else "who are competent at the end of the game",
+                )
+
+        navbar_entries.append(OPENSEASON_NAVBAR_ENTRY)
+
+        with open(WEBPAGE_WRITE_LOCATION / OPENSEASON_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
+            F.write(page_content)
+
+        return [Label("[SCORING] Generated openseason page.")]
 
     def _should_generate_stats_page(self) -> bool:
         game_end = get_game_end()
@@ -700,7 +670,6 @@ Syntax:
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         components = []
         components.extend(self._generate_openseason_page(navbar_entries))
-        components.extend(self._generate_standings(navbar_entries))
         if htmlResponse.get(self.html_ids["Generate Stats Page?"], "False") == "True":
             # this is silly but needed to fix a bug where columns end up in the wrong order
             columns: List[str] = [c for c in STATS_COLUMN_TEMPLATES if
