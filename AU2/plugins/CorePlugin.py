@@ -9,7 +9,7 @@ from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Assassin, Event
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData

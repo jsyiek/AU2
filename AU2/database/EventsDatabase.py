@@ -4,8 +4,9 @@ from typing import Dict, Optional
 
 from dataclasses_json import dataclass_json
 
-from AU2.database import BASE_WRITE_LOCATION
-from AU2.database.model import PersistentFile, Event
+from AU2 import BASE_WRITE_LOCATION
+from AU2.database import ALL_DATABASES
+from AU2.database.model import Event, PersistentFile
 
 
 @dataclass_json
@@ -39,3 +40,4 @@ class EventsDatabase(PersistentFile):
         self.events = self.load().events
 
 EVENTS_DATABASE = EventsDatabase.load()
+ALL_DATABASES.append(EVENTS_DATABASE)

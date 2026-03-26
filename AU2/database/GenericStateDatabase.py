@@ -4,7 +4,8 @@ from typing import Dict, Any
 
 from dataclasses_json import dataclass_json
 
-from AU2.database import BASE_WRITE_LOCATION
+from AU2 import BASE_WRITE_LOCATION
+from AU2.database import ALL_DATABASES
 from AU2.database.model.PersistentFile import PersistentFile
 
 
@@ -58,3 +59,4 @@ class GenericStateDatabase(PersistentFile):
 
 
 GENERIC_STATE_DATABASE = GenericStateDatabase.load()
+ALL_DATABASES.append(GENERIC_STATE_DATABASE)

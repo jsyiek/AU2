@@ -5,7 +5,8 @@ from dataclasses_json import dataclass_json
 from typing import Dict, List, Callable, Tuple, Union
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.model import PersistentFile, Assassin
+from AU2.database import ALL_DATABASES
+from AU2.database.model import Assassin, PersistentFile
 
 
 @dataclass_json
@@ -117,3 +118,4 @@ class AssassinsDatabase(PersistentFile):
 
 
 ASSASSINS_DATABASE = AssassinsDatabase.load()
+ALL_DATABASES.append(ASSASSINS_DATABASE)

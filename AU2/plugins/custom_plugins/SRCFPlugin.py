@@ -13,9 +13,8 @@ from AU2 import BASE_WRITE_LOCATION
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE, AssassinsDatabase
 from AU2.database.EventsDatabase import EVENTS_DATABASE, EventsDatabase
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
-from AU2.database import save_all_databases
+from AU2.database import refresh_databases, save_all_databases
 from AU2.database.model import Assassin
-from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox

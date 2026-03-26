@@ -1,12 +1,13 @@
 import re
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from dataclasses_json import dataclass_json
 
 from AU2 import ROOT_DIR, BASE_WRITE_LOCATION
 from AU2.database.model.PersistentFile import PersistentFile
+from AU2.database import ALL_DATABASES
 from AU2.html_components.HTMLComponent import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
@@ -102,6 +103,16 @@ class AwardsDatabase(PersistentFile):
             if award.get_key() == key:
                 self.awards.pop(i)
 
+    def _refresh(self):
+        """
+        Forces a refresh of the underlying database
+        """
+        if self.TEST_MODE:
+            self.awards = []
+            return
+
+        self.awards = self.load().awards
+
 
 @registered_plugin
 class AwardsPlugin(AbstractPlugin):
@@ -140,6 +151,7 @@ class AwardsPlugin(AbstractPlugin):
         ]
 
         self.AWARDS_DATABASE = AwardsDatabase.load()
+        ALL_DATABASES.append(self.AWARDS_DATABASE)
 
     def gather_awards(self) -> List[Tuple[str, str]]:
         return [
@@ -192,7 +204,6 @@ class AwardsPlugin(AbstractPlugin):
                 body=award_body,
             ))
             components.append(Label("[AWARDS] Added award."))
-        self.AWARDS_DATABASE.save()
         return components
 
     def ask_award_delete(self, award_key: str) -> List[HTMLComponent]:
@@ -215,7 +226,6 @@ class AwardsPlugin(AbstractPlugin):
     def answer_award_delete(self, html_response) -> List[HTMLComponent]:
         if html_response[self.html_ids["Confirm Delete"]]:
             self.AWARDS_DATABASE.delete(html_response[self.html_ids["Old Award Key"]])
-            self.AWARDS_DATABASE.save()
             return [Label("[AWARDS] Deleted award.")]
         else:
             return [Label("[AWARDS] Did not delete award.")]
