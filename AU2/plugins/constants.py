@@ -111,7 +111,6 @@ SUGGESTED_AWARDS = [
     "The MK Ultra Award for Indoctrination",
 ]
 
-
 COLLEGES = [
     "Christ's College",
     "Churchill College",
@@ -180,6 +179,18 @@ COLLEGES = [
     "Trinity Hall",
     "Wolfson",
 ]
+
+# map of months to terms
+TERM_MAP = {
+    1: "Lent",
+    2: "Lent",
+    3: "Lent",
+    6: "May Week",
+    10: "Michaelmas",
+    11: "Michaelmas",
+    12: "Michaelmas",
+}
+
 
 WATER_STATUSES = [
     "No water",

@@ -16,20 +16,24 @@ from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.RegexValidatedEntry import RegexValidatedEntry
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry
-from AU2.plugins.constants import SUGGESTED_AWARDS
+from AU2.plugins.constants import SUGGESTED_AWARDS, WEBPAGE_WRITE_LOCATION
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.util.date_utils import get_now_dt, get_term
+from AU2.plugins.util.game import get_game_start
 
 AWARD_TEMPLATE = """
 <dt id = '{KEY}'><span class='{KEY}'>{AWARD_NAME}:</span></dt><dd>{AWARD_BODY}</br></dd>
 
 """
 
-AWARDS_NAVBAR_ENTRY = NavbarEntry("awards.html", "Awards", -2)
+AWARD_DATA_TEMPLATE = "{AWARD_NAME}: {WINNER}"
+
+AWARDS_NAVBAR_ENTRY = NavbarEntry("awards.html", "Awards", -3)
 
 AWARDS_PAGE_TEMPLATE: str
-with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "bounties.html", "r", encoding="utf-8",
+with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "awards.html", "r", encoding="utf-8",
           errors="ignore") as F:
-    BOUNTIES_PAGE_TEMPLATE = F.read()
+    AWARDS_PAGE_TEMPLATE= F.read()
 
 AWARD_NAME_PATTERN = re.compile(r"^ *The (.*) for (.*) *$", flags=re.IGNORECASE)  # note: this is the regex from archive_collated_awards.php
 HTML_COMMENT_PATTERN = re.compile(r"<!--(?:(?!-->).)*-->", flags=re.MULTILINE | re.DOTALL)
@@ -65,7 +69,7 @@ class Award(PersistentFile):
     def render_name(self) -> str:
         """The award name as rendered on the page / in the UI"""
         award_name, award_reason = self.name
-        return f"The {award_name.title()} for {award_reason.title()}"
+        return f"The {award_name} for {award_reason}"
 
     def get_key(self) -> str:
         """The 'key' used to identify awards for the purposes of collation"""
@@ -147,7 +151,7 @@ class AwardsPlugin(AbstractPlugin):
         components = [
             RegexValidatedEntry(
                 identifier=self.html_ids["Award Name"],
-                title="Name of the award",
+                title="Name of the award (press TAB for autocomplete)",
                 regex=AWARD_NAME_PATTERN,
                 error_message="Invalid award name. Must be of form 'The [AWARD NAME] for [AWARD REASON]'",
                 default=award.render_name() if award else "",
@@ -161,7 +165,7 @@ class AwardsPlugin(AbstractPlugin):
             HtmlEntry(
                 identifier=self.html_ids["Award Body"],
                 title="Award body",
-                default=(award.body if award else "") + AWARD_BODY_INSTRUCTIONS,
+                default=(award.body if award else "[R], for ") + AWARD_BODY_INSTRUCTIONS,
             )
         ]
         if award:
@@ -211,6 +215,34 @@ class AwardsPlugin(AbstractPlugin):
     def answer_award_delete(self, html_response) -> List[HTMLComponent]:
         if html_response[self.html_ids["Confirm Delete"]]:
             self.AWARDS_DATABASE.delete(html_response[self.html_ids["Old Award Key"]])
+            self.AWARDS_DATABASE.save()
             return [Label("[AWARDS] Deleted award.")]
         else:
             return [Label("[AWARDS] Did not delete award.")]
+
+    def on_page_generate(self, html_response: dict, navbar_entries: List[NavbarEntry]) -> List[HTMLComponent]:
+        components = []
+        if self.AWARDS_DATABASE.awards:
+            award_data = "\n".join(
+                AWARD_DATA_TEMPLATE.format(AWARD_NAME=award.render_name(), WINNER=award.winner)
+                for award in self.AWARDS_DATABASE.awards
+            )
+            award_html = "\n".join(
+                AWARD_TEMPLATE.format(
+                    KEY=award.get_key(),
+                    AWARD_NAME=award.render_name(),
+                    AWARD_BODY=award.body.replace("[R]", f"<strong>{award.winner}</strong>"))
+                for award in self.AWARDS_DATABASE.awards
+            )
+            with open(WEBPAGE_WRITE_LOCATION / AWARDS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
+                F.write(
+                    AWARDS_PAGE_TEMPLATE.format(
+                        YEAR=get_now_dt().year,
+                        AWARD_HTML=award_html,
+                        AWARD_DATA=award_data,
+                        TERM=get_term(get_game_start())
+                    )
+                )
+            navbar_entries.append(AWARDS_NAVBAR_ENTRY)
+            components.append(Label("[AWARDS] Success!"))
+        return components

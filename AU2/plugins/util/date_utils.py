@@ -2,6 +2,7 @@ import datetime
 from typing import Optional, NamedTuple
 
 from AU2 import TIMEZONE
+from AU2.plugins.constants import TERM_MAP
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -65,3 +66,10 @@ def datetime_to_time_str(event_time: datetime.datetime) -> str:
     Returns a formatted timestamp suitable for the news.
     """
     return event_time.strftime("%H:%M %p")
+
+
+def get_term(ts: datetime.datetime) -> str:
+    """
+    Returns the term name for a particular datetime, based on month.
+    """
+    return f'{TERM_MAP.get(ts.month, "???")} {ts.year}'
