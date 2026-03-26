@@ -8,10 +8,12 @@ from dataclasses_json import dataclass_json
 from AU2 import ROOT_DIR, BASE_WRITE_LOCATION
 from AU2.database.model.PersistentFile import PersistentFile
 from AU2.html_components.HTMLComponent import HTMLComponent
+from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.AwardNameEntry import AwardNameEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
@@ -36,7 +38,7 @@ AWARD_BODY_INSTRUCTIONS = """
 <!--
 Here you can enter the HTML to be displayed under the award.
 Text inside HTML comment blocks, such as these instructions will be deleted by AU2.
-The code [R] will be substituted with the award recipient as previously entered, wrapped in <strong> tags.
+The code [R] will be substituted with the award recipient as previously entered.
 By convention, you should wrap the names of recipients of 'honourable mentions' in <strong> tags (i.e. "<strong>Recipent name</strong>").
 -->
 """
@@ -94,6 +96,11 @@ class AwardsDatabase(PersistentFile):
                 return award
         return None
 
+    def delete(self, key: str):
+        for i, award in enumerate(self.awards):
+            if award.get_key() == key:
+                self.awards.pop(i)
+
 
 @registered_plugin
 class AwardsPlugin(AbstractPlugin):
@@ -105,6 +112,7 @@ class AwardsPlugin(AbstractPlugin):
             "Award Recipient": self.identifier + "_award_recipient",
             "Award Body": self.identifier + "_award_body",
             "Old Award Key": self.identifier + "_old_key",
+            "Confirm Delete": self.identifier + "_confirm_delete",
         }
 
         self.exports = [
@@ -119,6 +127,13 @@ class AwardsPlugin(AbstractPlugin):
                 "Awards -> Update",
                 self.ask_award_create_or_update,
                 self.answer_award_create_or_update,
+                options_functions=(self.gather_awards,),
+            ),
+            Export(
+                "awards_delete",
+                "Awards -> Delete",
+                self.ask_award_delete,
+                self.answer_award_delete,
                 options_functions=(self.gather_awards,),
             ),
         ]
@@ -176,3 +191,27 @@ class AwardsPlugin(AbstractPlugin):
             components.append(Label("[AWARDS] Added award."))
         self.AWARDS_DATABASE.save()
         return components
+
+    def ask_award_delete(self, award_key: str) -> List[HTMLComponent]:
+        award = self.AWARDS_DATABASE.get(award_key)
+        return [
+            Table(
+                [("Name", award.render_name()),
+                 ("Recipient", award.winner),
+                 ("Body", award.body)]
+            ),
+            # We don't need to be particularly careful about deleting awards,
+            # hence use a Checkbox rather than a DigitsChallenge
+            Checkbox(
+                self.html_ids["Confirm Delete"],
+                "Delete the above award?"
+            ),
+            HiddenTextbox(self.html_ids["Old Award Key"], award_key),
+        ]
+
+    def answer_award_delete(self, html_response) -> List[HTMLComponent]:
+        if html_response[self.html_ids["Confirm Delete"]]:
+            self.AWARDS_DATABASE.delete(html_response[self.html_ids["Old Award Key"]])
+            return [Label("[AWARDS] Deleted award.")]
+        else:
+            return [Label("[AWARDS] Did not delete award.")]
