@@ -163,7 +163,7 @@ class AwardsPlugin(AbstractPlugin):
         components = [
             RegexValidatedEntry(
                 identifier=self.html_ids["Award Name"],
-                title="Name of the award (press TAB for autocomplete)",
+                title="Name of the award",
                 regex=AWARD_NAME_PATTERN,
                 error_message="Invalid award name. Must be of form 'The [AWARD NAME] for [AWARD REASON]'",
                 default=award.render_name() if award else "",

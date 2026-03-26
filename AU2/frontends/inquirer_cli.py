@@ -685,7 +685,7 @@ def render(html_component, dependency_context={}):
 
         q = [inquirer.Text(
             name=html_component.identifier,
-            message=escape_format_braces(html_component.title),
+            message=escape_format_braces(html_component.title) + (" (press TAB for autocomplete)" if html_component.suggestions else ""),
             default=html_component.default,
             validate=regex_validator,
             autocomplete=autocomplete
