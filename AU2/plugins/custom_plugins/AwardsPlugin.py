@@ -13,9 +13,10 @@ from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import Defaul
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.RegexValidatedEntry import RegexValidatedEntry
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.html_components.SpecialComponents.AwardNameEntry import AwardNameEntry
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry
+from AU2.plugins.constants import SUGGESTED_AWARDS
 from AU2.plugins.CorePlugin import registered_plugin
 
 AWARD_TEMPLATE = """
@@ -42,10 +43,6 @@ The code [R] will be substituted with the award recipient as previously entered.
 By convention, you should wrap the names of recipients of 'honourable mentions' in <strong> tags (i.e. "<strong>Recipent name</strong>").
 -->
 """
-
-SUGGESTED_AWARDS = [
-
-]
 
 
 @dataclass_json
@@ -148,9 +145,11 @@ class AwardsPlugin(AbstractPlugin):
     def ask_award_create_or_update(self, award_key: str = "") -> List[HTMLComponent]:
         award = self.AWARDS_DATABASE.get(award_key) if award_key else None
         components = [
-            AwardNameEntry(
+            RegexValidatedEntry(
                 identifier=self.html_ids["Award Name"],
                 title="Name of the award",
+                regex=AWARD_NAME_PATTERN,
+                error_message="Invalid award name. Must be of form 'The [AWARD NAME] for [AWARD REASON]'",
                 default=award.render_name() if award else "",
                 suggestions=SUGGESTED_AWARDS,
             ),
