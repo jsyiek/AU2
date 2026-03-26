@@ -4,7 +4,7 @@ import pathlib
 import pytz
 
 ROOT_DIR = pathlib.Path(os.path.abspath(__file__)).parent
-BASE_WRITE_LOCATION = os.path.expanduser("~/database")
+BASE_WRITE_LOCATION = pathlib.Path(os.path.expanduser("~/database"))
 TIMEZONE = pytz.timezone("Europe/London")
 
 # Sets the encoding to utf-8 for pyinquirer on Windows machines, since that isn't the default for some reason

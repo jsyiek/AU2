@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 from dataclasses_json import dataclass_json
@@ -14,7 +14,7 @@ class EventsDatabase(PersistentFile):
     WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "EventsSummary.json")
 
     # map from identifier to event
-    events: Dict[str, Event]
+    events: Dict[str, Event] = field(default_factory=dict)
 
     def add(self, event: Event):
         """

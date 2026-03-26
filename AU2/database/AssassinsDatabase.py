@@ -1,6 +1,6 @@
 import os
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from typing import Dict, List, Callable, Tuple, Union
 
@@ -12,7 +12,7 @@ from AU2.database.model import PersistentFile, Assassin
 @dataclass
 class AssassinsDatabase(PersistentFile):
     WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "AssassinsDatabase.json")
-    assassins: Dict[str, Assassin]
+    assassins: Dict[str, Assassin] = field(default_factory=dict)
 
     def add(self, assassin: Assassin):
         """

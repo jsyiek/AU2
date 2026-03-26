@@ -28,4 +28,4 @@ class PersistentFile:
             with open(cls.WRITE_LOCATION, "r") as F:
                 dump = F.read()
             return cls.from_json(dump)
-        return cls({})
+        return cls()
