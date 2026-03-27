@@ -18,6 +18,7 @@ GSHEET_SHARE_LINK_PATTERN = re.compile(r"docs.google.com/spreadsheets/d/([^/]+)/
 
 @registered_plugin
 class PlayerImporterPlugin(AbstractPlugin):
+    LOCAL = True
 
     def __init__(self):
         super().__init__("PlayerImporterPlugin")

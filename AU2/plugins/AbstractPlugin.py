@@ -2,6 +2,7 @@ from typing import Any, Callable, List, NamedTuple, Tuple, Type, TypeVar, Union
 
 from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.LocalConfigDatabase import LOCAL_CONFIG_DATABASE
 from AU2.html_components import HTMLComponent
 
 T = TypeVar("T")
@@ -110,15 +111,44 @@ class HookedExport:
         self.call_first = call_order
 
 
+def local_config_property(identifier: str, default: T, store_default: bool = True) -> property:
+    """
+    Creates a property corresponding to a value stored in LOCAL_CONFIG_DATABASE
+
+    Args:
+        identifier (str): identifier under which to store the property in LOCAL_CONFIG_DATABASE
+        default: the default value of the property
+        store_default (bool): whether to store the default value in the database. Necessary for mutable default values.
+
+    Returns:
+        property: a property whose getter and setter functions read and write from the LOCAL_CONFIG_DATABASE.
+            This needs to be set as a CLASS attribute to work!
+    """
+    if store_default:
+        def getter(self: AbstractPlugin) -> T:
+            return LOCAL_CONFIG_DATABASE.arb_state.setdefault(self.identifier, {}).setdefault(identifier, default)
+    else:
+        def getter(self: AbstractPlugin) -> T:
+            return LOCAL_CONFIG_DATABASE.arb_state.get(self.identifier, {}).get(identifier, default)
+
+    def setter(self: AbstractPlugin, val: T):
+        LOCAL_CONFIG_DATABASE.arb_state.setdefault(self.identifier, {})[identifier] = val
+
+    return property(getter, setter)
+
+
 AttributePairTableRow = Tuple[str, str]
 NavbarEntry = NamedTuple("NavbarEntry", (("url", str), ("display", str), ("position", float)))
 
 
-
 class AbstractPlugin:
+    # local plugins will not be synced with SRCF
+    LOCAL: bool = False
+
     def __init__(self, identifier: str):
         # unique identifier for the plugin
         self.identifier = identifier
+
         self.exports: List[Export] = []
 
         # for config parameters
@@ -137,13 +167,19 @@ class AbstractPlugin:
 
     @property
     def enabled(self) -> bool:
-        return GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, True)
+        in_generic = GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, False)
+        if self.LOCAL:
+            return LOCAL_CONFIG_DATABASE.plugin_map.get(self.identifier, in_generic)
+        return in_generic
 
     @enabled.setter
     def enabled(self, val: bool):
         if not isinstance(val, bool):
             raise TypeError(f"{self.__class__.__name__}.enabled must be a boolean, not '{type(val)}'")
-        GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
+        if self.LOCAL:
+            LOCAL_CONFIG_DATABASE.plugin_map[self.identifier] = val
+        else:
+            GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []
