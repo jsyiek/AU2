@@ -14,6 +14,9 @@ class LocalConfigDatabase(PersistentFile):
     """
     This class is for storing local settings that shouldn't be uploaded to SRCF or saved in backups
     """
+    # map from plugin identifier to whether it is enabled, for LOCAL plugins only
+    plugin_map: Dict[str, bool] = field(default_factory=dict)
+
     arb_state: Dict[str, Any] = field(default_factory=dict)
 
     # __ signals that the database file shouldn't be uploaded

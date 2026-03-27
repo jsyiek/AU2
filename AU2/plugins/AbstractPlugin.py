@@ -141,11 +141,14 @@ AttributePairTableRow = Tuple[str, str]
 NavbarEntry = NamedTuple("NavbarEntry", (("url", str), ("display", str), ("position", float)))
 
 
-
 class AbstractPlugin:
+    # local plugins will not be synced with SRCF
+    LOCAL: bool = False
+
     def __init__(self, identifier: str):
         # unique identifier for the plugin
         self.identifier = identifier
+
         self.exports: List[Export] = []
 
         # for config parameters
@@ -164,13 +167,19 @@ class AbstractPlugin:
 
     @property
     def enabled(self) -> bool:
-        return GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, True)
+        in_generic = GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, False)
+        if self.LOCAL:
+            return LOCAL_CONFIG_DATABASE.plugin_map.get(self.identifier, in_generic)
+        return in_generic
 
     @enabled.setter
     def enabled(self, val: bool):
         if not isinstance(val, bool):
             raise TypeError(f"{self.__class__.__name__}.enabled must be a boolean, not '{type(val)}'")
-        GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
+        if self.LOCAL:
+            LOCAL_CONFIG_DATABASE.plugin_map[self.identifier] = val
+        else:
+            GENERIC_STATE_DATABASE.plugin_map[self.identifier] = val
 
     def process_all_events(self, _: List[Event]) -> List[HTMLComponent]:
         return []

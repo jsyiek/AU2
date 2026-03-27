@@ -68,6 +68,7 @@ class UIChange:
 
 @registered_plugin
 class UIConfigPlugin(AbstractPlugin):
+    LOCAL = True
 
     def __init__(self):
         super().__init__("UIConfigPlugin")

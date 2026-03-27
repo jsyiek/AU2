@@ -124,6 +124,8 @@ class Email:
 
 @registered_plugin
 class SRCFPlugin(AbstractPlugin):
+    LOCAL = True
+
     def __init__(self):
         """
         The SRCF Plugin overrides self.exports into a @property to enforce logging in.

@@ -15,6 +15,7 @@ from AU2.plugins.util.date_utils import get_now_dt
 
 @registered_plugin
 class LocalBackupPlugin(AbstractPlugin):
+    LOCAL = True
 
     BACKUP_LOCATION = os.path.join(BASE_WRITE_LOCATION, "backup")
     if not os.path.exists(BACKUP_LOCATION):
