@@ -110,7 +110,8 @@ def get_active_players(death_manager: DeathManager) -> Set[str]:
     for e in sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime):
         death_manager.add_event(e)
         for killer, _ in e.kills:
-            active_players.append(killer)
+            if killer:
+                active_players.append(killer)
         for player_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
             active_players.append(player_id)
     return set(active_players)
