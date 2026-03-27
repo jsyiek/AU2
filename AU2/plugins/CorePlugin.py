@@ -984,7 +984,7 @@ class CorePlugin(AbstractPlugin):
             ),
             Checkbox(
                 self.identifier + "_include_local",
-                "Also reset UI config?",
+                "Also reset LOCAL config?",
                 False
             ),
         ]
