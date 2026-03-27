@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -17,6 +17,9 @@ class GenericStateDatabase(PersistentFile):
     """
     uniqueId: int = 0  # see get_unique_str
 
+    last_uploaded: Optional[int] = None
+    uploader: Optional[str] = None
+
     # map from plugin identifier to whether it is enabled
     plugin_map: Dict[str, bool] = field(default_factory=dict)
 
@@ -25,7 +28,7 @@ class GenericStateDatabase(PersistentFile):
     arb_state: Dict[str, Any] = field(default_factory=dict)
     arb_int_state: Dict[str, int] = field(default_factory=dict)
 
-    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "GenericState.json")
+    WRITE_LOCATION = BASE_WRITE_LOCATION / "GenericState.json"
 
     def __post_init__(self):
         if not isinstance(self.uniqueId, int):

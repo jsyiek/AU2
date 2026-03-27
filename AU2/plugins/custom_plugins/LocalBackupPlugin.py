@@ -16,7 +16,7 @@ from AU2.plugins.util.date_utils import get_now_dt
 @registered_plugin
 class LocalBackupPlugin(AbstractPlugin):
 
-    BACKUP_LOCATION = os.path.join(BASE_WRITE_LOCATION, "backup")
+    BACKUP_LOCATION = BASE_WRITE_LOCATION / "backup"
     if not os.path.exists(BACKUP_LOCATION):
         os.mkdir(BACKUP_LOCATION)
 
@@ -54,11 +54,11 @@ class LocalBackupPlugin(AbstractPlugin):
         ]
 
     def answer_backup(self, htmlResponse) -> List[HTMLComponent]:
-        backup_path = os.path.join(self.BACKUP_LOCATION, htmlResponse[self.html_ids["Backup Name"]])
+        backup_path = self.BACKUP_LOCATION / htmlResponse[self.html_ids["Backup Name"]]
         os.mkdir(backup_path)
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
-                shutil.copy(os.path.join(BASE_WRITE_LOCATION, f), os.path.join(backup_path, f))
+                shutil.copy(BASE_WRITE_LOCATION / f, backup_path / f)
         return [Label("[BACKUP] Success!")]
 
     def ask_restore_backup(self) -> List[HTMLComponent]:
@@ -77,10 +77,10 @@ class LocalBackupPlugin(AbstractPlugin):
             return [Label("[BACKUP] Aborted.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
-                os.remove(os.path.join(BASE_WRITE_LOCATION, f))
-        backup_path = os.path.join(self.BACKUP_LOCATION, chosen_backup)
+                os.remove(BASE_WRITE_LOCATION / f)
+        backup_path = self.BACKUP_LOCATION / chosen_backup
         for f in os.listdir(backup_path):
-            shutil.copy(os.path.join(backup_path, f), os.path.join(BASE_WRITE_LOCATION, f))
+            shutil.copy(backup_path / f, BASE_WRITE_LOCATION / f)
 
         refresh_databases()
         return [Label(f"[BACKUP] Restored {chosen_backup}")]
