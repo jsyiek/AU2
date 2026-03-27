@@ -38,7 +38,7 @@ with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "awards.h
 
 AWARD_NAME_PATTERN = re.compile(r"^ *The (.*) for (.*) *$", flags=re.IGNORECASE)  # note: this is the regex from archive_collated_awards.php
 HTML_COMMENT_PATTERN = re.compile(r"<!--(?:(?!-->).)*-->", flags=re.MULTILINE | re.DOTALL)
-WHITESPACE_PATTERN = re.compile(r"\s")
+KEY_TRANSFORMATION_PATTERN = re.compile(r"[^A-Za-z]+")
 
 AWARD_BODY_INSTRUCTIONS = """
 <!--
@@ -74,7 +74,7 @@ class Award(PersistentFile):
 
     def get_key(self) -> str:
         """The 'key' used to identify awards for the purposes of collation"""
-        return WHITESPACE_PATTERN.sub("", self.name[1]).lower()
+        return KEY_TRANSFORMATION_PATTERN.sub("", self.name[1]).lower()
 
     @classmethod
     def parse_name(cls, name: str) -> (str, str):
