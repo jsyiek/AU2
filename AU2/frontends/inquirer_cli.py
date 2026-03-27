@@ -351,11 +351,13 @@ def render(html_component, dependency_context={}):
             choices=assassins,
             default=[victim for _, victim in html_component.default],
         )]
-        deaths = inquirer_prompt_with_abort(q)["q"]
+        deaths = set(inquirer_prompt_with_abort(q)["q"])
+        default_killers = {victim: killer for killer, victim in html_component.default if victim in deaths}
         q = [inquirer.List(
             name=victim,
             message=f"Who killed {escape_format_braces(victim)}?",
             choices=[a for a in assassins if a != victim],
+            default=default_killers[victim],
         ) for victim in deaths]
         victim_killer_mapping = inquirer_prompt_with_abort(q)
         return {html_component.identifier: [(killer, victim) for victim, killer in victim_killer_mapping.items()]}
