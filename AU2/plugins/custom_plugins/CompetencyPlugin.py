@@ -258,13 +258,6 @@ class CompetencyPlugin(AbstractPlugin):
             options=available_assassins,
             defaults=[i for i in available_assassins if not i in active_players]
         ))
-        questions.append(InputWithDropDown(
-            title="Select the umpire, since someone needs to kill the selected players",
-            identifier=self.html_ids["Umpire"],
-            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_city_watch],
-            selected=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [""])[0]
-            # Will crash if there are no city watch to choose from
-        ))
         questions.append(DatetimeEntry(
             identifier=self.html_ids["Datetime"],
             title="Enter date/time of event")
@@ -279,27 +272,19 @@ class CompetencyPlugin(AbstractPlugin):
 
     def gigabolt_answer(self, htmlResponse):
         deaths = htmlResponse[self.html_ids['Gigabolt']]
-        umpire = htmlResponse[self.html_ids['Umpire']]
         # remove lines beginning with '#'
         headline = '\n'.join([i for i in htmlResponse[self.html_ids['Headline']].split('\n') if not i.startswith('#')])
         headline = headline.replace('[num_players]', str(len(deaths)))
-        # TODO Adjust targeting plugin so that it can handle events with many deaths, by retargeting in chunks
-        # I don't want to mess with the targeting plugin mid-game, so making a bunch of events with n kills each works for now
-        # Number of deaths per event:
-        n = 3
-        # Brief testing showed that 5 was too large (and broke targeting). 1 makes an annoying number of events
-        subdivided_deaths = [deaths[i:i + n] for i in range(0, len(deaths), n)]
-        for idx, i in enumerate(subdivided_deaths):
-            EVENTS_DATABASE.add(
-                Event(
-                    assassins={j: 0 for j in i} | {umpire: 0},
-                    datetime=htmlResponse[self.html_ids['Datetime']],
-                    headline=f"Gigabolt stage {idx+1}" if (idx or not headline) else headline,
-                    reports={},
-                    kills=[(umpire, j) for j in i],
-                    pluginState={"PageGeneratorPlugin": {"hidden_event": bool(idx) or not headline}}
-                )
+        EVENTS_DATABASE.add(
+            Event(
+                assassins={v: 0 for v in deaths},
+                datetime=htmlResponse[self.html_ids['Datetime']],
+                headline=headline or "GIGABOLT",
+                reports={},
+                kills=[("", v) for v in deaths],
+                pluginState={"PageGeneratorPlugin": {"hidden_event": not headline}}
             )
+        )
 
         return [Label(f"[COMPETENCY] Gigabolt Success! {len(deaths)} players eliminated")]
 
