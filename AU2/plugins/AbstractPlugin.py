@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, NamedTuple, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, List,  NamedTuple, Tuple, Type, TypeVar, Union
 
 from AU2.database.model import Assassin, Event
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
@@ -230,6 +230,15 @@ class AbstractPlugin:
         Display any information about an ASSASSIN that is managed by this plugin
         """
         return []
+
+    def render_assassins_summaries(self, _: List[Assassin]) -> Dict[str, List[AttributePairTableRow]]:
+        """
+        Display information about MULTIPLE assassins. Used for attributes that require processing of events
+
+        Returns:
+            dict[str, list[AttributePairTableRow]: a mapping from assassin identifiers to lists of summary table rows
+        """
+        return {}
 
     def render_event_summary(self, _: Event) -> List[AttributePairTableRow]:
         """
