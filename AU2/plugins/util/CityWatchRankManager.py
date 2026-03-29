@@ -32,7 +32,7 @@ class CityWatchRankManager:
             self.assassin_relative_ranks[aID] += rank
         if self.auto_ranking:
             for (killer, victim) in e.kills:
-                if not killer or not ASSASSINS_DATABASE.get(killer).is_city_watch:
+                if not ASSASSINS_DATABASE.get(killer).is_city_watch:
                     continue
                 if (killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [])
                         or killer in GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_cop", [])):

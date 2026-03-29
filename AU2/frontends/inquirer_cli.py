@@ -356,7 +356,7 @@ def render(html_component, dependency_context={}):
         q = [inquirer.List(
             name=victim,
             message=f"Who killed {escape_format_braces(victim)}?",
-            choices=[a for a in assassins if a != victim] + [("(Thunderbolt)", "")],
+            choices=[a for a in assassins if a != victim],
             default=default_killers[victim],
         ) for victim in deaths]
         victim_killer_mapping = inquirer_prompt_with_abort(q)
@@ -409,8 +409,6 @@ def render(html_component, dependency_context={}):
         mapping = {}
         defaults = []
         for (a1, a2) in kills:
-            if html_component.ignore_thunderbolts and not a1:
-                continue
             key = f"{a1} kills {a2}"
             mapping[key] = (a1, a2)
             if (a1, a2) in html_component.default:

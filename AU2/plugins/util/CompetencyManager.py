@@ -44,7 +44,7 @@ class CompetencyManager:
         if self.auto_competency:
             for (killer, victim) in e.kills:
                 victim_model = ASSASSINS_DATABASE.get(victim)
-                if victim_model.is_city_watch or self.death_manager.is_dead(victim_model) or not killer:
+                if victim_model.is_city_watch or self.death_manager.is_dead(victim_model):
                     continue
                 self.attempts_since_kill[killer] = 0
                 # Allows overriding auto competency on a case-by-case basis

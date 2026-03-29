@@ -33,7 +33,7 @@ class Event(PersistentFile):
     # from assassin ID and their pseudonym ID to their report
     reports: List[Tuple[str, Optional[int], str]]
 
-    # Map from killer to victim. If killer is empty (""), represents a thunderbolt.
+    # Map from killer to victim
     kills: List[Tuple[str, str]]
 
     # to allow plugins to make notes on the event

@@ -34,10 +34,9 @@ class ScoreManager:
             # and dead players will be pruned as events are added
             if victim not in self.live_assassins:
                 continue
+            self.kill_tree[killer].append(victim)
             if self.perma_death:
                 self.live_assassins.discard(victim)
-            if killer:
-                self.kill_tree[killer].append(victim)
         for assassin_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
             self.attempt_counter[assassin_id] = self.attempt_counter.get(assassin_id, 0) + 1
 
