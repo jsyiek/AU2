@@ -166,7 +166,6 @@ class TestCompetencyPlugin:
         plugin.gigabolt_answer(
             htmlResponse={
                 plugin.html_ids["Gigabolt"]: next((c.defaults for c in plugin.gigabolt_ask() if c.identifier == plugin.html_ids["Gigabolt"])),
-                plugin.html_ids["Umpire"]: p[19],
                 plugin.html_ids["Datetime"]: game.new_datetime(),
                 plugin.html_ids["Headline"]: "",
             }
@@ -263,3 +262,30 @@ class TestCompetencyPlugin:
 
         for i in range(10):
             assert ASSASSINS_DATABASE.get(p[i + 10] + " identifier") in incos
+
+    @plugin_test
+    def test_can_handle_thunderbolt(self):
+        """
+        Test that auto-competency can handle players being thunderbolted,
+        """
+        p = some_players(20)
+        game = MockGame().having_assassins(p)
+
+        # some players gain competency through kills...
+        for i in range(5):
+            game.assassin(p[i]).kills(p[i + 5], manual_competency=None)
+        # some get thunderbolted
+        game.assassin(p[10]).with_accomplices(*p[11:15]).are_thunderbolted()
+
+        manager = self.get_manager(game, auto_competency=True, initial_competency_period=0)
+        query_date = manager.game_start + datetime.timedelta(days=1, seconds=30)
+
+        incos = manager.get_incos_at(query_date)
+
+        for i in range(5):
+            assert ASSASSINS_DATABASE.get(p[i] + " identifier") not in incos
+
+        for i in range(10):
+            assert ASSASSINS_DATABASE.get(p[i + 5] + " identifier") in incos
+
+        assert len(incos) == 15

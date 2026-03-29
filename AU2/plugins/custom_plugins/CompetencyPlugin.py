@@ -177,7 +177,6 @@ class CompetencyPlugin(AbstractPlugin):
             "Attempts": self.identifier + "_attempts",
             "Gigabolt": self.identifier + "_gigabolt",
             "Headline": self.identifier + "_gigabolt_headline",
-            "Umpire": self.identifier + "_umpire",
             "Search": self.identifier + "_search"
         }
 
