@@ -2,11 +2,9 @@ import random
 import math
 from typing import Dict
 
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.plugins.custom_plugins.ScoringPlugin import ScoringPlugin
 from AU2.plugins.util.ScoreManager import ScoreManager
-from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
+from AU2.test.test_utils import MockGame, some_players, plugin_test
 
 
 class TestScoringPlugin:
@@ -153,8 +151,8 @@ class TestScoringPlugin:
         (with perma-death turned off)
         Kill graph used is
             0 <-> 1 -> 2
-                 /|\   |
-                  |   \|/
+                  ^    |
+                  |    V
                   4 <- 3
         """
         p = some_players(5)
@@ -239,3 +237,56 @@ class TestScoringPlugin:
 
         # check the open season list is correct
         assert manager.live_assassins == {idents[4], idents[5]}
+
+    @plugin_test
+    def test_can_handle_thunderbolt(self):
+        """
+        Kill graph looks like
+        0 -> 1 -> 2 -> 3
+        Thunderbolt -> 4 -> 5
+             |
+             v
+             6 <- 7
+
+        Where 7 -> 6 occurs *after* the thunderbolt
+        """
+        n = 8
+        p = some_players(n)
+        game = MockGame().having_assassins(p)
+        idents = [name + " identifier" for name in p]
+
+        # add kills
+        game.assassin(p[2]).kills(p[3]).then()\
+            .assassin(p[1]).kills(p[2]).then()\
+            .assassin(p[0]).kills(p[1]).then()\
+            .assassin(p[4]).kills(p[5])
+
+        # add thunderbolts
+        game.assassin(p[4]).is_thunderbolted().then()\
+            .assassin(p[6]).is_thunderbolted()
+
+        # add kill of thunderbolted player
+        game.assassin(p[7]).kills(p[6])
+
+        manager = self.get_manager(game)
+
+        # check kills are counted correctly
+        for i in range(n):
+            if i in {0, 1, 2, 4}:
+                assert manager._kills(idents[i]) == 1
+            else:
+                assert manager._kills(idents[i]) == 0
+
+        # check conkers are calculated correctly
+        for i in range(n):
+            if i in {2, 4}:
+                assert manager._conkers(idents[i]) == 1
+            elif i in {1}:
+                assert manager._conkers(idents[i]) == 2
+            elif i in {0}:
+                assert manager._conkers(idents[i]) == 3
+            else:
+                assert manager._conkers(idents[i]) == 0
+
+        # only players 0 and 7 survive the game
+        assert manager.live_assassins == {idents[0], idents[7]}

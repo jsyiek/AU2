@@ -1,13 +1,16 @@
-import datetime
-
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.database.model import Event
 from AU2.plugins.custom_plugins.CityWatchPlugin import CityWatchPlugin
-from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
+from AU2.plugins.util.CityWatchRankManager import CityWatchRankManager
+from AU2.test.test_utils import MockGame, some_players, plugin_test
 
 
 class TestCityWatchPlugin:
+    def get_manager(self, auto_ranking=True, city_watch_kill_ranking=False) -> CityWatchRankManager:
+        m = CityWatchRankManager(auto_ranking=auto_ranking, city_watch_kill_ranking=city_watch_kill_ranking)
+        for e in EVENTS_DATABASE.events.values():
+            m.add_event(e)
+        return m
 
     @plugin_test
     def test_resurrect_as_city_watch(self):
@@ -71,3 +74,31 @@ class TestCityWatchPlugin:
         # check the list of resurrectable assassins is correct after resurrection
         assert old_assassin.hidden
         assert set(plugin.gather_dead_full_players()) == {p[i] + " identifier" for i in range(k + 1, 2 * k - 1)}
+
+    @plugin_test
+    def test_can_handle_thunderbolt(self):
+        """
+        Have 20 players, players 0-9 city watch, rest full players.
+        Then kill graph
+        0 -> 10
+        |--> 11
+
+        Thunderbolt -> 12
+            |--------> 1
+        """
+        p = some_players(20)
+        game = MockGame().having_assassins(p)
+        game.assassin(p[0]).with_accomplices(*p[1:10]).are_city_watch()
+
+        game.assassin(p[0]).kills(p[10]).then()\
+            .assassin(p[0]).kills(p[11]).then()\
+            .assassin(p[12]).is_thunderbolted().then()\
+            .assassin(p[1]).is_thunderbolted()
+
+        manager = self.get_manager()
+
+        # player 0 has two kills -> two rankups
+        assert manager.get_relative_rank(p[0] + " identifier") == 2
+        # other city watch have no kills
+        for i in range(1, 10):
+            assert manager.get_relative_rank(p[i] + " identifier") == 0

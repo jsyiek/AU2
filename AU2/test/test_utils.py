@@ -313,6 +313,21 @@ class ProxyAssassin:
 
         return event
 
+    def are_thunderbolted(self, headline: str = "") -> ProxyEvent:
+        event = self.is_involved_in_event(
+            assassins=self.assassins,
+            headline=headline,
+            kills=[(self.__ident(v), self.__ident(v)) for v in self.assassins],
+        )
+
+        for v in self.assassins:
+            event.mockGame.has_died(v)
+
+        return event
+
+    def is_thunderbolted(self, *args, **kwargs) -> ProxyEvent:
+        return self.are_thunderbolted(*args, **kwargs)
+
     def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None) -> ProxyEvent:
         """
         Submits a generic event to the database
