@@ -283,9 +283,11 @@ class TestCompetencyPlugin:
         incos = manager.get_incos_at(query_date)
 
         for i in range(5):
-            assert ASSASSINS_DATABASE.get(p[i] + " identifier") not in incos
+            assert game.assassin_model(p[i]) not in incos
 
-        for i in range(10):
-            assert ASSASSINS_DATABASE.get(p[i + 5] + " identifier") in incos
+        for i in range(15, 20):
+            assert game.assassin_model(p[i]) in incos
 
-        assert len(incos) == 15
+        # thunderbolted players should all be 'inco corpses'
+        for i in range(10, 15):
+            assert game.assassin_model(p[i]) in manager.inco_corpses

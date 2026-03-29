@@ -151,8 +151,8 @@ class TestScoringPlugin:
         (with perma-death turned off)
         Kill graph used is
             0 <-> 1 -> 2
-                 /|\   |
-                  |   \|/
+                  ^    |
+                  |    V
                   4 <- 3
         """
         p = some_players(5)

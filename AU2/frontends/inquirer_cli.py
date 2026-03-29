@@ -356,8 +356,10 @@ def render(html_component, dependency_context={}):
         q = [inquirer.List(
             name=victim,
             message=f"Who killed {escape_format_braces(victim)}?",
-            choices=[a for a in assassins if a != victim],
-            default=default_killers[victim],
+            # note: we use 'self-kills' for thunderbolts, for backwards compatibility.
+            # so long as thunderbolt events aren't edited on an older version of AU2 it will be able to cope with this
+            choices=[a for a in assassins if a != victim] + [("(Thunderbolt)", victim)],
+            default=default_killers.get(victim),
         ) for victim in deaths]
         victim_killer_mapping = inquirer_prompt_with_abort(q)
         return {html_component.identifier: [(killer, victim) for victim, killer in victim_killer_mapping.items()]}
@@ -409,6 +411,8 @@ def render(html_component, dependency_context={}):
         mapping = {}
         defaults = []
         for (a1, a2) in kills:
+            if html_component.exclude_thunderbolts and a1 == a2:
+                continue
             key = f"{a1} kills {a2}"
             mapping[key] = (a1, a2)
             if (a1, a2) in html_component.default:

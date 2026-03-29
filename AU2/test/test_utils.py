@@ -317,7 +317,7 @@ class ProxyAssassin:
         event = self.is_involved_in_event(
             assassins=self.assassins,
             headline=headline,
-            kills=[("", self.__ident(v)) for v in self.assassins],
+            kills=[(self.__ident(v), self.__ident(v)) for v in self.assassins],
         )
 
         for v in self.assassins:
