@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 import copy
 import datetime
-import difflib
 import itertools
 import random
-import re
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import editor
 import html5lib
@@ -32,6 +30,7 @@ from AU2.html_components.DependentComponents.AssassinDependentTextEntry import A
 from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.ColourEntry import ColourEntry
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
@@ -56,6 +55,7 @@ from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
 from AU2.plugins.util.game import escape_format_braces, soft_escape
+from AU2.plugins.util.render_utils import hexcode_to_rgb, rgb_to_hexcode
 
 
 def datetime_validator(_, current) -> bool:
@@ -79,6 +79,20 @@ def optional_datetime_validator(_, current) -> bool:
     except ValueError:
         return False
     return True
+
+
+def colour_validator_factory(optional: bool = False) -> Callable[[List[str], str], bool]:
+    def validator(_, current) -> bool:
+        try:
+            if current is None:
+                raise KeyboardInterrupt
+            if optional and current == "":
+                return True
+            hexcode_to_rgb(current)
+        except ValueError:
+            raise ValidationError("", reason="Invalid colour hexcode")
+        return True
+    return validator
 
 
 def html_validator(_, to_validate: str) -> bool:
@@ -660,6 +674,17 @@ def render(html_component, dependency_context={}):
             default=html_component.default
         )]
         return inquirer_prompt_with_abort(q)
+
+    elif isinstance(html_component, ColourEntry):
+        q = [inquirer.Text(
+            name="colour hexcode",
+            message=escape_format_braces(html_component.title),
+            default=rgb_to_hexcode(html_component.default) if html_component.default else "",
+            validate=colour_validator_factory(optional=html_component.optional),
+        )]
+        hexcode = inquirer_prompt_with_abort(q)["colour hexcode"]
+        rgb = hexcode_to_rgb(hexcode) if hexcode else None
+        return {html_component.identifier: rgb}
 
     elif isinstance(html_component, Label):
         print(html_component.title)

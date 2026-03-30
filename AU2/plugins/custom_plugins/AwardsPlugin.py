@@ -10,6 +10,7 @@ from AU2.database.model.PersistentFile import PersistentFile
 from AU2.database import ALL_DATABASES
 from AU2.html_components.HTMLComponent import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
+from AU2.html_components.SimpleComponents.ColourEntry import ColourEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
@@ -20,6 +21,7 @@ from AU2.plugins.constants import DEFAULT_AWARDS, WEBPAGE_WRITE_LOCATION
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.util.date_utils import get_now_dt, get_term
 from AU2.plugins.util.game import get_game_start
+from AU2.plugins.util.render_utils import RGBValues, rgb_to_hexcode
 
 AWARD_TEMPLATE = """
 <dt id = '{KEY}'><span class='{KEY}'>{AWARD_NAME}:</span></dt>
@@ -30,6 +32,8 @@ AWARD_TEMPLATE = """
 """
 
 AWARD_DATA_TEMPLATE = "{AWARD_NAME}: {WINNER}"
+
+AWARD_CLASS_CSS_TEMPLATE = ".{KEY} {{ color: {HEXCODE}; }}"
 
 AWARDS_NAVBAR_ENTRY = NavbarEntry("awards.html", "Awards", -3)
 
@@ -81,7 +85,7 @@ def award_type_to_key(award_type: str) -> str:
 
     Examples:
         >>> award_type_to_key("the 'Smoothest' Kill")
-        "thesmoothestkill"
+        'thesmoothestkill'
     """
     return KEY_TRANSFORMATION_PATTERN.sub("", award_type).lower()
 
@@ -100,6 +104,7 @@ class Award(PersistentFile):
     recipient_name: str
     recipient_reason: str
     honourable_mentions: str
+    colour: Optional[RGBValues] = None
 
     def get_key(self) -> str:
         """The 'key' used to identify awards for the purposes of collation"""
@@ -142,6 +147,7 @@ class AwardsPlugin(AbstractPlugin):
             "Award Recipient": self.identifier + "_award_recipient",
             "Award Reason": self.identifier + "_award_reason",
             "Honourable Mentions": self.identifier + "_honourable_mentions",
+            "Colour": self.identifier + "_colour",
             "Confirm Delete": self.identifier + "_confirm_delete",
         }
 
@@ -182,12 +188,22 @@ class AwardsPlugin(AbstractPlugin):
         award = self.AWARDS_DATABASE.awards.get(award_key)
         is_custom = award_key not in DEFAULT_AWARDS_MAP
         return [
-            (
-                DefaultNamedSmallTextbox(
-                    identifier=self.html_ids["Award Type"],
-                    title="What the award is for (generically)",
-                    default=award.name[1] if award else "",
-                ) if is_custom else HiddenTextbox(self.html_ids["Award Type"], DEFAULT_AWARDS_MAP[award_key][1])
+            *(
+                (
+                    DefaultNamedSmallTextbox(
+                        identifier=self.html_ids["Award Type"],
+                        title="What the award is for (generically)",
+                        default=award.name[1] if award else "",
+                    ),
+                    ColourEntry(
+                        identifier=self.html_ids["Colour"],
+                        title="Award colour (as hexcode, optional)",
+                        default=award.colour if award else None,
+                        optional=True,
+                    ),
+                ) if is_custom else (
+                    HiddenTextbox(self.html_ids["Award Type"], DEFAULT_AWARDS_MAP[award_key][1]),
+                )
             ),
             HiddenTextbox(self.html_ids["Award Key"], award_key),
             DefaultNamedSmallTextbox(
@@ -222,6 +238,7 @@ class AwardsPlugin(AbstractPlugin):
             recipient_name = html_response[self.html_ids["Award Recipient"]],
             recipient_reason = html_response[self.html_ids["Award Reason"]],
             honourable_mentions = html_response[self.html_ids["Honourable Mentions"]],
+            colour = html_response.get(self.html_ids["Colour"])
         )
         self.AWARDS_DATABASE.add(award)
         return [Label(f"[AWARDS] Awarded {render_award_name(award.name)} to {award.recipient_name}")]
@@ -271,13 +288,21 @@ class AwardsPlugin(AbstractPlugin):
                 )
                 for award in self.AWARDS_DATABASE.awards.values()
             )
+            award_styling = "\n".join(
+                AWARD_CLASS_CSS_TEMPLATE.format(
+                    KEY=award.get_key(),
+                    HEXCODE=rgb_to_hexcode(award.colour),
+                )
+                for award in self.AWARDS_DATABASE.awards.values() if award.colour
+            )
             with open(WEBPAGE_WRITE_LOCATION / AWARDS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
                 F.write(
                     AWARDS_PAGE_TEMPLATE.format(
                         YEAR=get_now_dt().year,
                         AWARD_HTML=award_html,
                         AWARD_DATA=award_data,
-                        TERM=get_term(get_game_start())
+                        TERM=get_term(get_game_start()),
+                        AWARD_COLOURS_CSS=award_styling,
                     )
                 )
             navbar_entries.append(AWARDS_NAVBAR_ENTRY)

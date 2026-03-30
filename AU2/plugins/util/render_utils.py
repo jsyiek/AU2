@@ -175,24 +175,63 @@ def get_color(pseudonym: str,
     return HEX_COLS[ind % len(HEX_COLS)]
 
 
+RGBValues = Tuple[int, int, int]
+
+
+def hexcode_to_rgb(hexcode: str) -> RGBValues:
+    """Converts a colour hexcode to rgb values.
+
+    Args:
+        hexcode (str): a colour hexcode. May or may not include an initial '#'
+
+    Returns:
+        (int, int, int): a tuple of rgb values.
+
+    Raises:
+        ValueError: If `hexcode` is not a valid colour hexcode.
+    """
+    err = ValueError(f"invalid colour hexcode {hexcode}")
+    if hexcode[0] == '#':
+        hexcode = hexcode[1:]
+    if len(hexcode) != 6:
+        raise err
+    try:
+        return tuple(int(hexcode[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        raise err
+
+
+def rgb_to_hexcode(rgb: RGBValues) -> str:
+    """
+    Converts a tuple of rgb values into a hexcode.
+
+    Args:
+        rgb (int, int, int): tuple of rgb values
+
+    Returns:
+        str: the corresponding hexcode, including initial '#'.
+    """
+    return '#' + "".join(f"{x:02x}" for x in rgb)
+
+
 def adjust_brightness(hexcode: str, factor: float) -> str:
     """
     Adjusts the brightness of the specified colour by the specified factor.
     Used for making real names slightly darker than pseudonyms.
 
     Args:
-        hexcode (str): hexcode of the original colour, including an initial #
+        hexcode (str): hexcode of the original colour
         factor (float): factor by which to multiply the brightness. If < 0 this will be set to 0.
             If the factor is such that any of the rgb values ends up > 255, they are capped at 255.
 
     Returns:
         str: the hexcode of the brightness-adjusted colour, (including an initial #).
     """
-    rgb = (int(hexcode[i : i+2], 16) for i in (1, 3, 5))
+    rgb = hexcode_to_rgb(hexcode)
     factor = max(factor, 0)
     scaled = (int(factor * x) for x in rgb)
     capped = (min(255, x) for x in scaled)
-    return '#' + "".join(f"{x:02x}" for x in capped)
+    return rgb_to_hexcode(capped)
 
 
 def get_real_name_brightness() -> float:
