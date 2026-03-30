@@ -14,8 +14,6 @@ from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import Defaul
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.Label import Label
-from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
-from AU2.html_components.SimpleComponents.RegexValidatedEntry import RegexValidatedEntry
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry
 from AU2.plugins.constants import DEFAULT_AWARDS, WEBPAGE_WRITE_LOCATION

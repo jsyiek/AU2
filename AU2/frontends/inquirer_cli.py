@@ -48,7 +48,6 @@ from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
-from AU2.html_components.SimpleComponents.RegexValidatedEntry import RegexValidatedEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, \
     ListUpdates
@@ -659,36 +658,6 @@ def render(html_component, dependency_context={}):
             name=html_component.identifier,
             message=escape_format_braces(html_component.title),
             default=html_component.default
-        )]
-        return inquirer_prompt_with_abort(q)
-
-    elif isinstance(html_component, RegexValidatedEntry):
-        if not isinstance(html_component.regex, re.Pattern):
-            html_component.regex = re.compile(html_component.regex)
-
-        def regex_validator(_, to_validate):
-            if html_component.regex.match(to_validate):
-                return True
-            raise ValidationError("", reason=html_component.error_message)
-
-        curr_autocomplete_suggestions = []
-
-        def autocomplete(text, state):
-            """Autocomplete function which finds the closest matches then allows cycling through these"""
-            nonlocal curr_autocomplete_suggestions
-
-            if state == 0:
-                curr_autocomplete_suggestions = difflib.get_close_matches(text, html_component.suggestions, cutoff=0)
-
-            if curr_autocomplete_suggestions:
-                return curr_autocomplete_suggestions[state % len(curr_autocomplete_suggestions)]
-
-        q = [inquirer.Text(
-            name=html_component.identifier,
-            message=escape_format_braces(html_component.title) + (" (press TAB for autocomplete)" if html_component.suggestions else ""),
-            default=html_component.default,
-            validate=regex_validator,
-            autocomplete=autocomplete
         )]
         return inquirer_prompt_with_abort(q)
 
