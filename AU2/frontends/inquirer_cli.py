@@ -58,76 +58,45 @@ from AU2.plugins.util.game import escape_format_braces, soft_escape
 from AU2.plugins.util.render_utils import hexcode_to_rgb, rgb_to_hexcode
 
 
-def datetime_validator(_, current) -> bool:
-    try:
-        if current is None:
-            raise KeyboardInterrupt
-        s = datetime.datetime.strptime(current, DATETIME_FORMAT)
-    except ValueError:
-        return False
-    return True
+def validator_factory(type_callable: Callable[[Any], Any], message: str = "", optional: bool = False) -> Callable[[Dict[str, Any], str], bool]:
+    """
+    Function that produces a validator compatible with inquirer.Text and inquirer.Editor
 
+    Args:
+        type_callable (Callable[[Any], Any]): function or class that raises an Exception iff the input is not of the
+            correct form.
+        message (str): message to display when validation fails. If blank, will fall back to default inquirer error
+            message.
+        optional (bool): whether to allow a blank input. Provided for convenience to simplify values of`type_callable`.
 
-# same as above except allows blank values (for pseudonym datetimes this represents being valid forever)
-def optional_datetime_validator(_, current) -> bool:
-    try:
-        if current is None:
-            raise KeyboardInterrupt
-        if current == "":
-            return True
-        s = datetime.datetime.strptime(current, DATETIME_FORMAT)
-    except ValueError:
-        return False
-    return True
-
-
-def colour_validator_factory(optional: bool = False) -> Callable[[List[str], str], bool]:
+    Returns:
+        Callable[[Dict[str, Any], str], bool]: an `inquirer` validation function
+    """
     def validator(_, current) -> bool:
         try:
             if current is None:
                 raise KeyboardInterrupt
             if optional and current == "":
                 return True
-            hexcode_to_rgb(current)
-        except ValueError:
-            raise ValidationError("", reason="Invalid colour hexcode")
+            type_callable(current)
+        except Exception:
+            if message:
+                raise ValidationError("", reason=message)
+            return False
         return True
+
     return validator
 
 
-def html_validator(_, to_validate: str) -> bool:
-    parser = html5lib.HTMLParser(strict=True)
-    try:
-        parser.parse(f"<!DOCTYPE html>{to_validate}")
-    except Exception:
-        raise ValidationError("", reason="Invalid HTML")
-    return True
+integer_validator = validator_factory(int, "Invalid integer")
+float_validator = validator_factory(float, "Invalid float")
+datetime_validator = validator_factory(lambda s: datetime.datetime.strptime(s, DATETIME_FORMAT), "Invalid datetime")
+optional_datetime_validator = validator_factory(lambda s: datetime.datetime.strptime(s, DATETIME_FORMAT), "Invalid datetime", optional=True)
 
+parser = html5lib.HTMLParser(strict=True)
+html_validator = validator_factory(lambda s: parser.parse(f"<!DOCTYPE html>{s}"), "Invalid HTML")
+soft_html_validator = validator_factory(lambda s: parser.parse(f"<!DOCTYPE html>{soft_escape(s)}"), "Invalid HTML", optional=True)
 
-def soft_html_validator(_, to_validate: str) -> bool:
-    to_validate = soft_escape(to_validate)
-    return html_validator(_, to_validate)
-
-# TODO: Create a generic type validator
-
-def integer_validator(_, current):
-    try:
-        if current is None:
-            raise KeyboardInterrupt
-        s = int(current)
-    except ValueError:
-        return False
-    return True
-
-
-def float_validator(_, current):
-    try:
-        if current is None:
-            raise KeyboardInterrupt
-        s = float(current)
-    except ValueError:
-        return False
-    return True
 
 
 def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
@@ -680,7 +649,7 @@ def render(html_component, dependency_context={}):
             name="colour hexcode",
             message=escape_format_braces(html_component.title),
             default=rgb_to_hexcode(html_component.default) if html_component.default else "",
-            validate=colour_validator_factory(optional=html_component.optional),
+            validate=validator_factory(hexcode_to_rgb, "Invalid colour hexcode", optional=html_component.optional),
         )]
         hexcode = inquirer_prompt_with_abort(q)["colour hexcode"]
         rgb = hexcode_to_rgb(hexcode) if hexcode else None
