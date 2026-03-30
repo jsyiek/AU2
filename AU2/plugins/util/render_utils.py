@@ -189,8 +189,15 @@ def hexcode_to_rgb(hexcode: str) -> RGBValues:
 
     Raises:
         ValueError: If `hexcode` is not a valid colour hexcode.
+
+    Examples:
+        >>> hexcode_to_rgb("#b2d6c5")
+        (178, 214, 197)
+
+        >>> hexcode_to_rgb("b2d6c5")
+        (178, 214, 197)
     """
-    err = ValueError(f"invalid colour hexcode {hexcode}")
+    err = ValueError(f"invalid colour hexcode '{hexcode}'")
     if hexcode[0] == '#':
         hexcode = hexcode[1:]
     if len(hexcode) != 6:
@@ -210,6 +217,10 @@ def rgb_to_hexcode(rgb: RGBValues) -> str:
 
     Returns:
         str: the corresponding hexcode, including initial '#'.
+
+    Examples:
+        >>> rgb_to_hexcode((178, 214, 197))
+        '#b2d6c5'
     """
     return '#' + "".join(f"{x:02x}" for x in rgb)
 
