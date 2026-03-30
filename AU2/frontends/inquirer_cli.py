@@ -1012,7 +1012,9 @@ def main():
             if fallback:
                 options = InputWithDropDown(identifier="options",
                                             title="",
-                                            options=["*EXIT*"] + options)
+                                            options=["*EXIT*"] + options,
+                                            selected=None  # prevents auto-selection of options with value ""
+                                            )
             try:
                 result = render(options)
             except KeyboardInterrupt:

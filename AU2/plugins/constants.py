@@ -2,7 +2,7 @@ import os
 import pathlib
 
 
-SUGGESTED_AWARDS = [
+DEFAULT_AWARDS = [
     "The Tombstone Award for Psychopathy",
     "The Kenny Award for Dying Far Too Many Times",
     "The Leek and Safe Award for Most Interesting Weaponry",
@@ -58,7 +58,7 @@ SUGGESTED_AWARDS = [
     "The Judas Award for trying to betray someone, but they miraculously live thanks to the power of the almighty",
     "The Kit Jenkins award for most foolish pseudonym",
     "The Mexican Standoff Award for Tensest Situation",
-    "The Peace in the Middle East award for  Alliances",
+    "The Peace in the Middle East award for Fragile Alliances",
     "The Speedrun Award for Rapid Target Clearing",
     "The Cugini Award for Psychofreshery",
     "The Fluffy Bunny Collective Award for the Least Threatening Alliance",
