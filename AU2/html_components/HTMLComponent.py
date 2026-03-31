@@ -1,4 +1,7 @@
 from html import escape
+from typing import Any, Dict
+
+HTMLResponse = Dict[str, Any]
 
 
 class HTMLComponent:

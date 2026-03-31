@@ -4,7 +4,7 @@ import datetime
 import itertools
 import random
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import editor
 import html5lib
@@ -14,9 +14,9 @@ import tabulate
 from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database import save_all_databases
-from AU2.html_components import HTMLComponent
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
+from AU2.html_components import HTMLComponent, HTMLResponse
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
 from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
 from AU2.html_components.MetaComponents.ComponentOverride import ComponentOverride
@@ -125,46 +125,31 @@ def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
     return output
 
 
-def render(html_component, dependency_context={}):
-    """
-    dependency context is a MUTABLE DEFAULT ARGUMENT
-    if you are modifying it THEN MODIFY A COPY
-    TODO: don't use a mutable default arg!
-    """
-    if isinstance(html_component, Dependency):
-        iteration = 0
-        last_step = 1
-        while iteration < len(html_component.htmlComponents):
-            if iteration == -1:
-                raise KeyboardInterrupt
-            try:
-                if iteration == 0:
-                    # we can guarantee the necessary context is at front of Dependency
-                    needed = html_component.htmlComponents[0]
-                    # if this fails check the sorting function (merge_dependency)
-                    assert (needed.identifier == html_component.dependentOn)
-                    out = render(needed, dependency_context)
-                    new_dependency = dependency_context.copy()
-                    new_dependency.update(out)
-                elif iteration > 0:
-                    h = html_component.htmlComponents[iteration]
-                    if h.noInteraction and last_step == -1:
-                        iteration -= 1
-                        continue
-                    value = render(h, new_dependency)
-                    if value.get("skip", False) and last_step == -1:
-                        iteration -= 1
-                        continue
-                    out.update(value)
-                iteration += 1
-                last_step = 1
-            except KeyboardInterrupt:
-                iteration -= 1
-                last_step = -1
+def render(html_component: HTMLComponent, dependency_context: Optional[HTMLResponse] = None):
+    dependency_context = {} if dependency_context is None else dependency_context
 
-        if "skip" in out:
-            del out["skip"]
-        return out
+    if isinstance(html_component, Dependency):
+        h0 = html_component.htmlComponents[0]
+        # if this fails check the sorting function (merge_dependency)
+        assert h0.identifier == html_component.dependentOn
+        last_step = 1
+        while True:
+            if last_step == -1 and h0.noInteraction:
+                # if the first component has no interaction and the user ctrl-C'd out of subsequent components,
+                # then ctrl-C out of the whole Dependency
+                raise KeyboardInterrupt()
+            out = render(h0, dependency_context)
+            if out.pop("skip", False) and last_step == -1:
+                # basically the same as the no-interaction case except where the component had to be rendered first
+                # to determine if the user had any chance to ctrl-C out (i.e. AssassinDependent components)
+                raise KeyboardInterrupt()
+            dependency_context.update(out)
+            try:
+                out.update(render_components(html_component.htmlComponents[1:], dependency_context))
+            except KeyboardInterrupt:
+                last_step = -1
+            else:
+                return out
 
     elif isinstance(html_component, Searchable):
         answer = ""
@@ -886,12 +871,39 @@ def render(html_component, dependency_context={}):
     else:
         raise Exception("Unknown component type:", type(html_component))
 
+def render_components(components: Sequence[HTMLComponent], context: Optional[HTMLResponse] = None) -> Dict:
+    context = {} if context is None else context
+    components = replace_overrides(components)
+    components = merge_dependency(components)
+    out = {}
+    iteration = 0
+    last_step = 1
+    while iteration < len(components):
+        if iteration < 0:
+            # signals that the components were not fully rendered
+            raise KeyboardInterrupt()
+        try:
+            if last_step == -1 and components[iteration].noInteraction:
+                iteration -= 1
+                continue
+            result = render(components[iteration], context)
+            # must do condn this way around so that `pop` is always called!
+            if result.pop("skip", False) and last_step == -1:
+                iteration -= 1
+                continue
+            out.update(result)
+            context.update(result)
+            iteration += 1
+            last_step = 1
+        except KeyboardInterrupt:
+            iteration -= 1
+            last_step = -1
+    return out
 
 def move_dependent_to_front(dependency: Dependency) -> None:
     # only the required element should have score False(=0) (and the rest True(=1))
     dependency.htmlComponents.sort(key=lambda h: h.identifier != dependency.dependentOn)
     assert (dependency.htmlComponents[0].identifier == dependency.dependentOn)
-
 
 def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]:
     final = []
@@ -909,13 +921,13 @@ def merge_dependency(component_list: List[HTMLComponent]) -> List[HTMLComponent]
                 d1.htmlComponents += d2.htmlComponents
             else:
                 final.insert(0, d1)
-                move_dependent_to_front(d1)
                 d1 = d2
         final.insert(0, d1)
-        # merge nested dependencies
+        # merge nested dependencies and ensure the component depended on is the first in each dependency
         for c in final:
             if isinstance(c, Dependency):
                 c.htmlComponents = merge_dependency(c.htmlComponents)
+                move_dependent_to_front(c)
         move_dependent_to_front(d1)
 
     return final
@@ -954,13 +966,16 @@ def main():
     except:
         pass
 
+    exit_val = None
+    exit_option: List[Tuple[str, Optional[Export]]] = [("Exit", exit_val)]
+    exp: Optional[Export] = exit_val
     while True:
         core_plugin: CorePlugin = PLUGINS["CorePlugin"]
         exports = core_plugin.get_all_exports()
-        exit_val = None
-        exit_option: List[Tuple[str, Optional[Export]]] = [("Exit", exit_val)]
+        # display exports with previous selection pre-selected
         q = [inquirer.List(name="mode", message="Select mode",
-                           choices=exit_option + [(e.display_name, e) for e in exports])]
+                           choices=exit_option + [(e.display_name, e) for e in exports],
+                           default=exp)]
         try:
             exp: Optional[Export] = inquirer_prompt_with_abort(q)["mode"]
         except KeyboardInterrupt:
@@ -972,61 +987,56 @@ def main():
         exp: Export
 
         params = []
-        kwargs = {}
         abort = False
         for f in exp.options_functions:
             options = f(*params)
-            fallback = isinstance(options, list)
-            if fallback:
-                options = InputWithDropDown(identifier="options",
-                                            title="",
-                                            options=["*EXIT*"] + options)
             try:
-                result = render(options)
+                result = render(InputWithDropDown(identifier="options",
+                                                  title="",
+                                                  options=["*EXIT*", *options]))
             except KeyboardInterrupt:
                 abort = True
                 break
 
-            if fallback:
-                selection = result["options"]
-                abort = selection == "*EXIT*"
-                if abort:
-                    break
-                params.append(selection)
-            else:
-                kwargs.update(result)
+            selection = result["options"]
+            abort = selection == "*EXIT*"
+            if abort:
+                break
+            params.append(selection)
 
         if abort:
             continue
 
-        inp = {}
-        components = exp.ask(*params, **kwargs)
-        components = replace_overrides(components)
-        components = merge_dependency(components)
-        iteration = 0
-        last_step = 1
-        while iteration < len(components):
-            try:
-                if iteration == -1:
-                    break
-                if last_step == -1 and components[iteration].noInteraction:
-                    iteration -= 1
-                    continue
-                result = render(components[iteration])
-                if result.get("skip", False) and last_step == -1:
-                    iteration -= 1
-                    continue
-                inp.update(result)
-                iteration += 1
-                last_step = 1
-            except KeyboardInterrupt:
-                iteration -= 1
-                last_step = -1
-        if iteration != -1:
-            components = exp.answer(inp)
-            for component in components:
-                render(component)
+        if isinstance(exp.answer, Sequence):
+            ask_answer_functions = (exp.ask, *exp.answer)
+        else:
+            ask_answer_functions = (exp.ask, exp.answer)
 
+            # we iterate through the ask/answer functions,
+            # but allow the user to go 'backwards' to a previous ask/answer stage by ctrl-C'ing
+            # this isn't completely seemless since
+            #   -   each stage is rendered from the first component,
+            #       but within a stage ctrl-C'ing causes the previous component to be rendered
+            #   -   it doesn't support going back to the options functions,
+            #       instead the whole export is aborted in this case (TODO?)
+        htmlResponses = [{} for _ in ask_answer_functions]
+        curr_index = 0
+        while 0 <= curr_index < len(ask_answer_functions):
+            try:
+                # ask function gets output of options_functions as input
+                if curr_index == 0:
+                    components = ask_answer_functions[curr_index](*params)
+                # but answer functions get html responses as input
+                else:
+                    components = ask_answer_functions[curr_index](htmlResponses[curr_index - 1])
+                htmlResponses[curr_index] = render_components(components, htmlResponses[curr_index])
+                curr_index += 1
+            except KeyboardInterrupt:
+                curr_index -= 1
+
+        # save if got through all answer functions,
+        # otherwise just abort
+        if curr_index == len(ask_answer_functions):
             print("Saving databases...")
             save_all_databases()
 
