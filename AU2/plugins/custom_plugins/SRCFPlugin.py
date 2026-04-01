@@ -2,9 +2,10 @@ import contextlib
 import datetime
 import os
 import re
+import tempfile
 import time
 import pathlib
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 
 import inquirer
 import paramiko
@@ -49,6 +50,16 @@ PUBLISH_LOG = LOGS / "publish.log"
 REMOTE_WEBPAGES_PATH = ASSASSINS_PATH / "public_html"
 REMOTE_BACKUP_LOCATION = AU2_DATA_PATH / "backups"
 REMOTE_DATABASE_LOCATION = AU2_DATA_PATH / "databases"
+
+REMOTE_ARCHIVE_PATH = REMOTE_WEBPAGES_PATH / "archive"
+AWARD_PAGES_FILENAME = "awards.html"
+
+# the required format for archive game folders, according to archive_collated_awards.php
+GAME_NAME_PATTERN = re.compile(r"^[0-9]{4}-[a-z]*$")
+# finds the list of awards as encoded for the collated awards page which occurs in an HTML comment starting with AWARDS:
+AWARD_DATA_PATTERN = re.compile(r"<!--.*?AWARDS:(.*?)-->", flags=re.DOTALL)
+# parses each individual line giving the recipient of an award
+AWARD_LINE_PATTERN = re.compile(r" *The (?P<award_name>.*) for (?P<award_type>.*) *: *(?P<winner>[^:]*)$")
 
 EMAIL_TEMPLATE = """\
 MAIL FROM:assassins-umpire@srcf.net
@@ -336,6 +347,9 @@ class SRCFPlugin(AbstractPlugin):
                     city_watch_assassins=city_watch_assassins
                 )
             ]
+        elif hook == "awards_get_existing":
+            return [Label("[SRCF Plugin] Scanning through archive for awards. This may take a while...")]
+
         return []
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
@@ -432,6 +446,42 @@ class SRCFPlugin(AbstractPlugin):
                     components.append(Label(f"[SRCFPlugin] Uploaded database."))
                     autobackup_name = self._autobackup(sftp)
                     components.append(Label(f"[SRCFPlugin] Created remote backup {autobackup_name}"))
+
+        elif hook == "awards_get_existing":
+            # this hook is to search through the archives for existing awards
+            data: Dict[str, List[Tuple[str, str, str]]]
+            with self._get_client() as sftp:
+                # have to iterate through listdir_iter *before* downloading any files,
+                # otherwise it causes the program to hang (see https://github.com/paramiko/paramiko/issues/1171)
+                game_folders = [f.filename
+                                for f in sftp.listdir_iter(str(REMOTE_ARCHIVE_PATH))
+                                if GAME_NAME_PATTERN.match(f.filename)]
+
+                for game_name in game_folders:
+                    try:
+                        with tempfile.NamedTemporaryFile() as tmp:
+                            # sftp requires files to be downloaded somewhere, it seems, so download to a tempfile...
+                            sftp.getfo(str(REMOTE_ARCHIVE_PATH / game_name / AWARD_PAGES_FILENAME), tmp)
+                            tmp.seek(0)
+                            content = tmp.read()
+                            # most pages should be fine to decode using utf-8, but some older ones use iso-8859-1,
+                            # so we need to use this as a fallback!
+                            try:
+                                content = content.decode('utf-8')
+                            except UnicodeDecodeError:
+                                content = content.decode('iso-8859-1')
+                            data_match = AWARD_DATA_PATTERN.search(content)
+                            if not data_match:
+                                continue
+                            award_matches = [AWARD_LINE_PATTERN.match(line) for line in data_match[1].split("\n")]
+                            parsed_award_data = [
+                                (m["award_name"], m["award_type"], m["winner"])
+                                for m in award_matches if m
+                            ]
+                            data[game_name] = parsed_award_data
+                    except IOError:  # thrown if award page doesn't exist
+                        pass
+
         return components
 
     def ask_ignore_lock(self) -> List[HTMLComponent]:

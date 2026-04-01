@@ -16,7 +16,7 @@ from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry, HookedExport
 from AU2.plugins.constants import DEFAULT_AWARDS, WEBPAGE_WRITE_LOCATION
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.util.date_utils import get_now_dt, get_term
@@ -114,7 +114,7 @@ class Award(PersistentFile):
 @dataclass
 class AwardsDatabase(PersistentFile):
     WRITE_LOCATION = BASE_WRITE_LOCATION / "AwardsDatabase.json"
-    awards: Dict[str, Award]  = field(default_factory=dict) # map {key: award}
+    awards: Dict[str, Award] = field(default_factory=dict) # map {key: award}
 
     def add(self, award: Award):
         self.awards[award.get_key()] = award
@@ -173,6 +173,16 @@ class AwardsPlugin(AbstractPlugin):
                 self.answer_award_delete,
                 options_functions=(self.gather_awards,),
             ),
+        ]
+
+        self.hooked_exports = [
+            HookedExport(
+                plugin_name=self.identifier,
+                identifier="awards_get_existing",
+                display_name="Awards -> Fetch existing awards",
+                producer=dict,
+                call_order=HookedExport.LAST,
+            )
         ]
 
         self.AWARDS_DATABASE = AwardsDatabase.load()
@@ -270,6 +280,14 @@ class AwardsPlugin(AbstractPlugin):
             return [Label("[AWARDS] Deleted award.")]
         else:
             return [Label("[AWARDS] Did not delete award.")]
+
+    def on_hook_respond(self, hook: str, html_response, data) -> List[HTMLComponent]:
+        if hook == "awards_get_existing":
+            # data should be a dict {game_name : [(award_name, award_type, winner), ]
+            data: Dict[str, Tuple[Tuple[str, str], str]]
+            # TODO: store response in db
+
+        return []
 
     def on_page_generate(self, html_response: dict, navbar_entries: List[NavbarEntry]) -> List[HTMLComponent]:
         components = []
