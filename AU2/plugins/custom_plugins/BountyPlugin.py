@@ -131,7 +131,7 @@ class BountyPlugin(AbstractPlugin):
             SearchableInputDropdown(
                     identifier=self.html_ids["placer"],
                     title="Who is placing the bounty?",
-                    options=ASSASSINS_DATABASE.get_identifiers(),
+                    options=ASSASSINS_DATABASE.get_display_name_ident_pairs(),
                     selected=default.placer_id
             ),
             DefaultNamedSmallTextbox(

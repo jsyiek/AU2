@@ -250,17 +250,17 @@ class CompetencyPlugin(AbstractPlugin):
 
         death_manager = DeathManager()
         active_players = get_active_players(death_manager)
-        available_assassins = ASSASSINS_DATABASE.get_identifiers(include=lambda a: not (a.is_city_watch or death_manager.is_dead(a)))
+        available_assassins = ASSASSINS_DATABASE.get_display_name_ident_pairs(include=lambda a: not (a.is_city_watch or death_manager.is_dead(a)))
         questions.append(SelectorList(
             title="Select assassins to thunderbolt",
             identifier=self.html_ids["Gigabolt"],
             options=available_assassins,
-            defaults=[i for i in available_assassins if not i in active_players]
+            defaults=[i for _, i in available_assassins if not i in active_players]
         ))
         questions.append(InputWithDropDown(
             title="Select the umpire, since someone needs to kill the selected players",
             identifier=self.html_ids["Umpire"],
-            options=[i for i in ASSASSINS_DATABASE.get_identifiers() if ASSASSINS_DATABASE.get(i).is_city_watch],
+            options=ASSASSINS_DATABASE.get_display_name_ident_pairs(include=lambda a: a.is_city_watch),
             selected=GENERIC_STATE_DATABASE.arb_state.get("CityWatchPlugin", {}).get("CityWatchPlugin_umpires", [""])[0]
             # Will crash if there are no city watch to choose from
         ))
