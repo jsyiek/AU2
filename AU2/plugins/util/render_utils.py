@@ -106,14 +106,14 @@ def default_page_allocator(e: Event) -> Optional[Chapter]:
         return Chapter(f"Week {week} News", NavbarEntry(f"news{week:02}.html", f"Week {week} Reports", week))
 
 
-def event_url(e: Event, page: Optional[str] = None) -> str:
+def event_url(e: Event, page: Optional[str] = None) -> Optional[str]:
     """
     Generates the (relative) url pointing to this event's appearance on the news pages.
     """
     if not page:
         ch = default_page_allocator(e)
         if not ch:
-            return ""
+            return None
         page = ch.nav_entry.url
     return f"{page}#{e._Event__secret_id}"
 
