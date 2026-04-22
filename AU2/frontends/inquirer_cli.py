@@ -12,6 +12,7 @@ import inquirer
 import tabulate
 
 from inquirer.errors import ValidationError, EndOfInput
+from tinycss2.color4 import parse_color
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -55,15 +56,17 @@ from AU2.plugins.AbstractPlugin import Export, DangerousConfigExport
 from AU2.plugins.CorePlugin import PLUGINS, CorePlugin
 from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
 from AU2.plugins.util.game import escape_format_braces, soft_escape
-from AU2.plugins.util.render_utils import hexcode_to_rgb, rgb_to_hexcode
 
 
-def validator_factory(type_callable: Callable[[Any], Any], message: str = "", optional: bool = False) -> Callable[[Dict[str, Any], str], bool]:
+def validator_factory(type_callable: Callable[[Any], Any],
+                      message: str = "",
+                      optional: bool = False,
+                      ) -> Callable[[Dict[str, Any], str], bool]:
     """
     Function that produces a validator compatible with inquirer.Text and inquirer.Editor
 
     Args:
-        type_callable (Callable[[Any], Any]): function or class that raises an Exception iff the input is not of the
+        type_callable (Callable[[Any], Any]): function or class that raises an Exception if the input is not of the
             correct form.
         message (str): message to display when validation fails. If blank, will fall back to default inquirer error
             message.
@@ -97,6 +100,14 @@ parser = html5lib.HTMLParser(strict=True)
 html_validator = validator_factory(lambda s: parser.parse(f"<!DOCTYPE html>{s}"), "Invalid HTML")
 soft_html_validator = validator_factory(lambda s: parser.parse(f"<!DOCTYPE html>{soft_escape(s)}"), "Invalid HTML", optional=True)
 
+
+def strict_colour_parser(css_colour: str):
+    # TODO: maybe modify validator_factory instead?
+    parsed = parse_color(css_colour)
+    if parsed:
+        return parsed
+    else:
+        raise ValueError("Invalid CSS colour.")
 
 
 def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
@@ -645,16 +656,13 @@ def render(html_component, dependency_context={}):
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, ColourEntry):
-        # TODO: replace validation with color-parser-py,and allow ANY CSS colour defn!
         q = [inquirer.Text(
-            name="colour hexcode",
+            name=html_component.identifier,
             message=escape_format_braces(html_component.title),
-            default=rgb_to_hexcode(html_component.default) if html_component.default else "",
-            validate=validator_factory(hexcode_to_rgb, "Invalid colour hexcode", optional=html_component.optional),
+            default=html_component.default,
+            validate=validator_factory(strict_colour_parser, "Invalid CSS colour", optional=html_component.optional),
         )]
-        hexcode = inquirer_prompt_with_abort(q)["colour hexcode"]
-        rgb = hexcode_to_rgb(hexcode) if hexcode else None
-        return {html_component.identifier: rgb}
+        return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, Label):
         print(html_component.title)

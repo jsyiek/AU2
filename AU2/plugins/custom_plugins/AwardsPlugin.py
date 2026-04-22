@@ -20,7 +20,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.util.award_utils import award_type_to_key, INITIAL_THE_PATTERN, render_award_name
 from AU2.plugins.util.date_utils import get_now_dt, get_term
 from AU2.plugins.util.game import get_game_start
-from AU2.plugins.util.render_utils import RGBValues, rgb_to_hexcode
+
 
 AWARD_TEMPLATE = """
 <dt id = '{KEY}'><span class='{KEY}'>{AWARD_NAME}:</span></dt>
@@ -32,7 +32,7 @@ AWARD_TEMPLATE = """
 
 AWARD_DATA_TEMPLATE = "{AWARD_NAME}: {WINNER}"
 
-AWARD_CLASS_CSS_TEMPLATE = ".{KEY} {{ color: {HEXCODE}; }}"
+AWARD_CLASS_CSS_TEMPLATE = ".{KEY} {{ color: {COLOUR}; }}"
 
 AWARDS_NAVBAR_ENTRY = NavbarEntry("awards.html", "Awards", -3)
 
@@ -52,7 +52,7 @@ class Award(PersistentFile):
     recipient_name: str
     recipient_reason: str
     honourable_mentions: str
-    colour: Optional[RGBValues] = None
+    colour: Optional[str] = None
 
     def get_key(self) -> str:
         """The 'key' used to identify awards for the purposes of collation"""
@@ -156,7 +156,7 @@ class AwardsPlugin(AbstractPlugin):
                     ),
                     ColourEntry(
                         identifier=self.html_ids["Colour"],
-                        title="Award colour (as hexcode, optional)",
+                        title="Award colour",
                         default=award.colour if award else None,
                         optional=True,
                     ),
@@ -260,7 +260,7 @@ class AwardsPlugin(AbstractPlugin):
             award_styling = "\n".join(
                 AWARD_CLASS_CSS_TEMPLATE.format(
                     KEY=award.get_key(),
-                    HEXCODE=rgb_to_hexcode(award.colour),
+                    COLOUR=award.colour,
                 )
                 for award in self.AWARDS_DATABASE.awards.values() if award.colour
             )

@@ -4,6 +4,7 @@ datetime
 paramiko
 tabulate
 html5lib
+tinycss2
 colorama  # optional -- only needed if using an old Windows terminal
 pyvis  # optional -- only needed when generating graph visualisations
 lxml  # optional -- only needed when generating a kill-graph visualisation

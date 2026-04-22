@@ -12,12 +12,12 @@ class ColourEntry(HTMLComponent):
     Attributes:
         identifier (str): key under which to put the response to this component
         title (str): text labelling the component for the user
-        default (Optional[int, int, int]): the default colour, in RGB values, or None for no default
+        default (Optional[str]): the default colour, as a CSS colour, or None for no default
         optional (bool): whether to allow a 'null' value
     """
     name: str = "ColourEntry"
 
-    def __init__(self, identifier: str, title: str, default: Optional[RGBValues], optional: bool = False):
+    def __init__(self, identifier: str, title: str, default: Optional[str], optional: bool = False):
         self.title = title
         self.identifier = identifier
         self.default = default
