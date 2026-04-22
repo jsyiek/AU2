@@ -645,6 +645,7 @@ def render(html_component, dependency_context={}):
         return inquirer_prompt_with_abort(q)
 
     elif isinstance(html_component, ColourEntry):
+        # TODO: replace validation with color-parser-py,and allow ANY CSS colour defn!
         q = [inquirer.Text(
             name="colour hexcode",
             message=escape_format_braces(html_component.title),

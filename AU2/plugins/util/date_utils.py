@@ -73,3 +73,27 @@ def get_term(ts: datetime.datetime) -> str:
     Returns the term name for a particular datetime, based on month.
     """
     return f'{TERM_MAP.get(ts.month, "???")} {ts.year}'
+
+
+def archive_game_name_to_tuple(game_name: str) -> (int, int):
+    """
+    Converts the game names as used in the archive to tuples that when ordered lexicographically correspond to the
+    chronological order of games.
+
+    Args:
+        game_name (str): Name of a game as appears in the archives, i.e. of the form '2019-mich'
+
+    Returns:
+        (int, int): a tuple of (year, term number), where for term number, lent -> 0, mw -> 1, mich -> 2.
+
+    Examples:
+        >>> archive_game_name_to_tuple('2019-mich')
+        (2019, 2)
+        >>> archive_game_name_to_tuple('2020-lent')
+        (2020, 0)
+        >>> archive_game_name_to_tuple('2025-mw')
+        (2025, 1)
+    """
+    year, term = game_name.split("-", 1)
+    term_as_int = 0 if term == 'lent' else 2 if term == 'mich' else 1
+    return int(year), term_as_int

@@ -8,7 +8,6 @@ from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
 from AU2.plugins.util.date_utils import dt_to_timestamp, timestamp_to_dt
 
-
 @dataclass_json
 @dataclass
 class Event(PersistentFile):

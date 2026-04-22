@@ -1,5 +1,3 @@
-import re
-
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -17,8 +15,9 @@ from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry, HookedExport
-from AU2.plugins.constants import DEFAULT_AWARDS, WEBPAGE_WRITE_LOCATION
+from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.CorePlugin import registered_plugin
+from AU2.plugins.util.award_utils import award_type_to_key, INITIAL_THE_PATTERN, render_award_name
 from AU2.plugins.util.date_utils import get_now_dt, get_term
 from AU2.plugins.util.game import get_game_start
 from AU2.plugins.util.render_utils import RGBValues, rgb_to_hexcode
@@ -40,58 +39,7 @@ AWARDS_NAVBAR_ENTRY = NavbarEntry("awards.html", "Awards", -3)
 AWARDS_PAGE_TEMPLATE: str
 with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "awards.html", "r", encoding="utf-8",
           errors="ignore") as F:
-    AWARDS_PAGE_TEMPLATE= F.read()
-
-# regex patterns from archive_collated_awards.php
-AWARD_NAME_PATTERN = re.compile(r"^ *The (.*) for (.*) *$", flags=re.IGNORECASE)
-KEY_TRANSFORMATION_PATTERN = re.compile(r"[^A-Za-z]+")
-
-# pattern to ignore an initial 'The'
-INITIAL_THE_PATTERN = re.compile(r"^\s*The ", flags=re.IGNORECASE)
-
-
-def parse_award_name(full_name: str) -> (str, str):
-    """Parses a full award name into the format used internally by AwardsPlugin
-
-    Args:
-        full_name (str): Full award name. Must be of form "The X for Y".
-
-    Returns:
-        str, str: the tuple (X, Y)
-
-    Examples:
-        >>> parse_award_name("The 'Ginger Cake' Award for the 'Smoothest' Kill")
-        ("'Ginger Cake' Award", "the 'Smoothest' Kill")
-    """
-    m = AWARD_NAME_PATTERN.match(full_name)
-    return m[1], m[2]
-
-
-def render_award_name(name: (str, str)) -> str:
-    """A (right) inverse of `parse_award_name`"""
-    return f"The {name[0]} for {name[1]}"
-
-
-def award_type_to_key(award_type: str) -> str:
-    """Converts an award reason (part of the award name after 'for') into the corresponding key used as its CSS class,
-    and by archive_collated_awards.php to count two awards as 'the same' and to link from that page to the original
-    award.
-
-    Args:
-        award_type (str): The part of an award name after 'for', defining the award.
-
-    Returns:
-        str: the award's "key"
-
-    Examples:
-        >>> award_type_to_key("the 'Smoothest' Kill")
-        'thesmoothestkill'
-    """
-    return KEY_TRANSFORMATION_PATTERN.sub("", award_type).lower()
-
-
-# parse default awards to more convenient format
-DEFAULT_AWARDS_MAP = {award_type_to_key(n[1]): n for n in (parse_award_name(full_name) for full_name in DEFAULT_AWARDS)}
+    AWARDS_PAGE_TEMPLATE = F.read()
 
 
 @dataclass_json
@@ -114,7 +62,8 @@ class Award(PersistentFile):
 @dataclass
 class AwardsDatabase(PersistentFile):
     WRITE_LOCATION = BASE_WRITE_LOCATION / "AwardsDatabase.json"
-    awards: Dict[str, Award] = field(default_factory=dict) # map {key: award}
+    awards: Dict[str, Award] = field(default_factory=dict)  # map {key: award}
+    defaults: Dict[str, Tuple[str, str]] = field(default_factory=dict)  # map {key: (award name, award type)}
 
     def add(self, award: Award):
         self.awards[award.get_key()] = award
@@ -191,12 +140,12 @@ class AwardsPlugin(AbstractPlugin):
     def gather_unclaimed_awards(self) -> List[Tuple[str, str]]:
         """Returns a list of the default awards that have not yet been assigned to someone, plus a *CUSTOM* option for new awards"""
         return [
-            (name[1], key) for key, name in DEFAULT_AWARDS_MAP.items() if key not in self.AWARDS_DATABASE.awards
+            (name[1], key) for key, name in self.AWARDS_DATABASE.defaults.items() if key not in self.AWARDS_DATABASE.awards
         ] + [("*CUSTOM*", "")]
 
     def ask_award_create_or_update(self, award_key: str) -> List[HTMLComponent]:
         award = self.AWARDS_DATABASE.awards.get(award_key)
-        is_custom = award_key not in DEFAULT_AWARDS_MAP
+        is_custom = award_key not in self.AWARDS_DATABASE.defaults
         return [
             *(
                 (
@@ -212,14 +161,14 @@ class AwardsPlugin(AbstractPlugin):
                         optional=True,
                     ),
                 ) if is_custom else (
-                    HiddenTextbox(self.html_ids["Award Type"], DEFAULT_AWARDS_MAP[award_key][1]),
+                    HiddenTextbox(self.html_ids["Award Type"], self.AWARDS_DATABASE.defaults[award_key][1]),
                 )
             ),
             HiddenTextbox(self.html_ids["Award Key"], award_key),
             DefaultNamedSmallTextbox(
                 identifier=self.html_ids["Award Name"],
                 title="Part of award name BEFORE 'for'",
-                default=award.name[0] if award else DEFAULT_AWARDS_MAP.get(award_key, ("",))[0]
+                default=award.name[0] if award else self.AWARDS_DATABASE.defaults.get(award_key, ("",))[0]
             ),
             DefaultNamedSmallTextbox(
                 identifier=self.html_ids["Award Recipient"],
@@ -283,10 +232,12 @@ class AwardsPlugin(AbstractPlugin):
 
     def on_hook_respond(self, hook: str, html_response, data) -> List[HTMLComponent]:
         if hook == "awards_get_existing":
-            # data should be a dict {game_name : [(award_name, award_type, winner), ]
-            data: Dict[str, Tuple[Tuple[str, str], str]]
-            # TODO: store response in db
-
+            award_defaults = data.get("award_defaults")
+            if award_defaults:
+                self.AWARDS_DATABASE.defaults = award_defaults
+                return [Label("[AWARDS] Saved existing award names.")]
+            else:
+                return [Label("[AWARDS] Could not find any awards. Make sure that SRCFPlugin is enabled!")]
         return []
 
     def on_page_generate(self, html_response: dict, navbar_entries: List[NavbarEntry]) -> List[HTMLComponent]:

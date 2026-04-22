@@ -29,7 +29,9 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport, Con
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.award_utils import GAME_NAME_PATTERN, AWARD_DATA_PATTERN, AWARD_PAGES_FILENAME, \
+    AWARD_LINE_PATTERN, award_type_to_key
+from AU2.plugins.util.date_utils import get_now_dt, archive_game_name_to_tuple
 
 SRCF_WEBSITE = "shell.srcf.net"
 SSH_PORT = 22
@@ -52,14 +54,7 @@ REMOTE_BACKUP_LOCATION = AU2_DATA_PATH / "backups"
 REMOTE_DATABASE_LOCATION = AU2_DATA_PATH / "databases"
 
 REMOTE_ARCHIVE_PATH = REMOTE_WEBPAGES_PATH / "archive"
-AWARD_PAGES_FILENAME = "awards.html"
 
-# the required format for archive game folders, according to archive_collated_awards.php
-GAME_NAME_PATTERN = re.compile(r"^[0-9]{4}-[a-z]*$")
-# finds the list of awards as encoded for the collated awards page which occurs in an HTML comment starting with AWARDS:
-AWARD_DATA_PATTERN = re.compile(r"<!--.*?AWARDS:(.*?)-->", flags=re.DOTALL)
-# parses each individual line giving the recipient of an award
-AWARD_LINE_PATTERN = re.compile(r" *The (?P<award_name>.*) for (?P<award_type>.*) *: *(?P<winner>[^:]*)$")
 
 EMAIL_TEMPLATE = """\
 MAIL FROM:assassins-umpire@srcf.net
@@ -449,40 +444,57 @@ class SRCFPlugin(AbstractPlugin):
 
         elif hook == "awards_get_existing":
             # this hook is to search through the archives for existing awards
-            data: Dict[str, List[Tuple[str, str, str]]]
+            data: Dict[str, Tuple[str, str]]
+            award_defaults = data.setdefault("award_defaults", {})
             with self._get_client() as sftp:
                 # have to iterate through listdir_iter *before* downloading any files,
                 # otherwise it causes the program to hang (see https://github.com/paramiko/paramiko/issues/1171)
                 game_folders = [f.filename
                                 for f in sftp.listdir_iter(str(REMOTE_ARCHIVE_PATH))
                                 if GAME_NAME_PATTERN.match(f.filename)]
+                # go in chronological order of games, so that most recent awards take priority!
+                game_folders.sort(key=archive_game_name_to_tuple)
 
                 for game_name in game_folders:
-                    try:
-                        with tempfile.NamedTemporaryFile() as tmp:
-                            # sftp requires files to be downloaded somewhere, it seems, so download to a tempfile...
-                            sftp.getfo(str(REMOTE_ARCHIVE_PATH / game_name / AWARD_PAGES_FILENAME), tmp)
-                            tmp.seek(0)
-                            content = tmp.read()
-                            # most pages should be fine to decode using utf-8, but some older ones use iso-8859-1,
-                            # so we need to use this as a fallback!
-                            try:
-                                content = content.decode('utf-8')
-                            except UnicodeDecodeError:
-                                content = content.decode('iso-8859-1')
-                            data_match = AWARD_DATA_PATTERN.search(content)
-                            if not data_match:
-                                continue
-                            award_matches = [AWARD_LINE_PATTERN.match(line) for line in data_match[1].split("\n")]
-                            parsed_award_data = [
-                                (m["award_name"], m["award_type"], m["winner"])
-                                for m in award_matches if m
-                            ]
-                            data[game_name] = parsed_award_data
-                    except IOError:  # thrown if award page doesn't exist
-                        pass
+                    awards_content = self._file_to_string(sftp, str(REMOTE_ARCHIVE_PATH / game_name / AWARD_PAGES_FILENAME))
+                    if not awards_content:
+                        continue
+                    data_match = AWARD_DATA_PATTERN.search(awards_content)
+                    if not data_match:
+                        continue
+                    award_matches = [AWARD_LINE_PATTERN.match(line) for line in data_match[1].split("\n")]
+                    for m in award_matches:
+                        if m:
+                            award_type = m["award_type"]
+                            award_key = award_type_to_key(award_type)
+                            award_defaults[award_key] = (m["award_name"], award_type)
 
+                    """colours_content = self._file_to_string(sftp, str(REMOTE_ARCHIVE_PATH / game_name / AWARD_COLOURS_FILENAME))
+                    if not colours_content:
+                        continue
+                    colour_map = {
+                        m["award_key"]: m["award_colour"]
+                        for m in AWARD_COLOUR_PATTERN.finditer(colours_content)
+                    }
+                    award_colours[game_name] = colour_map"""
+            components.append(Label("[SRCF Plugin] Downloaded awards."))
         return components
+
+    def _file_to_string(self, sftp: paramiko.SFTPClient, remotepath: str) -> Optional[str]:
+        try:
+            with tempfile.NamedTemporaryFile() as tmp:
+                # sftp requires files to be downloaded somewhere, it seems, so download to a tempfile...
+                sftp.getfo(remotepath, tmp)
+                tmp.seek(0)
+                content = tmp.read()
+                # most pages should be fine to decode using utf-8, but some older ones use iso-8859-1,
+                # so we need to use this as a fallback!
+                try:
+                    return content.decode('utf-8')
+                except UnicodeDecodeError:
+                    return content.decode('iso-8859-1')
+        except IOError:  # thrown if award page doesn't exist
+            return None
 
     def ask_ignore_lock(self) -> List[HTMLComponent]:
         with self._get_client() as sftp:
@@ -808,8 +820,12 @@ class SRCFPlugin(AbstractPlugin):
                         remotepath = REMOTE_DATABASE_LOCATION / database
 
                         self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
-                        sftp.get(str(remotepath), localpath)
-                        self._log_to(sftp, ACCESS_LOG, f"Read {database}")
+                        try:
+                            sftp.get(str(remotepath), localpath)
+                        except FileNotFoundError:
+                            self._log_to(sftp, ACCESS_LOG, f"Failed to read {database}")
+                        else:
+                            self._log_to(sftp, ACCESS_LOG, f"Read {database}")
                     print("[SRCF Plugin] Success!")
                 else:
                     print("[SRCF Plugin] Did not update LOCAL copies.")
