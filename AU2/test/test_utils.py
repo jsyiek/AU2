@@ -1,10 +1,10 @@
 import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.database.model import PersistentFile, Assassin, Event
+from AU2.database.model import Assassin, Event, Kill, PersistentFile
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components.HTMLComponent import HTMLComponent
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
@@ -312,6 +312,21 @@ class ProxyAssassin:
             event.mockGame.has_died(v)
 
         return event
+
+    def are_thunderbolted(self, headline: str = "") -> ProxyEvent:
+        event = self.is_involved_in_event(
+            assassins=self.assassins,
+            headline=headline,
+            kills=[Kill(None, self.__ident(v)) for v in self.assassins],
+        )
+
+        for v in self.assassins:
+            event.mockGame.has_died(v)
+
+        return event
+
+    def is_thunderbolted(self, *args, **kwargs) -> ProxyEvent:
+        return self.are_thunderbolted(*args, **kwargs)
 
     def is_involved_in_event(self, assassins=None, dt=None, headline="Event Headline", reports=None, kills=None, pluginState=None) -> ProxyEvent:
         """

@@ -15,6 +15,7 @@ from inquirer.errors import ValidationError, EndOfInput
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
+from AU2.database.model.Event import Kill
 from AU2.database import save_all_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
@@ -345,25 +346,22 @@ def render(html_component, dependency_context={}):
         assassins = list(assassins_mapping.keys())
         if len(assassins) <= 1:
             return {html_component.identifier: tuple(), "skip": True}
-        potential_kills = {}
-        defaults = []
-        for a1 in assassins:
-            for a2 in assassins:
-                if a1 != a2:
-                    key = f"{a1} kills {a2}"
-                    potential_kills[key] = (a1, a2)
-                    if (a1, a2) in html_component.default:
-                        defaults.append(key)
         q = [inquirer.Checkbox(
             name="q",
-            message="Select kills",
-            choices=list(potential_kills.keys()),
-            default=defaults
+            message="Select players who DIED in this event",
+            choices=assassins,
+            default=[victim for _, victim in html_component.default],
         )]
-        # TODO: Confirm what happens if option in default isn't in choices
-        a = inquirer_prompt_with_abort(q)["q"]
-        a = tuple(potential_kills[k] for k in a)
-        return {html_component.identifier: a}
+        deaths = set(inquirer_prompt_with_abort(q)["q"])
+        default_killers = {victim: killer for killer, victim in html_component.default if victim in deaths}
+        q = [inquirer.List(
+            name=victim,
+            message=f"Who killed {escape_format_braces(victim)}?",
+            choices=[a for a in assassins if a != victim] + [("(Thunderbolt)", None)],
+            default=default_killers[victim],
+        ) for victim in deaths]
+        victim_killer_mapping = inquirer_prompt_with_abort(q)
+        return {html_component.identifier: [Kill(killer, victim) for victim, killer in victim_killer_mapping.items()]}
 
     # dependent component
     elif isinstance(html_component, AssassinDependentTransferEntry):
@@ -412,6 +410,8 @@ def render(html_component, dependency_context={}):
         mapping = {}
         defaults = []
         for (a1, a2) in kills:
+            if html_component.ignore_thunderbolts and not a1:
+                continue
             key = f"{a1} kills {a2}"
             mapping[key] = (a1, a2)
             if (a1, a2) in html_component.default:

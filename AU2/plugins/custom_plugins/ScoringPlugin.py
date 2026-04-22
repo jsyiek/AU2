@@ -125,6 +125,11 @@ def generate_killtree_visualiser(events: List[Event], score_manager: ScoreManage
         for (killer, victim) in e.kills:
             competency_manager.add_event(e)
             wanted_manager.add_event(e)
+
+            # ignore thunderbolts
+            if not killer:
+                continue
+
             killer_model = ASSASSINS_DATABASE.get(killer)
             victim_model = ASSASSINS_DATABASE.get(victim)
             killer_searchable = f"{killer_model.all_pseudonyms(fn=lambda x: x)} ({killer_model.real_name})"

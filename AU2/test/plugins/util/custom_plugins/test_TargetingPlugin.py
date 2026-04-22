@@ -129,3 +129,31 @@ class TestTargetingPlugin:
 
         # test passes only if calculation took a reasonable amount of time
         assert perf < 1.0
+
+    @plugin_test
+    def test_can_handle_thunderbolt(self):
+        num_players = 50
+        p = some_players(num_players)
+        game = MockGame().having_assassins(p)
+
+        plugin = TargetingPlugin()
+        targets = plugin.compute_targets([])
+        assert valid_targets(num_players, targets)
+
+        game.assassin(p[0]).kills(p[1]).then() \
+            .assassin(p[2]).kills(p[3])
+
+        # add in some thunderbolts
+        thunderbolted = p[30:45]
+        game.assassin(thunderbolted[0]).with_accomplices(*thunderbolted).are_thunderbolted()
+
+        game.assassin(p[4]).kills(p[5]).then() \
+            .assassin(p[6]).kills(p[7])
+
+        targets = plugin.compute_targets([])
+        assert valid_targets(num_players - 4 - len(thunderbolted), targets)
+
+        # verify that thunderbolted players are no longer involved in targeting
+        for name in thunderbolted:
+            assert (name + " identifier") not in targets
+            assert not any((name + " identifier") in targ_list for targ_list in targets.values())

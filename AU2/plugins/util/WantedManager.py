@@ -27,7 +27,7 @@ class WantedManager:
                                                  'wanted_duration': datetime.timedelta(days=duration),
                                                  'crime': crime,
                                                  'redemption': redemption})
-        for (killer, victim) in e.kills:
+        for (_, victim) in e.kills:
             self.wanted_events.setdefault(victim, [])
             self.wanted_events[victim].append({'event_time': e.datetime})
 
