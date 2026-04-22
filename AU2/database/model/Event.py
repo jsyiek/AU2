@@ -2,11 +2,14 @@ from dataclasses import dataclass, field
 
 import datetime as dt
 from dataclasses_json import dataclass_json, config
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import PersistentFile
 from AU2.plugins.util.date_utils import dt_to_timestamp, timestamp_to_dt
+
+
+Kill = NamedTuple("Kill", (("killer", Optional[str]), ("victim", str)))
 
 
 @dataclass_json
@@ -34,7 +37,11 @@ class Event(PersistentFile):
     reports: List[Tuple[str, Optional[int], str]]
 
     # Map from killer to victim
-    kills: List[Tuple[str, str]]
+    kills: List[Kill] = field(
+        metadata=config(
+            decoder=lambda l: [Kill(*t) for t in l],
+        )
+    )
 
     # to allow plugins to make notes on the event
     pluginState: Dict[str, Any] = field(default_factory=dict)
