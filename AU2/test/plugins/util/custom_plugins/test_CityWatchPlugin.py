@@ -90,10 +90,10 @@ class TestCityWatchPlugin:
         game = MockGame().having_assassins(p)
         game.assassin(p[0]).with_accomplices(*p[1:10]).are_city_watch()
 
-        game.assassin(p[0]).kills(p[10]).then()\
-            .assassin(p[0]).kills(p[11]).then()\
-            .assassin(p[12]).is_thunderbolted().then()\
-            .assassin(p[1]).is_thunderbolted()
+        game.assassin(p[0]).kills(p[10])\
+            .then().assassin(p[0]).kills(p[11])\
+            .then().assassin(p[12]).is_thunderbolted()\
+            .then().assassin(p[1]).is_thunderbolted()
 
         manager = self.get_manager()
 
