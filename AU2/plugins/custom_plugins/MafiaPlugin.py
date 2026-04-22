@@ -497,6 +497,9 @@ class MafiaPlugin(AbstractPlugin):
             deaths = []
             point_gains = {}
             for (killer, victim) in e.kills:
+                if not killer:
+                    continue
+
                 multiplier = 1
 
                 if victim in current_capos:

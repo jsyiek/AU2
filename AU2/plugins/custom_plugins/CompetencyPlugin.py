@@ -8,7 +8,7 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event, Kill
 from AU2.html_components import HTMLComponent
 from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
@@ -110,7 +110,8 @@ def get_active_players(death_manager: DeathManager) -> Set[str]:
     for e in sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime):
         death_manager.add_event(e)
         for killer, _ in e.kills:
-            active_players.append(killer)
+            if killer:
+                active_players.append(killer)
         for player_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):
             active_players.append(player_id)
     return set(active_players)
@@ -279,7 +280,7 @@ class CompetencyPlugin(AbstractPlugin):
                 datetime=htmlResponse[self.html_ids['Datetime']],
                 headline=headline or "GIGABOLT",
                 reports={},
-                kills=[("", v) for v in deaths],
+                kills=[Kill(None, v) for v in deaths],
                 pluginState={"PageGeneratorPlugin": {"hidden_event": not headline}}
             )
         )

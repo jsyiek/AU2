@@ -7,12 +7,13 @@ from AU2.html_components import HTMLComponent
 class KillDependentSelector(HTMLComponent):
     name: str = "KillDependentSelector"
 
-    def __init__(self, kills_identifier: str, identifier: str, title: str, default: List[Tuple[str, str]]=[]):
+    def __init__(self, kills_identifier: str, identifier: str, title: str, default: List[Tuple[str, str]]=[], ignore_thunderbolts: bool = True):
         self.kills_identifier = escape(kills_identifier)
         self.title = title
         self.identifier = identifier
         self.uniqueStr = self.get_unique_str()
         self.default = default
+        self.ignore_thunderbolts = ignore_thunderbolts
         super().__init__()
 
     def _representation(self) -> str:

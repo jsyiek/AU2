@@ -1,10 +1,10 @@
 import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
-from AU2.database.model import PersistentFile, Assassin, Event
+from AU2.database.model import Assassin, Event, Kill, PersistentFile
 from AU2.database.model.database_utils import refresh_databases
 from AU2.html_components.HTMLComponent import HTMLComponent
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
@@ -317,7 +317,7 @@ class ProxyAssassin:
         event = self.is_involved_in_event(
             assassins=self.assassins,
             headline=headline,
-            kills=[("", self.__ident(v)) for v in self.assassins],
+            kills=[Kill(None, self.__ident(v)) for v in self.assassins],
         )
 
         for v in self.assassins:

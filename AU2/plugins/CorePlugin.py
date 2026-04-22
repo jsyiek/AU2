@@ -349,9 +349,9 @@ class CorePlugin(AbstractPlugin):
             response.append((f"Report {i+1}", f"{a.snapshot()} as {pseudonym}"))
 
         for (i, (killer_id, victim_id)) in enumerate(event.kills):
-            killer = ASSASSINS_DATABASE.get(killer_id)
+            killer_snapshot = ASSASSINS_DATABASE.get(killer_id).snapshot() if killer_id else "THUNDERBOLT"
             victim = ASSASSINS_DATABASE.get(victim_id)
-            response.append((f"Kill {i+1}", f"{killer.snapshot()} kills {victim.snapshot()}"))
+            response.append((f"Kill {i+1}", f"{killer_snapshot} kills {victim.snapshot()}"))
         return response
 
     def ask_core_plugin_summary_event(self) -> List[HTMLComponent]:

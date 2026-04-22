@@ -9,6 +9,7 @@ from AU2.database.model import PersistentFile
 from AU2.plugins.util.date_utils import dt_to_timestamp, timestamp_to_dt
 
 
+# 'thunderbolt' kills are implemented with a null value for the killer
 Kill = NamedTuple("Kill", (("killer", Optional[str]), ("victim", str)))
 
 
@@ -36,7 +37,6 @@ class Event(PersistentFile):
     # from assassin ID and their pseudonym ID to their report
     reports: List[Tuple[str, Optional[int], str]]
 
-    # Map from killer to victim
     kills: List[Kill] = field(
         metadata=config(
             decoder=lambda l: [Kill(*t) for t in l],

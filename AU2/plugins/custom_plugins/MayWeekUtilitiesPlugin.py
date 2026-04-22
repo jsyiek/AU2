@@ -621,10 +621,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
             for (killer, victim) in e.kills:
                 is_as_team = teams_enabled and (killer, victim) in kills_made_as_team
-                is_with_multiplier = killer in multiplier_owners
-                if team_multiplier_sharing_enabled and not is_with_multiplier:
-                    # check whether the killer is in the same team as someone with a multiplier
-                    is_with_multiplier = any(memb in multiplier_owners for memb in team_to_members[member_to_team[killer]])
+                is_with_multiplier = False
+                if killer:
+                    is_with_multiplier = killer in multiplier_owners
+                    if team_multiplier_sharing_enabled and not is_with_multiplier:
+                        # check whether the killer is in the same team as someone with a multiplier
+                        is_with_multiplier = any(memb in multiplier_owners for memb in team_to_members[member_to_team[killer]])
 
                 # apply team and multiplier bonuses (% and fixed) iff they apply
                 # (side note: maybe calling the items that grant bonuses multipliers is a little confusing in this
@@ -635,7 +637,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 m_now = m if is_with_multiplier else 1
                 M_now = M if is_with_multiplier else 0
 
-                point_deltas[killer] = point_deltas.get(killer, 0) + ((scores[victim]*b + B)*t_now + T_now)*m_now + M_now
+                if killer:
+                    point_deltas[killer] = point_deltas.get(killer, 0) + ((scores[victim]*b + B)*t_now + T_now)*m_now + M_now
                 point_deltas[victim] = point_deltas.get(victim, 0) - scores[victim]*d - D
 
             # resolve deltas once all worked out
