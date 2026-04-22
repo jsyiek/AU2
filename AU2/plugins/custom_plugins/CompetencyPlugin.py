@@ -279,8 +279,7 @@ class CompetencyPlugin(AbstractPlugin):
                 datetime=htmlResponse[self.html_ids['Datetime']],
                 headline=headline or "GIGABOLT",
                 reports={},
-                # we use 'self kills' for thunderbolt for backwards-compatibility
-                kills=[(v, v) for v in deaths],
+                kills=[("", v) for v in deaths],
                 pluginState={"PageGeneratorPlugin": {"hidden_event": not headline}}
             )
         )

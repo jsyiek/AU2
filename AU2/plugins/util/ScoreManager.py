@@ -34,9 +34,7 @@ class ScoreManager:
             # and dead players will be pruned as events are added
             if victim not in self.live_assassins:
                 continue
-            # we use self-kills to represent thunderbolts, so need to ignore these kills
-            if victim != killer:
-                self.kill_tree[killer].append(victim)
+            self.kill_tree[killer].append(victim)
             if self.perma_death:
                 self.live_assassins.discard(victim)
         for assassin_id in e.pluginState.get("CompetencyPlugin", {}).get("attempts", []):

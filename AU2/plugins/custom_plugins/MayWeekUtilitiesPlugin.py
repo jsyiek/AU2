@@ -635,12 +635,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 m_now = m if is_with_multiplier else 1
                 M_now = M if is_with_multiplier else 0
 
-                # we use 'self-kills' for thunderbolts.
-                # thunderbolting shouldn't really be a thing in may week,
-                # but it seems the logical handling is to have players be treated as a victim only
-                if killer != victim:
-                    point_deltas[killer] = point_deltas.get(killer, 0) + ((scores[victim]*b + B)*t_now + T_now)*m_now + M_now
-
+                point_deltas[killer] = point_deltas.get(killer, 0) + ((scores[victim]*b + B)*t_now + T_now)*m_now + M_now
                 point_deltas[victim] = point_deltas.get(victim, 0) - scores[victim]*d - D
 
             # resolve deltas once all worked out
