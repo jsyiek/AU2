@@ -16,6 +16,8 @@ from AU2.plugins.util import random_data
 
 @registered_plugin
 class RandomGamePlugin(AbstractPlugin):
+    LOCAL = True
+
     def __init__(self):
         super().__init__("RandomGame")
         self.exports = [
