@@ -286,7 +286,7 @@ class AwardsPlugin(AbstractPlugin):
                     KEY=key,
                     COLOUR=colour,
                 )
-                for key, colour in self.AWARDS_DATABASE.colours
+                for key, colour in self.AWARDS_DATABASE.colours.items()
             )
             custom_award_styling = "".join(
                 AWARD_CLASS_CSS_TEMPLATE.format(
@@ -297,14 +297,7 @@ class AwardsPlugin(AbstractPlugin):
             )
             if existing_award_styling or custom_award_styling:
                 with open(WEBPAGE_WRITE_LOCATION / AWARD_COLOURS_FILENAME, "w+", encoding="utf-8") as F:
-                    F.write(
-                        AWARDS_PAGE_TEMPLATE.format(
-                            YEAR=get_now_dt().year,
-                            AWARD_HTML=award_html,
-                            AWARD_DATA=award_data,
-                            TERM=get_term(get_game_start()),
-                        )
-                    )
+                    F.write(existing_award_styling + custom_award_styling)
 
             components.append(Label("[AWARDS] Success!"))
         return components
