@@ -13,16 +13,31 @@ HTML_REPORT_PREFIX = "<!--HTML-->"
 
 def soft_escape(string: str) -> str:
     """
-    Escapes html and adds <br /> to newlines only if not prefixed by HTML_REPORT_PREFIX
+    Escapes html and adds <br /> to newlines unless prefixed by HTML_REPORT_PREFIX *and* html is enabled using the
+    config option CorePlugin -> Allow/disallow HTML.
     """
 
     # umpires may regret allowing this
     # supposing you are a clever player who has found this and the umpire does not know...
     # please spare the umpire any headaches
     # and remember that code injection without explicit consent is illegal (CMA sxn 2/3)
-    if not string.startswith(HTML_REPORT_PREFIX):
-        return escape(string).replace("\n", "<br />\n")
-    return string
+    if get_allow_html() and string.startswith(HTML_REPORT_PREFIX):
+        return string
+    return escape(string).replace("\n", "<br />\n")
+
+
+def set_allow_html(value: bool):
+    """
+    Use this to set whether soft_escape should allow HTML when text is prefixed by HTML_REPORT_PREFIX
+    """
+    GENERIC_STATE_DATABASE.arb_state["allow_html"] = value
+
+
+def get_allow_html() -> bool:
+    """
+    Returns whether soft_escape should allow HTML when text is prefixed by HTML_REPORT_PREFIX
+    """
+    return GENERIC_STATE_DATABASE.arb_state.get("allow_html", False)
 
 
 def get_game_start() -> datetime.datetime:

@@ -37,7 +37,8 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.game import get_allow_html, get_game_end, get_game_start, HTML_REPORT_PREFIX, set_allow_html, \
+    set_game_end, set_game_start
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.render_utils import generate_navbar
 
@@ -281,6 +282,12 @@ class CorePlugin(AbstractPlugin):
                 self.answer_set_game_end
             ),
             ConfigExport(
+                "core_plugin_set_allow_html",
+                "CorePlugin -> Allow/disallow HTML",
+                self.ask_set_html_allowed,
+                self.answer_set_html_allowed
+            ),
+            ConfigExport(
                 "core_plugin_suppress_exports",
                 "CorePlugin -> Hide menu options",
                 self.ask_suppress_exports,
@@ -519,11 +526,13 @@ class CorePlugin(AbstractPlugin):
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         return [
             *self.ask_set_game_start(),
+            *self.ask_set_html_allowed(),
         ]
 
     def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
         return [
             *self.answer_set_game_start(htmlResponse),
+            *self.answer_set_html_allowed(htmlResponse),
         ]
 
     def get_all_exports(self, include_suppressed: bool = False) -> List[Export]:
@@ -1022,6 +1031,20 @@ class CorePlugin(AbstractPlugin):
             Label(f"[CORE] Set game end to {new_end.strftime('%Y-%m-%d %H:%M:%S')}") if new_end
             else Label(f"[CORE] Unset game end.")
         ]
+
+    def ask_set_html_allowed(self) -> List[HTMLComponent]:
+        return [
+            Label("Below you can enable HTML in player reports and pseudonyms. "
+                  f"Any HTML reports / pseudonyms must be prefixed by {HTML_REPORT_PREFIX} to render correctly. "
+                  "HTML in headlines will always be rendered, "
+                  "regardless of this setting and without needing to be prefixed."),
+            Checkbox(self.identifier + "_allow_html", "Allow HTML in reports and pseudonyms?", get_allow_html())
+        ]
+
+    def answer_set_html_allowed(self, html_response) -> List[HTMLComponent]:
+        allow = html_response[self.identifier + "_allow_html"]
+        set_allow_html(allow)
+        return [Label(f"[CORE] {'A' if allow else 'Disa'}llowing HTML in pseudonyms / reports.")]
 
     def gather_game_types(self) -> List[str]:
         return list(GAME_TYPE_PLUGIN_MAP)
