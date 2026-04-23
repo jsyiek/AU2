@@ -2,6 +2,7 @@
 import re
 
 AWARD_PAGES_FILENAME = "awards.html"
+AWARD_COLOURS_FILENAME = "award_colours.css"
 
 # the required format for archive game folders, according to archive_collated_awards.php
 GAME_NAME_PATTERN = re.compile(r"^[0-9]{4}-[a-z]*$")
@@ -10,7 +11,7 @@ AWARD_DATA_PATTERN = re.compile(r"<!--.*?AWARDS:(.*?)-->", flags=re.DOTALL)
 # parses each individual line giving the recipient of an award
 AWARD_LINE_PATTERN = re.compile(r" *The (?P<award_name>.*) for (?P<award_type>.*) *: *(?P<winner>[^:]*)$")
 # matches the CSS defining the colour for an award in award_colours.css
-AWARD_COLOUR_PATTERN = re.compile(r"\.(?P<award_key>[a-zA-Z]+\s*{[^}]*color\s*:\s*(?P<award_colour>\S+)\s*;})")
+AWARD_COLOUR_PATTERN = re.compile(r"\.(?P<award_key>[a-zA-Z]+)\s*{[^}]*color\s*:\s*(?P<award_colour>\S+)\s*;\s*}")
 
 # regex patterns from archive_collated_awards.php
 AWARD_NAME_PATTERN = re.compile(r"^ *The (.*) for (.*) *$", flags=re.IGNORECASE)

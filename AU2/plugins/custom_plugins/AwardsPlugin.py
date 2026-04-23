@@ -17,7 +17,8 @@ from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, NavbarEntry, HookedExport
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.CorePlugin import registered_plugin
-from AU2.plugins.util.award_utils import award_type_to_key, INITIAL_THE_PATTERN, render_award_name
+from AU2.plugins.util.award_utils import award_type_to_key, INITIAL_THE_PATTERN, render_award_name, \
+    AWARD_COLOURS_FILENAME, AWARD_PAGES_FILENAME
 from AU2.plugins.util.date_utils import get_now_dt, get_term
 from AU2.plugins.util.game import get_game_start
 
@@ -32,9 +33,9 @@ AWARD_TEMPLATE = """
 
 AWARD_DATA_TEMPLATE = "{AWARD_NAME}: {WINNER}"
 
-AWARD_CLASS_CSS_TEMPLATE = ".{KEY} {{ color: {COLOUR}; }}"
+AWARD_CLASS_CSS_TEMPLATE = ".{KEY} {{ color: {COLOUR}; }}\n"
 
-AWARDS_NAVBAR_ENTRY = NavbarEntry("awards.html", "Awards", -3)
+AWARDS_NAVBAR_ENTRY = NavbarEntry(AWARD_PAGES_FILENAME, "Awards", -3)
 
 AWARDS_PAGE_TEMPLATE: str
 with open(ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "awards.html", "r", encoding="utf-8",
@@ -64,6 +65,7 @@ class AwardsDatabase(PersistentFile):
     WRITE_LOCATION = BASE_WRITE_LOCATION / "AwardsDatabase.json"
     awards: Dict[str, Award] = field(default_factory=dict)  # map {key: award}
     defaults: Dict[str, Tuple[str, str]] = field(default_factory=dict)  # map {key: (award name, award type)}
+    colours: Dict[str, str] = field(default_factory=dict)  # map {key: css colour}
 
     def add(self, award: Award):
         self.awards[award.get_key()] = award
@@ -231,18 +233,28 @@ class AwardsPlugin(AbstractPlugin):
             return [Label("[AWARDS] Did not delete award.")]
 
     def on_hook_respond(self, hook: str, html_response, data) -> List[HTMLComponent]:
+        components = []
         if hook == "awards_get_existing":
             award_defaults = data.get("award_defaults")
             if award_defaults:
                 self.AWARDS_DATABASE.defaults = award_defaults
-                return [Label("[AWARDS] Saved existing award names.")]
+                components.append(Label("[AWARDS] Saved existing award names."))
             else:
-                return [Label("[AWARDS] Could not find any awards. Make sure that SRCFPlugin is enabled!")]
-        return []
+                components.append(Label("[AWARDS] Could not find any awards. Make sure that SRCFPlugin is enabled!"))
+
+            award_colours = data.get("award_colours")
+            if award_colours:
+                self.AWARDS_DATABASE.colours = award_colours
+                components.append(Label("[AWARDS] Saved existing award colours."))
+            else:
+                components.append(Label("[AWARDS] Could not find award colours."))
+
+        return components
 
     def on_page_generate(self, html_response: dict, navbar_entries: List[NavbarEntry]) -> List[HTMLComponent]:
         components = []
         if self.AWARDS_DATABASE.awards:
+            # awards page
             award_data = "\n".join(
                 AWARD_DATA_TEMPLATE.format(AWARD_NAME=render_award_name(award.name), WINNER=award.recipient_name)
                 for award in self.AWARDS_DATABASE.awards.values()
@@ -257,13 +269,6 @@ class AwardsPlugin(AbstractPlugin):
                 )
                 for award in self.AWARDS_DATABASE.awards.values()
             )
-            award_styling = "\n".join(
-                AWARD_CLASS_CSS_TEMPLATE.format(
-                    KEY=award.get_key(),
-                    COLOUR=award.colour,
-                )
-                for award in self.AWARDS_DATABASE.awards.values() if award.colour
-            )
             with open(WEBPAGE_WRITE_LOCATION / AWARDS_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
                 F.write(
                     AWARDS_PAGE_TEMPLATE.format(
@@ -271,9 +276,35 @@ class AwardsPlugin(AbstractPlugin):
                         AWARD_HTML=award_html,
                         AWARD_DATA=award_data,
                         TERM=get_term(get_game_start()),
-                        AWARD_COLOURS_CSS=award_styling,
                     )
                 )
             navbar_entries.append(AWARDS_NAVBAR_ENTRY)
+
+            # award styling
+            existing_award_styling = "".join(
+                AWARD_CLASS_CSS_TEMPLATE.format(
+                    KEY=key,
+                    COLOUR=colour,
+                )
+                for key, colour in self.AWARDS_DATABASE.colours
+            )
+            custom_award_styling = "".join(
+                AWARD_CLASS_CSS_TEMPLATE.format(
+                    KEY=award.get_key(),
+                    COLOUR=award.colour,
+                )
+                for award in self.AWARDS_DATABASE.awards.values() if award.colour
+            )
+            if existing_award_styling or custom_award_styling:
+                with open(WEBPAGE_WRITE_LOCATION / AWARD_COLOURS_FILENAME, "w+", encoding="utf-8") as F:
+                    F.write(
+                        AWARDS_PAGE_TEMPLATE.format(
+                            YEAR=get_now_dt().year,
+                            AWARD_HTML=award_html,
+                            AWARD_DATA=award_data,
+                            TERM=get_term(get_game_start()),
+                        )
+                    )
+
             components.append(Label("[AWARDS] Success!"))
         return components

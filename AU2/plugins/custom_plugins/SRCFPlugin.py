@@ -30,7 +30,7 @@ from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.award_utils import GAME_NAME_PATTERN, AWARD_DATA_PATTERN, AWARD_PAGES_FILENAME, \
-    AWARD_LINE_PATTERN, award_type_to_key
+    AWARD_LINE_PATTERN, award_type_to_key, AWARD_COLOUR_PATTERN, AWARD_COLOURS_FILENAME
 from AU2.plugins.util.date_utils import get_now_dt, archive_game_name_to_tuple
 
 SRCF_WEBSITE = "shell.srcf.net"
@@ -446,6 +446,7 @@ class SRCFPlugin(AbstractPlugin):
             # this hook is to search through the archives for existing awards
             data: Dict[str, Tuple[str, str]]
             award_defaults = data.setdefault("award_defaults", {})
+            award_colours = data.setdefault("award_colours", {})
             with self._get_client() as sftp:
                 # have to iterate through listdir_iter *before* downloading any files,
                 # otherwise it causes the program to hang (see https://github.com/paramiko/paramiko/issues/1171)
@@ -455,6 +456,7 @@ class SRCFPlugin(AbstractPlugin):
                 # go in chronological order of games, so that most recent awards take priority!
                 game_folders.sort(key=archive_game_name_to_tuple)
 
+                # this fetches all the existing awards using the awards data encoded for archive_collated_awards.php
                 for game_name in game_folders:
                     awards_content = self._file_to_string(sftp, str(REMOTE_ARCHIVE_PATH / game_name / AWARD_PAGES_FILENAME))
                     if not awards_content:
@@ -469,14 +471,16 @@ class SRCFPlugin(AbstractPlugin):
                             award_key = award_type_to_key(award_type)
                             award_defaults[award_key] = (m["award_name"], award_type)
 
-                    """colours_content = self._file_to_string(sftp, str(REMOTE_ARCHIVE_PATH / game_name / AWARD_COLOURS_FILENAME))
+                # this fetches award colours by reading the award_colours.css file for each game, which is a new
+                # stylesheet to separate award colours from newassassins.css
+                for game_name in game_folders:
+                    colours_content = self._file_to_string(sftp, str(REMOTE_ARCHIVE_PATH / game_name / AWARD_COLOURS_FILENAME))
                     if not colours_content:
                         continue
-                    colour_map = {
-                        m["award_key"]: m["award_colour"]
-                        for m in AWARD_COLOUR_PATTERN.finditer(colours_content)
-                    }
-                    award_colours[game_name] = colour_map"""
+
+                    for m in AWARD_COLOUR_PATTERN.finditer(colours_content):
+                        award_colours[m["award_key"]] = m["award_colour"]
+
             components.append(Label("[SRCF Plugin] Downloaded awards."))
         return components
 
