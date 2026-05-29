@@ -114,6 +114,18 @@ def float_validator(_, current):
         return False
     return True
 
+def optional_float_validator(_, current):
+    try:
+        if current is None:
+            raise KeyboardInterrupt
+        # allow null values
+        if current == "":
+            return True
+        s = float(current)
+    except ValueError:
+        return False
+    return True
+
 
 def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
     """
@@ -636,7 +648,7 @@ def render(html_component, dependency_context={}):
         q = [inquirer.Text(
             name="int",
             message=escape_format_braces(html_component.title),
-            default=html_component.default,
+            default=str(html_component.default),  # note: str needed to stop 0 being turned into empty string by inquirer
             validate=integer_validator
         )]
         integer = inquirer_prompt_with_abort(q)["int"]
@@ -646,11 +658,12 @@ def render(html_component, dependency_context={}):
         q = [inquirer.Text(
             name="float",
             message=escape_format_braces(html_component.title),
-            default=html_component.default,
-            validate=float_validator
+            # note: str needed to stop 0 being turned into empty string by inquirer
+            default="" if html_component.default is None else str(html_component.default),
+            validate=optional_float_validator if html_component.optional else float_validator
         )]
         number = inquirer_prompt_with_abort(q)["float"]
-        return {html_component.identifier: float(number)}
+        return {html_component.identifier: float(number) if number != "" else None}
 
     elif isinstance(html_component, PathEntry):
         q = [inquirer.Path(

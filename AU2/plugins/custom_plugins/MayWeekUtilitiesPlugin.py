@@ -16,6 +16,7 @@ from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown 
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
+from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
@@ -88,6 +89,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Team Names": self.identifier + "_team_names",
             "Enable Teams?": self.identifier + "_enable_teams",
             "Share Multipliers?": self.identifier + "_share_multipliers",
+            "Investment %": self.identifier + "_investment_pct",
+            "Invest first?": self.identifier + "_invest_first",
+            "Temp Points Floor": self.identifier + "_temp_pts_floor",
+            "Deplete Permanent Points?": self.identifier + "_deplete_perm_pts",
+            "Perm Points Floor": self.identifier + "_perm_pts_floor",
             "Assassins": self.identifier + "_assassins",
             "Team ID": self.identifier + "_team_id",
             "Team Changes": self.identifier + "_team_changes",
@@ -101,6 +107,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Team Names": "team_names",
             "Enable Teams?": "enable_teams",
             "Share Multipliers?": "share_multipliers",
+            "Investment %": "investment_pct",
+            "Invest first?": "invest_first",
+            "Temp Points Floor": "temp_pts_floor",
+            "Deplete Permanent Points?": "deplete_perm_pts",
+            "Perm Points Floor": "perm_pts_floor",
             "Team Members": "team_members",
             "Team Changes": "team_changes",
             "Multiplier Transfers": "multiplier_transfers",
@@ -110,12 +121,19 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         self.ps_defaults = {
             "Team Names": ["Team 1", "Team 2", "Team 3"],
-            "Share Multipliers?": False
+            "Share Multipliers?": False,
+            "Investment %": 0,
+            "Invest first?": True,
+            "Temp Points Floor": 0,
+            "Deplete Permanent Points?": True,
+            "Perm Points Floor": None,
         }
 
         self.cosmetics = [
             "Multiplier",
             "Teams",
+            "Temporary Points",
+            "Permanent Points",
         ]
         self.html_ids.update({k: self.identifier + "_" + k.lower() for k in self.cosmetics})
         self.plugin_state.update({k: k.lower() for k in self.cosmetics})
@@ -170,13 +188,13 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 name="multiplier_bonus_fixed",
                 default_value=1,
                 description="M = Fixed points awarded when kills are made with a multiplier"
-            )
+            ),
         ]
         self.html_ids.update({param.name: self.identifier + "_" + param.name.lower() for param in self.scoring_parameters})
         self.plugin_state.update({param.name: param.identifier() for param in self.scoring_parameters})
 
         for p in self.scoring_parameters:
-            self.gsdb_set(p.name, p.default_value)
+            self.ps_defaults[p.name] = p.default_value
 
         self.printable_gain_formula = "Points gained from kills: ((V*b + B)*t + T)*m + M"
         self.printable_loss_formula = "Points lost from death: -V*d - D"
@@ -208,6 +226,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 display_name="May Week -> Enable/disable multiplier team sharing",
                 ask=self.ask_enable_multiplier_team_sharing,
                 answer=self.answer_enable_multiplier_team_sharing
+            ),
+            ConfigExport(
+                identifier="may_week_config_temp_points",
+                display_name="May Week -> Configure Temporary Points",
+                ask=self.ask_config_temp_points,
+                answer=self.answer_config_temp_points,
             ),
             ConfigExport(
                 identifier="may_week_cosmetics",
@@ -251,8 +275,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 return memb_map
         self.TeamManager = TeamManager
 
-    def gsdb_get(self, plugin_state_id, default):
-        return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state[plugin_state_id], default)
+    def gsdb_get(self, plugin_state_id, default = None):
+        return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(
+            self.plugin_state[plugin_state_id],
+            self.ps_defaults.get(plugin_state_id, default)
+        )
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]] = data
@@ -291,6 +318,64 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return [
             Label("Team multiplier sharing is now: " + "enabled" if enabled else "disabled")
         ]
+
+    def ask_config_temp_points(self):
+        # TODO: would like to have this in some kind of conditional metacomponent,
+        #       where enable/disable split asked first, and only if enable ask about other params!
+        #       would be trivial with the refactoring in #164. Maybe do anyway?
+        return [
+            FloatEntry(
+                title="% of Temporary Points to convert into Permanent Points when investing. "
+                      "(Set to 0 to disable the split into temporary/permanent points)",
+                identifier=self.html_ids["Investment %"],
+                default=self.gsdb_get("Investment %"),
+            ),
+            # TODO: consider whether InputWithDropdown better?
+            Checkbox(
+                title="Invest Temporary Points BEFORE profiting from kills (and BS points)?",
+                identifier=self.html_ids["Invest first?"],
+                checked=self.gsdb_get("Invest first?"),
+            ),
+            FloatEntry(
+                title="Floor for Temporary Points (Temporary Points will not be allowed to decrease below this value; "
+                      "leave blank for no floor)",
+                identifier=self.html_ids["Temp Points Floor"],
+                default=self.gsdb_get("Temp Points Floor"),
+                optional=True,
+            ),
+            Checkbox(
+                title="Transfer Permanent Points back to Temporary Points to keep the latter above the floor?",
+                identifier=self.html_ids["Deplete Permanent Points?"],
+                checked=self.gsdb_get("Deplete Permanent Points?"),
+            ),
+            FloatEntry(
+                title="Floor for Permanent Points (Permanent Points will not be allowed to decrease below this value; "
+                      "leave blank for no floor)",
+                identifier=self.html_ids["Perm Points Floor"],
+                default=self.gsdb_get("Perm Points Floor"),
+                optional=True,
+            ),
+        ]
+
+    def answer_config_temp_points(self, html_response):
+        investment_pct = html_response[self.html_ids["Investment %"]]
+
+        if investment_pct < 0 or investment_pct > 100:
+            return [Label(f"[ERROR] Cannot invest {investment_pct}% of temporary points!")]
+
+        invest_first = html_response[self.html_ids["Invest first?"]]
+        temp_pts_floor = html_response[self.html_ids["Temp Points Floor"]]
+        deplete_perm_pts = html_response[self.html_ids["Deplete Permanent Points?"]]
+        perm_pts_floor = html_response[self.html_ids["Perm Points Floor"]]
+
+        self.gsdb_set("Investment %", investment_pct)
+        self.gsdb_set("Invest first?", invest_first)
+        self.gsdb_set("Temp Points Floor", temp_pts_floor)
+        self.gsdb_set("Deplete Permanent Points?", deplete_perm_pts)
+        self.gsdb_set("Perm Points Floor", perm_pts_floor)
+
+        # TODO: more informative message
+        return [Label("[MAY WEEK] Configured temporary points.")]
 
     def ask_name_teams(self):
         existing_ranks: List[str] = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
