@@ -42,8 +42,6 @@ HEX_COLS = [
 CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
 ENTRY_TEMPLATE = "<td {CREW_COLOR}>{VALUE}</td>"
 HDR_TEMPLATE = "<th>{HEADING}</th>"
-SPLIT_SCORE_ENTRY_TEMPLATE = "<td {CREW_COLOR}>{TEMP_POINTS}</td><td {CREW_COLOR}>{PERM_POINTS}</td><td {CREW_COLOR}>{POINTS}</td>"
-SPLIT_SCORE_HDR_TEMPLATE = "<th>{TEMP_PTS_STR}</th><th>{PERM_PTS_STR}</th><th>{POINTS_STR}</th>"
 PLAYER_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PLAYER_TYPE}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
 PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
                          "{POINTS_ENTRY}"
@@ -89,15 +87,27 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def __init__(self):
         super().__init__(type(self).__name__)
 
+        self.gimmick_names = {
+            "teams": "Teams",
+            "multipliers": "Multipliers",
+            "investment": "Temporary/Permanent Points",
+        }
+
+        self.point_type_names = {
+            "temp_points": "Temporary Points",
+            "perm_points": "Permanent Points",
+            "total_points": "Total Points",
+        }
+
         self.html_ids = {
             "Team Names": self.identifier + "_team_names",
             "Gimmicks": self.identifier + "_gimmicks",
             "Share Multipliers?": self.identifier + "_share_multipliers",
             "Investment %": self.identifier + "_investment_pct",
             "Invest first?": self.identifier + "_invest_first",
-            "Temp Points Floor": self.identifier + "_temp_pts_floor",
             "Deplete Permanent Points?": self.identifier + "_deplete_perm_pts",
             "Perm Points Floor": self.identifier + "_perm_pts_floor",
+            "Visible Points": self.identifier + "_visible_points",
             "Assassins": self.identifier + "_assassins",
             "Team ID": self.identifier + "_team_id",
             "Team Changes": self.identifier + "_team_changes",
@@ -113,9 +123,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Share Multipliers?": "share_multipliers",
             "Investment %": "investment_pct",
             "Invest first?": "invest_first",
-            "Temp Points Floor": "temp_pts_floor",
             "Deplete Permanent Points?": "deplete_perm_pts",
             "Perm Points Floor": "perm_pts_floor",
+            "Visible Points": "visible_points",
             "Team Members": "team_members",
             "Team Changes": "team_changes",
             "Multiplier Transfers": "multiplier_transfers",
@@ -129,9 +139,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Share Multipliers?": False,
             "Investment %": 0,
             "Invest first?": True,
-            "Temp Points Floor": 0,
             "Deplete Permanent Points?": True,
             "Perm Points Floor": None,
+            "Visible Points": list(self.point_type_names)
         }
 
         self.cosmetics = [
@@ -140,15 +150,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Points",
             "Temporary Points",
             "Permanent Points",
+            "Total Points",
         ]
         self.html_ids.update({k: self.identifier + "_" + k.lower() for k in self.cosmetics})
         self.plugin_state.update({k: k.lower() for k in self.cosmetics})
-
-        self.gimmick_names = {
-            "teams": "Teams",
-            "multipliers": "Multipliers",
-            "investment": "Temporary/Permanent Points",
-        }
 
         self.scoring_parameters = [
             ScoringParameter(
@@ -223,7 +228,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         self.config_exports = [
             ConfigExport(
                 identifier="may_week_set_gimmicks",
-                display_name="May Week -> Enable/disable Gimmicks",
+                display_name="May Week -> Enable/disable MW gimmicks",
                 ask=self.ask_set_gimmicks,
                 answer=self.answer_set_gimmicks
             ),
@@ -240,7 +245,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 answer=self.answer_enable_multiplier_team_sharing
             ),
             ConfigExport(
-                identifier="may_week_config_temp_points",
+                identifier="may_week_config_perm_points",
                 display_name="May Week -> Configure Permanent Points",
                 ask=self.ask_config_perm_points,
                 answer=self.answer_config_perm_points,
@@ -343,19 +348,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             ),
             # TODO: consider whether InputWithDropdown better?
             Checkbox(
-                title="Invest Temporary Points BEFORE profiting from kills (and BS points)?",
+                title="Invest Temporary Points BEFORE players profit from kills (and BS points)?",
                 identifier=self.html_ids["Invest first?"],
                 checked=self.gsdb_get("Invest first?"),
             ),
-            FloatEntry(
-                title="Floor for Temporary Points (Temporary Points will not be allowed to decrease below this value; "
-                      "leave blank for no floor)",
-                identifier=self.html_ids["Temp Points Floor"],
-                default=self.gsdb_get("Temp Points Floor"),
-                optional=True,
-            ),
             Checkbox(
-                title="Transfer Permanent Points back to Temporary Points to keep the latter above the floor?",
+                title="Transfer Permanent Points back to Temporary Points if the latter falls below 0?",
                 identifier=self.html_ids["Deplete Permanent Points?"],
                 checked=self.gsdb_get("Deplete Permanent Points?"),
             ),
@@ -366,6 +364,13 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 default=self.gsdb_get("Perm Points Floor"),
                 optional=True,
             ),
+            # TODO: selectorlist for which points to show (out Temp Points, Perm Points, Total Points)
+            SelectorList(
+                title="Which types of points should be shown in the player list?",
+                identifier=self.html_ids["Visible Points"],
+                options=[(v, k) for k, v in self.point_type_names.items()],
+                defaults=self.gsdb_get("Visible Points"),
+            )
         ]
 
     def answer_config_perm_points(self, html_response):
@@ -375,18 +380,18 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             return [Label(f"[ERROR] Cannot invest {investment_pct}% of temporary points!")]
 
         invest_first = html_response[self.html_ids["Invest first?"]]
-        temp_pts_floor = html_response[self.html_ids["Temp Points Floor"]]
         deplete_perm_pts = html_response[self.html_ids["Deplete Permanent Points?"]]
         perm_pts_floor = html_response[self.html_ids["Perm Points Floor"]]
+        visible_point_types = html_response[self.html_ids["Visible Points"]]
 
         self.gsdb_set("Investment %", investment_pct)
         self.gsdb_set("Invest first?", invest_first)
-        self.gsdb_set("Temp Points Floor", temp_pts_floor)
         self.gsdb_set("Deplete Permanent Points?", deplete_perm_pts)
         self.gsdb_set("Perm Points Floor", perm_pts_floor)
+        self.gsdb_set("Visible Points", visible_point_types)
 
         # TODO: more informative message
-        return [Label("[MAY WEEK] Configured temporary points.")]
+        return [Label("[MAY WEEK] Configured permanent points.")]
 
     def ask_name_teams(self):
         existing_ranks: List[str] = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
@@ -435,17 +440,20 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 title=param.description,
                 default=self.gsdb_get(param.name, param.default_value),
                 identifier=self.html_ids[param.name]
-            ) for param in self.scoring_parameters)
+            ) for param in self.scoring_parameters),
         ]
 
     def answer_set_scoring_params(self, html_response):
         for param in self.scoring_parameters:
             self.gsdb_set(param.name, html_response[self.html_ids[param.name]])
 
+        points_floor = html_response[self.html_ids["Points Floor"]]
+        self.gsdb_set("Points Floor", points_floor)
+
         return [
             Label(title=f"Parameter {param.name} set to {html_response[self.html_ids[param.name]]}")
             for param in self.scoring_parameters
-        ]
+        ] + [Label(f"Points floor set to {points_floor}")]
 
     def ask_teams_summary(self) -> List[HTMLComponent]:
         return [
@@ -739,6 +747,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         )
         split_scores = gimmick_map.get("investment")
         invest_first = self.gsdb_get("Invest first?")
+        deplete_perm_pts = self.gsdb_get("Deplete Permanent Points?")
+        perm_pts_floor = self.gsdb_get("Perm Points Floor")
 
         if split_scores:
             def do_investments(e: Event):
@@ -794,9 +804,15 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
             # resolve deltas once all worked out
             for player in point_deltas:
-                # use max or else you can LOSE points by killing someone!
-                # (specifically, if killing a player with negative points would lose you points)
-                temp_scores[player] = max(0, temp_scores[player] + point_deltas[player])
+                # keep temp points >= 0, as killing a player with negative points would lose you points!
+                new_score = temp_scores[player] + point_deltas[player]
+                if new_score < 0:
+                    if deplete_perm_pts:
+                        new_perm_score = perm_scores[player] + new_score
+                        if perm_pts_floor is not None:
+                            perm_scores[player] = max(new_perm_score, perm_pts_floor)
+                    new_score = 0
+                temp_scores[player] = new_score
 
             if not invest_first:
                 do_investments(e)
@@ -829,6 +845,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         teams_enabled = gimmick_map.get("teams", False)
         multipliers_enabled = gimmick_map.get("multipliers", False)
         split_scores = gimmick_map.get("investment", False)
+        visible_point_types = self.gsdb_get("Visible Points")
 
         team_manager = self.TeamManager()
         temp_scores, perm_scores = self.calculate_scores(team_manager=team_manager)
@@ -860,11 +877,18 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 VALUE="Y" if a_id in multiplier_beneficiaries else "",
                 CREW_COLOR=crew_color
             ) if multipliers_enabled else ""
-            points_entry = SPLIT_SCORE_ENTRY_TEMPLATE.format(
-                CREW_COLOR=crew_color,
-                TEMP_POINTS=temp_scores[a_id],
-                PERM_POINTS=perm_scores[a_id],
-                POINTS=score
+
+            # if using temporary/permanent points, user can configure which of the three headings they want rendered in
+            # the player list.  e.g. in MW2024, only total + permanent points were shown, and not temporary points on
+            # their own
+            score_values= {
+                "temp_points": temp_scores[a_id],
+                "perm_points": perm_scores[a_id],
+                "total_points": score
+            }
+            points_entry = "".join(
+                ENTRY_TEMPLATE.format(CREW_COLOR=crew_color, VALUE=score_values[score_type])
+                for score_type in visible_point_types
             ) if split_scores else ENTRY_TEMPLATE.format(CREW_COLOR=crew_color, VALUE=score)
 
             assassin = ASSASSINS_DATABASE.get(a_id)
@@ -905,10 +929,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 TEAM_COLUMN_HDR = HDR_TEMPLATE.format(
                     HEADING = self.get_cosmetic_name("Teams")
                 ) if teams_enabled else "",
-                POINTS_HDR = SPLIT_SCORE_HDR_TEMPLATE.format(
-                    TEMP_PTS_STR = self.get_cosmetic_name("Temporary Points"),
-                    PERM_PTS_STR = self.get_cosmetic_name("Permanent Points"),
-                    POINTS_STR = self.get_cosmetic_name("Points"),
+                POINTS_HDR = "".join(
+                    HDR_TEMPLATE.format(HEADING = self.get_cosmetic_name(self.point_type_names[point_type]))
+                    for point_type in visible_point_types
                 ) if split_scores else HDR_TEMPLATE.format(HEADING = self.get_cosmetic_name("Points"))
             ))
 
