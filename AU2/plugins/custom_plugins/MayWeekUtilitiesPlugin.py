@@ -326,11 +326,13 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
 
     def ask_enable_multiplier_team_sharing(self):
-        return [Checkbox(
-            title="Should multipliers be shared within teams?",
-            identifier=self.html_ids["Share Multipliers?"],
-            checked=self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
-        )]
+        return [
+            Checkbox(
+                title="Should multipliers be shared within teams?",
+                identifier=self.html_ids["Share Multipliers?"],
+                checked=self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
+            )
+        ]
 
     def answer_enable_multiplier_team_sharing(self, html_response):
         enabled = html_response[self.html_ids["Share Multipliers?"]]
@@ -395,7 +397,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
     def ask_name_teams(self):
         existing_ranks: List[str] = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-        default_text = "# Enter team names each on a new line.\n# Lines starting with hashtags will be ignored.\n"
+        default_text = ("# Enter team names each on a new line.\n"
+                        "# Lines starting with hashtags will be ignored.\n"
+                        "# Note that each team is identified by its position in this list, so if editing team names "
+                        "during a game, only add new teams to the *end* of this list.\n")
         return [
             LargeTextEntry(
                 title="Rename teams",
@@ -447,13 +452,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         for param in self.scoring_parameters:
             self.gsdb_set(param.name, html_response[self.html_ids[param.name]])
 
-        points_floor = html_response[self.html_ids["Points Floor"]]
-        self.gsdb_set("Points Floor", points_floor)
-
         return [
             Label(title=f"Parameter {param.name} set to {html_response[self.html_ids[param.name]]}")
             for param in self.scoring_parameters
-        ] + [Label(f"Points floor set to {points_floor}")]
+        ]
 
     def ask_teams_summary(self) -> List[HTMLComponent]:
         return [
@@ -967,3 +969,28 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         )
 
         return [Label("[MAY WEEK] Success!")]
+
+    def on_request_setup_game(self, _) -> List[HTMLComponent]:
+        return [
+            *self.ask_set_gimmicks(),
+            Label("[IMPORTANT] Below you will be asked to set various parameters for May Week features. "
+                  "Due to technical limitations this may include parameters for some of the features that you did not "
+                  "enable above. Such parameters may be safely ignored."),
+            *self.ask_set_scoring_params(),
+            Label("[MAY WEEK] Below you can set team names. Players are assigned to teams in Events, as teams may "
+                  "change over the course of the game."),
+            *self.ask_name_teams(),
+            *self.ask_enable_multiplier_team_sharing(),
+            *self.ask_config_perm_points(),
+            *self.ask_tweak_cosmetics(),
+        ]
+
+    def on_setup_game(self, html_response) -> List[HTMLComponent]:
+        return [
+            *self.answer_set_gimmicks(html_response),
+            *self.answer_set_scoring_params(html_response),
+            *self.answer_name_teams(html_response),
+            *self.answer_enable_multiplier_team_sharing(html_response),
+            *self.answer_config_perm_points(html_response),
+            *self.answer_tweak_cosmetics(html_response),
+        ]

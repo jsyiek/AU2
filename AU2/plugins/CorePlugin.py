@@ -77,21 +77,19 @@ GAME_TYPE_PLUGIN_MAP = {
         "UIConfigPlugin": True,
         "WantedPlugin": True,
     },
-    # Can't implement Setup Game for MayWeekUtilitiesPlugin at the moment because config options depend on whether
-    # teams are enabled or not, and doing a partial implementation would mislead users.
-    # "May Week": {
-    #     "CompetencyPlugin":False,
-    #     "LocalBackupPlugin": True,
-    #     "MafiaPlugin": False,
-    #     "MayWeekUtilitiesPlugin": True,
-    #     "PageGeneratorPlugin": True,  # needed to be able to hide events
-    #     "CityWatchPlugin": False,
-    #     "RandomGamePlugin": False,
-    #     "ScoringPlugin": False,
-    #     "TargetingPlugin": False,
-    #     "UIConfigPlugin": True,
-    #     "WantedPlugin": True,
-    # }
+    "May Week": {
+        "CompetencyPlugin":False,
+        "LocalBackupPlugin": True,
+        "MafiaPlugin": False,
+        "MayWeekUtilitiesPlugin": True,
+        "PageGeneratorPlugin": True,  # needed to be able to hide events
+        "CityWatchPlugin": False,
+        "RandomGamePlugin": False,
+        "ScoringPlugin": False,
+        "TargetingPlugin": False,
+        "UIConfigPlugin": True,
+        "WantedPlugin": True,
+    }
 }
 BOUNTY_PLUGINS = ("BountyNewsPlugin", "BountyPlugin")
 
@@ -1092,7 +1090,8 @@ class CorePlugin(AbstractPlugin):
             Label("AU2 has two different plugins for setting bounties."),
             Label("'BountyNewsPlugin' is the allows you to mark certain events as bounties, "
                   "causing them to be rendered on the page bounty-news.html. See May Week 2025 in the archive for an "
-                  "example."),
+                  "example. (Note however that BountyNewsPlugin currently has some issues when used in May Week)."),
+            # ^ the issues are addressed by https://github.com/jsyiek/AU2/pull/178 which is yet to be merged...
             Label("'BountyPlugin' on the other hand displays bounties in a table, on the page bounties.html. "
                   "See Lent 2025 in the archive for an example."),
             SelectorList(
