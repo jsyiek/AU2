@@ -22,6 +22,10 @@ class TestMayWeekUtilitiesPlugin:
             param.name: random.randint(0, 100) for param in plugin.scoring_parameters
         }
 
+        # 'magnify' starting scores to reduce likelihood of stupidly large fixed bonus/penalty values
+        param_values["starting_score_casual"] *= 10
+        param_values["starting_score_full"] *= 10
+
         # set scoring parameters
         plugin.answer_set_scoring_params({
             plugin.html_ids[name]: value for name, value in param_values.items()
@@ -72,6 +76,30 @@ class TestMayWeekUtilitiesPlugin:
         game.assassin(p[23]).kills(p[1], p[2])
         game.assassin(p[24]).kills(p[3], p[34])
 
+        # for testing that multipliers, teams ignored when these are disabled
+        e = game.assassin(p[25]).with_accomplices(p[40]).is_involved_in_event().model()
+        plugin.eps_set(e, "Multiplier Transfers", [(None, p[25] + " identifier")])
+        plugin.eps_set(e, "Team Changes", [(p[25] + " identifier", 1), (p[40] + " identifier", 1)])
+
+        plugin.eps_set(
+            game.assassin(p[25]).kills(p[35]).model(),
+            "Kills as Team",
+            [(p[25] + " identifier", p[35] + " identifier")]
+        )
+
+        # test BS points
+        bs_points = {
+            p[i] + " identifier": random.randint(1, 10) for i in (26, 36, 41)
+        }
+        plugin.eps_set(
+            game.assassin(p[26]).with_accomplices(p[36], p[41]).is_involved_in_event().model(),
+            "BS Points",
+            bs_points
+        )
+        game.new_datetime()
+        game.assassin(p[26]).kills(p[36])
+
+
         scores, perm_scores = plugin.calculate_scores()
 
         # since investment is disabled, permanent scores should all be 0
@@ -82,7 +110,7 @@ class TestMayWeekUtilitiesPlugin:
         for name in p[0:4]:
             assert scores[name + " identifier"] == max(0, Sc - D - d*Sc)
         # full player victims
-        for name in p[31:35]:
+        for name in p[31:36]:
             assert scores[name + " identifier"] == max(0, Sf - D - d*Sf)
         # full player killers
         # note: use isclose to test float values because we can get small rounding errors
@@ -91,3 +119,15 @@ class TestMayWeekUtilitiesPlugin:
         assert isclose(scores[p[22] + " identifier"], Sf + 2*(B + b * Sf))  # killed two full players
         assert isclose(scores[p[23] + " identifier"], Sf + 2*(B + b * Sc))  # killed two casual players
         assert isclose(scores[p[24] + " identifier"], Sf + B + b * Sf + B + b * Sc)  # killed one full one casual player
+        assert isclose(scores[p[25] + " identifier"], Sf + B + b * Sf)  # killed a full player (with ignored team kill + multiplier)
+
+        assert scores[p[40] + " identifier"] == Sf  # player on the same team as a team kill
+
+        # scores involving BS points
+        assert isclose(scores[p[26] + " identifier"], (
+                Sf + bs_points[p[26] + " identifier"] + B + b * (
+                    Sf + bs_points[p[36] + " identifier"]
+                )
+        ))  # has BS points + killed a player with BS points
+        assert isclose(scores[p[36] + " identifier"], max(0, (1 - d) * (Sf + bs_points[p[36] + " identifier"]) - D))  # victim with BS points
+        assert isclose(scores[p[41] + " identifier"], Sf + bs_points[p[41] + " identifier"])  # no kills
