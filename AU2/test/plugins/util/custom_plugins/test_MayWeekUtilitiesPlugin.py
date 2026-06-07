@@ -289,3 +289,16 @@ class TestMayWeekUtilitiesPlugin:
         temp_scores3, perm_scores3 = plugin.calculate_scores()
         assert perm_scores3[p[0] + " identifier"] == -6
         assert temp_scores3[p[0] + " identifier"] == 0
+
+
+        # check that a floor is enforced if set
+        plugin.answer_config_perm_points({
+            plugin.html_ids["Investment %"]: invest_pct,
+            plugin.html_ids["Invest first?"]: True,
+            plugin.html_ids["Deplete Permanent Points?"]: True,
+            plugin.html_ids["Perm Points Floor"]: 0,
+            plugin.html_ids["Visible Points"]: [],
+        })
+        temp_scores4, perm_scores4 = plugin.calculate_scores()
+        assert perm_scores4[p[0] + " identifier"] == 0
+        assert temp_scores4[p[0] + " identifier"] == 0
