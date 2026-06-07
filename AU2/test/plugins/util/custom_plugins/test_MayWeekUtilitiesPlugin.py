@@ -18,8 +18,8 @@ class TestMayWeekUtilitiesPlugin:
         """Helper function that sets random scoring parameters"""
         plugin = MayWeekUtilitiesPlugin()
         param_values = {
-            # values 0 to 100 are valid for all the scoring parameters
-            param.name: random.randint(0, 100) for param in plugin.scoring_parameters
+            # values 1 to 100 are valid for all the scoring parameters
+            param.name: random.randint(1, 100) for param in plugin.scoring_parameters
         }
 
         # 'magnify' starting scores to reduce likelihood of stupidly large fixed bonus/penalty values
@@ -131,3 +131,109 @@ class TestMayWeekUtilitiesPlugin:
         ))  # has BS points + killed a player with BS points
         assert isclose(scores[p[36] + " identifier"], max(0, (1 - d) * (Sf + bs_points[p[36] + " identifier"]) - D))  # victim with BS points
         assert isclose(scores[p[41] + " identifier"], Sf + bs_points[p[41] + " identifier"])  # no kills
+
+    @plugin_test
+    def test_investment_first(self):
+        """
+        Tests the permanent/temporary scores gimmick ONLY, with investment occurring first.
+        """
+        plugin = MayWeekUtilitiesPlugin()
+        plugin.answer_set_gimmicks({plugin.html_ids["Gimmicks"]: ["investment"]})
+        param_values = self.set_random_scoring_parameters()
+
+        d = param_values["death_penalty_pct"] / 100
+        D = param_values["death_penalty_fixed"]
+        b = param_values["kill_bonus_pct"] / 100
+        B = param_values["kill_bonus_fixed"]
+        Sc = param_values["starting_score_casual"]
+        Sf = param_values["starting_score_full"]
+
+        invest_pct = random.randint(1, 100)
+        plugin.answer_config_perm_points({
+            plugin.html_ids["Investment %"]: invest_pct,
+            plugin.html_ids["Invest first?"]: True,
+            plugin.html_ids["Deplete Permanent Points?"]: True,
+            plugin.html_ids["Perm Points Floor"]: None,
+            plugin.html_ids["Visible Points"]: [],
+        })
+        invest_prop = invest_pct / 100
+        keep_prop = 1 - invest_prop  # proportion of temporary points NOT invested
+
+        p = some_players(50)
+        game = MockGame().having_assassins(p)
+        # ensure that the starting hour is 1pm so that we can test the 'same day' condition properly
+        game.date = game.date.replace(hour=13)
+
+        # give a player 0 BS points
+        bs_points = random.randint(1, 10)
+        plugin.eps_set(
+            game.assassin(p[0]).is_involved_in_event().model(),
+            "BS Points",
+            {p[0] + " identifier": bs_points}
+        )
+        game.new_datetime()
+
+        # some kills
+        game.assassin(p[0]).kills(p[10])
+        plugin.eps_set(
+            game.assassin(p[1]).kills(p[11]).model(),
+            "BS Points",
+            {p[1] + " identifier": bs_points}
+        )
+
+        temp_scores, perm_scores = plugin.calculate_scores()
+        # player 0's first kill of the day occurs after getting BS points, so invests some of it
+        assert isclose(perm_scores[p[0] + " identifier"], invest_prop * (Sf + bs_points))
+        assert isclose(temp_scores[p[0] + " identifier"], keep_prop * (Sf + bs_points) + B + b * Sf)
+        # on the other hand, player 1 gains the BS points during the kill so they aren't invested
+        assert isclose(perm_scores[p[1] + " identifier"], invest_prop * Sf)
+        assert isclose(temp_scores[p[1] + " identifier"], keep_prop * Sf + B + b * Sf + bs_points)
+
+        # no other players should have any permanent points at this stage either
+        for name in p[2:]:
+            assert perm_scores[name + " identifier"] == 0
+
+        # now, move later in same day and add more kills for the same players. They shouldn't invest any more!
+        game.new_datetime(minutes=4*60)
+        game.assassin(p[0]).kills(p[12])  # new kill
+        game.assassin(p[1]).kills(p[11])  # old kill
+        game.assassin(p[2]).kills(p[10])  # new kill for player 2 but old victim
+
+        temp_scores2, perm_scores2 = plugin.calculate_scores()
+
+        # permanent scores for players 0, 1 shouldn't change
+        for name in p[:2]:
+            assert perm_scores2[name + " identifier"] == perm_scores[name + " identifier"]
+        # but player 2 should invest here
+        assert isclose(perm_scores2[p[2] + " identifier"], invest_prop * Sf)
+        assert isclose(temp_scores2[p[2] + " identifier"], keep_prop * Sf + B + b * temp_scores[p[10] + " identifier"])
+        # and all the killer's temp scores should change
+        assert isclose(temp_scores2[p[0] + " identifier"],
+                       temp_scores[p[0] + " identifier"] + B + b * Sf)
+        assert isclose(temp_scores2[p[1] + " identifier"],
+                       temp_scores[p[1] + " identifier"] + B + b * temp_scores[p[11] + " identifier"])
+
+        # now move to the next day (but less than 24 hrs from the original kills!)
+        game.new_datetime(minutes=16*60)
+        game.assassin(p[0]).kills(p[12])  # old kill
+        game.assassin(p[1]).kills(p[10])  # new kill
+        game.assassin(p[2]).kills(p[11], p[13])  # two new kills: only triggers one investment...
+
+        temp_scores3, perm_scores3 = plugin.calculate_scores()
+        # player 0 shouldn't have invested anything, since they killed someone they already had
+        assert perm_scores3[p[0] + " identifier"] == perm_scores2[p[0] + " identifier"]
+        # but both players 1 and 2 should have invested again
+        assert isclose(perm_scores3[p[1] + " identifier"],
+                       perm_scores2[p[1] + " identifier"] + invest_prop * temp_scores2[p[1] + " identifier"])
+        assert isclose(perm_scores3[p[2] + " identifier"],
+                       perm_scores2[p[2] + " identifier"] + invest_prop * temp_scores2[p[2] + " identifier"])
+
+        # also check that temp scores updated correctly
+        assert isclose(temp_scores3[p[0] + " identifier"],
+                       temp_scores2[p[0] + " identifier"] + B + b * temp_scores2[p[12] + " identifier"])
+        assert isclose(temp_scores3[p[1] + " identifier"],
+                       keep_prop * temp_scores2[p[1] + " identifier"] + B + b * temp_scores2[p[10] + " identifier"])
+        assert isclose(temp_scores3[p[2] + " identifier"],
+                       keep_prop * temp_scores2[p[2] + " identifier"]
+                       + B + b * temp_scores2[p[11] + " identifier"]
+                       + B + b * temp_scores2[p[13] + " identifier"])

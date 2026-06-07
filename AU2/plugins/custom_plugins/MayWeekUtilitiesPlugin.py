@@ -758,13 +758,14 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         if split_scores:
             def do_investments(e: Event):
+                date = e.datetime.date()
                 for (killer, victim) in e.kills:
-                    date = e.datetime.date()
                     if killer not in day_investers[date] and victim not in previous_kills[killer]:
                         to_invest = temp_scores[killer] * invest_prop
                         temp_scores[killer] -= to_invest
                         perm_scores[killer] += to_invest
                         day_investers[date].add(killer)
+
         else:
             def do_investments(e: Event):
                 pass
