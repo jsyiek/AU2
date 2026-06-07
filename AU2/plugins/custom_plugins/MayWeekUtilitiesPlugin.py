@@ -813,7 +813,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     if deplete_perm_pts:
                         new_perm_score = perm_scores[player] + new_score
                         if perm_pts_floor is not None:
-                            perm_scores[player] = max(new_perm_score, perm_pts_floor)
+                            new_perm_score = max(new_perm_score, perm_pts_floor)
+                        perm_scores[player] = new_perm_score
                     new_score = 0
                 temp_scores[player] = new_score
 

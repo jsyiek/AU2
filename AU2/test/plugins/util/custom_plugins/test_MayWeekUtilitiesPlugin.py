@@ -141,11 +141,8 @@ class TestMayWeekUtilitiesPlugin:
         plugin.answer_set_gimmicks({plugin.html_ids["Gimmicks"]: ["investment"]})
         param_values = self.set_random_scoring_parameters()
 
-        d = param_values["death_penalty_pct"] / 100
-        D = param_values["death_penalty_fixed"]
         b = param_values["kill_bonus_pct"] / 100
         B = param_values["kill_bonus_fixed"]
-        Sc = param_values["starting_score_casual"]
         Sf = param_values["starting_score_full"]
 
         invest_pct = random.randint(1, 100)
@@ -237,3 +234,58 @@ class TestMayWeekUtilitiesPlugin:
                        keep_prop * temp_scores2[p[2] + " identifier"]
                        + B + b * temp_scores2[p[11] + " identifier"]
                        + B + b * temp_scores2[p[13] + " identifier"])
+
+    @plugin_test
+    def test_betting_gold(self):
+        """Unit test to check that permenant points can be depleted using -ve BS points"""
+        plugin = MayWeekUtilitiesPlugin()
+        plugin.answer_set_gimmicks({plugin.html_ids["Gimmicks"]: ["investment"]})
+        param_values = self.set_random_scoring_parameters()
+
+        # set these params deterministically to guarantee that we deplete permanent points
+        param_values["kill_bonus_pct"] = 0
+        param_values["kill_bonus_fixed"] = 0
+        param_values["starting_score_full"] = 10
+        plugin.answer_set_scoring_params({
+            plugin.html_ids[name]: value for name, value in param_values.items()
+        })
+        invest_pct = 50
+        plugin.answer_config_perm_points({
+            plugin.html_ids["Investment %"]: invest_pct,
+            plugin.html_ids["Invest first?"]: True,
+            plugin.html_ids["Deplete Permanent Points?"]: True,
+            plugin.html_ids["Perm Points Floor"]: None,
+            plugin.html_ids["Visible Points"]: [],
+        })
+        invest_prop = invest_pct / 100
+
+        p = some_players(2)
+        game = MockGame().having_assassins(p)
+
+        # a kill to get some points invested
+        game.assassin(p[0]).kills(p[1])
+        temp_scores, perm_scores = plugin.calculate_scores()
+        assert perm_scores[p[0] + " identifier"] == 5
+        assert temp_scores[p[0] + " identifier"] == 5  # kill bonuses are set to 0 for this unit test
+
+        # negative BS points to deplete permanent points
+        game.new_datetime()
+        plugin.eps_set(
+            game.assassin(p[0]).is_involved_in_event().model(),
+            "BS Points",
+            {p[0] + " identifier": -8}
+        )
+        temp_scores2, perm_scores2 = plugin.calculate_scores()
+        assert perm_scores2[p[0] + " identifier"] == 2
+        assert temp_scores2[p[0] + " identifier"] == 0
+
+        # check that perm points can go negative when no floor is set
+        game.new_datetime()
+        plugin.eps_set(
+            game.assassin(p[0]).is_involved_in_event().model(),
+            "BS Points",
+            {p[0] + " identifier": -8}
+        )
+        temp_scores3, perm_scores3 = plugin.calculate_scores()
+        assert perm_scores3[p[0] + " identifier"] == -6
+        assert temp_scores3[p[0] + " identifier"] == 0
