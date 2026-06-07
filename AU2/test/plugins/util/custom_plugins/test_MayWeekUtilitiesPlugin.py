@@ -133,9 +133,9 @@ class TestMayWeekUtilitiesPlugin:
         assert isclose(scores[p[41] + " identifier"], Sf + bs_points[p[41] + " identifier"])  # no kills
 
     @plugin_test
-    def test_investment_first(self):
+    def test_investment(self):
         """
-        Tests the permanent/temporary scores gimmick ONLY, with investment occurring first.
+        Tests the permanent/temporary scores gimmick ONLY
         """
         plugin = MayWeekUtilitiesPlugin()
         plugin.answer_set_gimmicks({plugin.html_ids["Gimmicks"]: ["investment"]})
@@ -148,7 +148,6 @@ class TestMayWeekUtilitiesPlugin:
         invest_pct = random.randint(1, 100)
         plugin.answer_config_perm_points({
             plugin.html_ids["Investment %"]: invest_pct,
-            plugin.html_ids["Invest first?"]: True,
             plugin.html_ids["Deplete Permanent Points?"]: True,
             plugin.html_ids["Perm Points Floor"]: None,
             plugin.html_ids["Visible Points"]: [],
@@ -252,7 +251,6 @@ class TestMayWeekUtilitiesPlugin:
         invest_pct = 50
         plugin.answer_config_perm_points({
             plugin.html_ids["Investment %"]: invest_pct,
-            plugin.html_ids["Invest first?"]: True,
             plugin.html_ids["Deplete Permanent Points?"]: True,
             plugin.html_ids["Perm Points Floor"]: None,
             plugin.html_ids["Visible Points"]: [],
@@ -294,7 +292,6 @@ class TestMayWeekUtilitiesPlugin:
         # check that a floor is enforced if set
         plugin.answer_config_perm_points({
             plugin.html_ids["Investment %"]: invest_pct,
-            plugin.html_ids["Invest first?"]: True,
             plugin.html_ids["Deplete Permanent Points?"]: True,
             plugin.html_ids["Perm Points Floor"]: 0,
             plugin.html_ids["Visible Points"]: [],

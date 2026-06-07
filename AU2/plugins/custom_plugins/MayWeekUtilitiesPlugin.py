@@ -104,7 +104,6 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Gimmicks": self.identifier + "_gimmicks",
             "Share Multipliers?": self.identifier + "_share_multipliers",
             "Investment %": self.identifier + "_investment_pct",
-            "Invest first?": self.identifier + "_invest_first",
             "Deplete Permanent Points?": self.identifier + "_deplete_perm_pts",
             "Perm Points Floor": self.identifier + "_perm_pts_floor",
             "Visible Points": self.identifier + "_visible_points",
@@ -347,12 +346,6 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 identifier=self.html_ids["Investment %"],
                 default=self.gsdb_get("Investment %"),
             ),
-            # TODO: consider whether InputWithDropdown better?
-            Checkbox(
-                title="Invest Temporary Points BEFORE players profit from kills (and BS points)?",
-                identifier=self.html_ids["Invest first?"],
-                checked=self.gsdb_get("Invest first?"),
-            ),
             Checkbox(
                 title="Transfer Permanent Points back to Temporary Points if the latter falls below 0?",
                 identifier=self.html_ids["Deplete Permanent Points?"],
@@ -365,7 +358,6 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 default=self.gsdb_get("Perm Points Floor"),
                 optional=True,
             ),
-            # TODO: selectorlist for which points to show (out Temp Points, Perm Points, Total Points)
             SelectorList(
                 title="Which types of points should be shown in the player list?",
                 identifier=self.html_ids["Visible Points"],
@@ -380,13 +372,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         if investment_pct < 0 or investment_pct > 100:
             return [Label(f"[ERROR] Cannot invest {investment_pct}% of temporary points!")]
 
-        invest_first = html_response[self.html_ids["Invest first?"]]
         deplete_perm_pts = html_response[self.html_ids["Deplete Permanent Points?"]]
         perm_pts_floor = html_response[self.html_ids["Perm Points Floor"]]
         visible_point_types = html_response[self.html_ids["Visible Points"]]
 
         self.gsdb_set("Investment %", investment_pct)
-        self.gsdb_set("Invest first?", invest_first)
         self.gsdb_set("Deplete Permanent Points?", deplete_perm_pts)
         self.gsdb_set("Perm Points Floor", perm_pts_floor)
         self.gsdb_set("Visible Points", visible_point_types)
@@ -752,23 +742,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
         )
         split_scores = gimmick_map.get("investment")
-        invest_first = self.gsdb_get("Invest first?")
         deplete_perm_pts = self.gsdb_get("Deplete Permanent Points?")
         perm_pts_floor = self.gsdb_get("Perm Points Floor")
-
-        if split_scores:
-            def do_investments(e: Event):
-                date = e.datetime.date()
-                for (killer, victim) in e.kills:
-                    if killer not in day_investers[date] and victim not in previous_kills[killer]:
-                        to_invest = temp_scores[killer] * invest_prop
-                        temp_scores[killer] -= to_invest
-                        perm_scores[killer] += to_invest
-                        day_investers[date].add(killer)
-
-        else:
-            def do_investments(e: Event):
-                pass
 
         for e in EVENTS_DATABASE.events_chronologically():
             kills_made_as_team = self.eps_get(e, "Kills as Team", [])
@@ -779,8 +754,14 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             member_to_team = team_manager.member_to_team
             team_to_members = team_manager.team_to_member_map()
 
-            if invest_first:
-                do_investments(e)
+            if split_scores:
+                date = e.datetime.date()
+                for (killer, victim) in e.kills:
+                    if killer not in day_investers[date] and victim not in previous_kills[killer]:
+                        to_invest = temp_scores[killer] * invest_prop
+                        temp_scores[killer] -= to_invest
+                        perm_scores[killer] += to_invest
+                        day_investers[date].add(killer)
 
             # updates happen atomically, so we calculate them as a batch and then add them back in
             point_deltas = {player: bs_allotment for (player, bs_allotment) in bs_points}
@@ -817,9 +798,6 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                         perm_scores[player] = new_perm_score
                     new_score = 0
                 temp_scores[player] = new_score
-
-            if not invest_first:
-                do_investments(e)
 
             # work out any multiplier transfers
             for (loser, gainer) in e.pluginState.get(self.identifier, {}).get(self.plugin_state["Multiplier Transfers"], []):
