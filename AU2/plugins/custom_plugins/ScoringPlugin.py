@@ -309,7 +309,7 @@ class ScoringPlugin(AbstractPlugin):
                                                        include_hidden=lambda a: not a.is_city_watch)
         formula = self.gsdb_get("Formula")
         score_manager = ScoreManager({a.identifier for a in full_players}, formula=formula, game_end=openseason_end)
-        events = sorted(EVENTS_DATABASE.events.values(), key=lambda e: e.datetime)
+        events = EVENTS_DATABASE.events_chronologically()
         for e in events:
             score_manager.add_event(e)
         rows = []
@@ -471,10 +471,8 @@ Syntax:
                                          ident: self.aps_get(ident, "Bonus")
                                          for ident in ASSASSINS_DATABASE.get_identifiers(include_hidden=True)
                                      })
-        events = sorted(EVENTS_DATABASE.events.values(),
-                        key=lambda e: e.datetime)
         openseason_end = get_game_end() or get_now_dt()
-        for e in events:
+        for e in EVENTS_DATABASE.events_chronologically():
             # stops the duel changing the openseason page
             if e.datetime > openseason_end:
                 break

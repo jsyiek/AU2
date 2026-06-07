@@ -114,7 +114,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Multiplier Transfer": self.identifier + "_multiplier_transfer",
             "Kills as Team": self.identifier + "_kills_as_team",
             "BS Points": self.identifier + "_bs_points",
-            "Event Secret ID": self.identifier + "_event_secret_id"
+            "Event Secret ID": self.identifier + "_event_secret_id",
+            "Event": self.identifier + "_event_id",
         }
 
         self.plugin_state = {
@@ -275,10 +276,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 TeamManager_self.member_to_team.update(team_memb_changes)
                 TeamManager_self.team_to_member_map.cache_clear()
 
-            def process_events_until(self, before_event: int = float("Inf")) -> "TeamManager":
-                for e in EVENTS_DATABASE.events.values():
-                    if int(e._Event__secret_id) >= before_event:
-                        continue
+            def process_events_until(self, last: Optional[Event] = None) -> "TeamManager":
+                for e in EVENTS_DATABASE.events_chronologically(last=last):
                     self.add_event(e)
                 return self
 
@@ -459,28 +458,25 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
     def ask_teams_summary(self) -> List[HTMLComponent]:
         return [
-            # TODO: PR #143 might be able to solve this
-            Label(f"Note: due to technical limitations, {self.identifier} processes events in the order in which they "
-                  f"were added, not in order of the datetimes assigned to each event."),
-            InputWithDropDown(identifier=self.html_ids["Event Secret ID"],
+            InputWithDropDown(identifier=self.html_ids["Event"],
                               title="Select the event AFTER which to view team status",
                               options=[
-                                  (f"({e._Event__secret_id}) "
-                                   f"[{e.datetime.strftime('%Y-%m-%d %H:%M %p')}] {e.headline[0:25].rstrip()}",
-                                   e._Event__secret_id)
-                                  for e in reversed(EVENTS_DATABASE.events.values())
+                                  (e.text_display(),
+                                   e.identifier)
+                                  for e in reversed(EVENTS_DATABASE.events_chronologically())
                               ])
         ]
 
-    def answer_teams_summary(self, htmlResponse) -> List[HTMLComponent]:
+    def answer_teams_summary(self, html_response) -> List[HTMLComponent]:
         teams_str = self.get_cosmetic_name("Teams").capitalize()
         multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
-        team_manager = self.TeamManager().process_events_until(before_event=int(
-            htmlResponse[self.html_ids["Event Secret ID"]]) + 1
-        )
+
+        event = EVENTS_DATABASE.get(html_response[self.html_ids["Event"]])
+
+        team_manager = self.TeamManager().process_events_until(event)
         team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-        multiplier_owners = self.get_multiplier_owners()
+        multiplier_owners = self.get_multiplier_owners(after=event)
         rows = []
         for team_id, team_name in sorted(enumerate(team_names), key=lambda x: x[1]):
             members = team_to_members[team_id]
@@ -563,11 +559,9 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def get_cosmetic_name(self, name: str) -> str:
         return self.gsdb_get(name, name)
 
-    def get_multiplier_owners(self, before_event: int = float("inf")) -> List[str]:
+    def get_multiplier_owners(self, after: Optional[Event] = None) -> List[str]:
         owners = set()
-        for event in EVENTS_DATABASE.events.values():
-            if int(event._Event__secret_id) >= before_event:
-                continue
+        for event in EVENTS_DATABASE.events_chronologically(last=after):
             key = self.plugin_state["Multiplier Transfers"]
             for (loser, gainer) in event.pluginState.get(self.identifier, {}).get(key, []):
                 if loser is not None and loser in owners:
@@ -611,14 +605,19 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                         identifier=self.html_ids["BS Points"],
                         title="[MAY WEEK] Want to award any BS points?",
                     ),
-                    Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
-                          "transferred again after this!"),
-                    *(AssassinDependentTransferEntry(
-                        assassins_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Multiplier Transfer"],
-                        owners=self.get_multiplier_owners(),
-                        title=f"[MAY WEEK] Any {multiplier_str} transfers? (None -> A adds a new {multiplier_str}, A -> None deletes it)"
-                    ) for _ in range(multipliers_enabled)),
+                    *(
+                        (
+                            Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has "
+                                  f"already transferred again after this!"),
+                            AssassinDependentTransferEntry(
+                                assassins_list_identifier="CorePlugin_assassin_pseudonym",
+                                identifier=self.html_ids["Multiplier Transfer"],
+                                owners=[],  # cannot determine for now...
+                                title=f"[MAY WEEK] Any {multiplier_str} transfers?",
+                                transfer_item_name=multiplier_str,
+                            ),
+                        ) if multipliers_enabled else ()
+                    ),
 
                     *(AssassinDependentInputWithDropDown(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
@@ -642,7 +641,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def on_event_create(self, e: Event, html_response) -> List[HTMLComponent]:
-        if self.html_ids["Multiplier Transfers"] in html_response:
+        if self.html_ids["Multiplier Transfer"] in html_response:
             self.eps_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
         self.eps_set(e, "BS Points",  html_response[self.html_ids["BS Points"]])
         if self.html_ids["Kills as Team"] in html_response:
@@ -668,15 +667,20 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                         title="Want to award any BS points?",
                         default=self.eps_get(e, "BS Points", {})
                     ),
-                    Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
-                          "transferred again after this!"),
-                    *(AssassinDependentTransferEntry(
-                        assassins_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Multiplier Transfer"],
-                        owners=self.get_multiplier_owners(before_event=int(e._Event__secret_id)),
-                        title=f"[MAY WEEK] Any {multiplier_str} transfers?",
-                        default=self.eps_get(e, "Multiplier Transfers", [])
-                    ) for _ in range(multipliers_enabled)),
+                    *(
+                        (
+                            Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has "
+                                  f"already transferred again after this!"),
+                            AssassinDependentTransferEntry(
+                                assassins_list_identifier="CorePlugin_assassin_pseudonym",
+                                identifier=self.html_ids["Multiplier Transfer"],
+                                owners=[], # cannot determine for now...
+                                title=f"[MAY WEEK] Any {multiplier_str} transfers?",
+                                default=self.eps_get(e, "Multiplier Transfers", []),
+                                transfer_item_name=multiplier_str,
+                            ),
+                        ) if multipliers_enabled else ()
+                    ),
                     *(AssassinDependentInputWithDropDown(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["Team Changes"],
@@ -700,7 +704,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def on_event_update(self, e: Event, html_response) -> List[HTMLComponent]:
-        if self.html_ids["Multiplier Transfers"] in html_response:
+        if self.html_ids["Multiplier Transfer"] in html_response:
             self.eps_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
         self.eps_set(e, "BS Points",  html_response[self.html_ids["BS Points"]])
         if self.html_ids["Kills as Team"] in html_response:
@@ -709,7 +713,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             self.eps_set(e, "Team Changes", html_response[self.html_ids["Team Changes"]])
         return [Label("[MAY WEEK] Success!")]
 
-    def calculate_scores(self, before_event: int = float("inf"), team_manager = None) -> (Dict[str, float], Dict[str, float]):
+    def calculate_scores(self, team_manager = None) -> (Dict[str, float], Dict[str, float]):
         """
         Returns:
             (temporary points, permanent points)
@@ -765,11 +769,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             def do_investments(e: Event):
                 pass
 
-        # unfortunately events have to processed in order of secret id (i.e. in the order they were created)
-        # so that the multiplier transfer interface in Event -> Create / Event -> Update  works correctly...
-        for e in EVENTS_DATABASE.events.values():
-            if int(e._Event__secret_id) > before_event:
-                continue
+        for e in EVENTS_DATABASE.events_chronologically():
             kills_made_as_team = self.eps_get(e, "Kills as Team", [])
             bs_points = self.eps_get(e, "BS Points", {}).items()
 
@@ -883,7 +883,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             # if using temporary/permanent points, user can configure which of the three headings they want rendered in
             # the player list.  e.g. in MW2024, only total + permanent points were shown, and not temporary points on
             # their own
-            score_values= {
+            score_values = {
                 "temp_points": temp_scores[a_id],
                 "perm_points": perm_scores[a_id],
                 "total_points": score
