@@ -137,7 +137,7 @@ class AbstractPlugin:
 
     @property
     def enabled(self) -> bool:
-        return GENERIC_STATE_DATABASE.plugin_map.get(self.identifier, True)
+        return GENERIC_STATE_DATABASE.plugin_map.setdefault(self.identifier, False)
 
     @enabled.setter
     def enabled(self, val: bool):

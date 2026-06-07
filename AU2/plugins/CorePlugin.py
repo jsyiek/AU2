@@ -91,6 +91,7 @@ GAME_TYPE_PLUGIN_MAP = {
         "WantedPlugin": True,
     }
 }
+REQUIRES_PLAYERS_FIRST = ("Standard Game",)
 BOUNTY_PLUGINS = ("BountyNewsPlugin", "BountyPlugin")
 
 
@@ -1069,9 +1070,9 @@ class CorePlugin(AbstractPlugin):
                 PLUGINS[plugin].enabled = to_enable
                 components.append(Label(f"[CORE] {'En' if to_enable else 'Dis'}abled {plugin}"))
 
-        # require players to be added first.
+        # for certain game types (i.e. those involving city watch or targeting...) require players to be added first.
         # this is done *after* enabling plugins, so that Setup Game can at least help to set up the correct plugins
-        if not ASSASSINS_DATABASE.assassins:
+        if game_type in REQUIRES_PLAYERS_FIRST and not ASSASSINS_DATABASE.assassins:
             components.append(
                 HiddenTextbox(
                     self.config_html_ids["Setup Error"],
