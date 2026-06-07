@@ -106,14 +106,14 @@ class TestMayWeekUtilitiesPlugin:
         for name in p:
             assert perm_scores[name + " identifier"] == 0
 
+        # note: use isclose to test float values because we can get small rounding errors
         # casual victims
         for name in p[0:4]:
-            assert scores[name + " identifier"] == max(0, Sc - D - d*Sc)
+            assert isclose(scores[name + " identifier"], max(0, Sc - D - d*Sc))
         # full player victims
         for name in p[31:36]:
-            assert scores[name + " identifier"] == max(0, Sf - D - d*Sf)
+            assert isclose(scores[name + " identifier"], max(0, Sf - D - d*Sf))
         # full player killers
-        # note: use isclose to test float values because we can get small rounding errors
         assert isclose(scores[p[20] + " identifier"], Sf + B + b * Sf)  # killed a full player
         assert isclose(scores[p[21] + " identifier"], Sf + B + b * Sc)  # killed a casual player
         assert isclose(scores[p[22] + " identifier"], Sf + 2*(B + b * Sf))  # killed two full players
