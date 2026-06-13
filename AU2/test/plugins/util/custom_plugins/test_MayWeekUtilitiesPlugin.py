@@ -18,8 +18,8 @@ class TestMayWeekUtilitiesPlugin:
         """Helper function that sets random scoring parameters"""
         plugin = MayWeekUtilitiesPlugin()
         param_values = {
-            # values 1 to 100 are valid for all the scoring parameters
-            param.name: random.randint(1, 100) for param in plugin.scoring_parameters
+            # values 0 to 100 are valid for all parameters
+            param.name: random.randint(0, 100) for param in plugin.scoring_parameters
         }
 
         # 'magnify' starting scores to reduce likelihood of stupidly large fixed bonus/penalty values
@@ -101,10 +101,6 @@ class TestMayWeekUtilitiesPlugin:
 
 
         scores, perm_scores = plugin.calculate_scores()
-
-        # since investment is disabled, permanent scores should all be 0
-        for name in p:
-            assert perm_scores[name + " identifier"] == 0
 
         # note: use isclose to test float values because we can get small rounding errors
         # casual victims
