@@ -8,8 +8,9 @@ from AU2.test.test_utils import plugin_test, some_players, MockGame
 
 
 expected_scoring_params = [
-    "starting_score_casual", "starting_score_full", "death_penalty_pct", "death_penalty_fixed", "kill_bonus_pct",
-    "kill_bonus_fixed", "team_bonus_pct", "team_bonus_fixed", "multiplier_bonus_pct", "multiplier_bonus_fixed"
+    "starting_score_casual", "starting_score_full", "death_penalty_pct", "death_penalty_fixed", "wanted_penalty_pct",
+    "wanted_penalty_fixed", "kill_bonus_pct", "kill_bonus_fixed", "wanted_bonus_pct", "wanted_bonus_fixed",
+    "team_bonus_pct", "team_bonus_fixed", "multiplier_bonus_pct", "multiplier_bonus_fixed"
 ]
 
 
@@ -18,8 +19,8 @@ class TestMayWeekUtilitiesPlugin:
         """Helper function that sets random scoring parameters"""
         plugin = MayWeekUtilitiesPlugin()
         param_values = {
-            # values 0 to 100 are valid for all parameters
-            param.name: random.randint(0, 100) for param in plugin.scoring_parameters
+            # values 0 to 50  are valid for all parameters
+            param.name: random.randint(0, 50) for param in plugin.scoring_parameters
         }
 
         # 'magnify' starting scores to reduce likelihood of stupidly large fixed bonus/penalty values
@@ -295,3 +296,69 @@ class TestMayWeekUtilitiesPlugin:
         temp_scores4, perm_scores4 = plugin.calculate_scores()
         assert perm_scores4[p[0] + " identifier"] == 0
         assert temp_scores4[p[0] + " identifier"] == 0
+
+    @plugin_test
+    def test_wanted(self):
+        """Tests extra bonuses for killing wanted players and extra penalties for wanted players dying"""
+        plugin = MayWeekUtilitiesPlugin()
+
+        # make sure investment is disabled
+        plugin.answer_set_gimmicks({plugin.html_ids["Gimmicks"]: []})
+
+        param_values = self.set_random_scoring_parameters()
+
+        d = param_values["death_penalty_pct"] / 100
+        D = param_values["death_penalty_fixed"]
+        wd = param_values["wanted_penalty_pct"] / 100
+        Wd = param_values["wanted_penalty_fixed"]
+        b = param_values["kill_bonus_pct"] / 100
+        B = param_values["kill_bonus_fixed"]
+        wb = param_values["wanted_bonus_pct"] / 100
+        Wb = param_values["wanted_bonus_fixed"]
+        Sf = param_values["starting_score_full"]
+
+        p = some_players(50)
+        game = MockGame().having_assassins(p)
+
+        # have player 0 be killed while wanted by player 10
+        game.assassin(p[0]).is_involved_in_event(pluginState={
+            "WantedPlugin": {
+                p[0] + " identifier": (1, "test crime", "survive for 1 day")
+            }
+        }).then().new_datetime(100)
+        game.assassin(p[10]).kills(p[0])
+
+        # have player 1 be killed after having been automatically redeemed
+        game.assassin(p[1]).is_involved_in_event(pluginState={
+            "WantedPlugin": {
+                p[1] + " identifier": (1, "test crime", "survive for 1 day")
+            }
+        }).then().new_datetime(24*60)
+        game.assassin(p[11]).kills(p[1])
+
+        # have player 2 be killed after being *manually* redeemed
+        game.assassin(p[2]).is_involved_in_event(pluginState={
+            "WantedPlugin": {
+                p[2] + " identifier": (1, "test crime", "survive for 1 day")
+            }
+        }).then().new_datetime(10)
+        game.assassin(p[2]).is_involved_in_event(pluginState={
+            "WantedPlugin": {
+                p[2] + " identifier": (0, "", "")
+            }
+        }).then().assassin(p[12]).kills(p[2])
+
+        # now check scores calculated correctly
+        scores, _ = plugin.calculate_scores()
+
+        # player 0 is killed while wanted
+        assert isclose(scores[p[0] + " identifier"], max(0, Sf - d * Sf - D - wd * Sf - Wd))
+        # players 1 and 2 are killed while not wanted
+        for name in p[1:3]:
+            assert isclose(scores[name + " identifier"], max(0, Sf - d * Sf - D))
+
+        # player 10 killed a wanted player (with no other multipliers)
+        assert isclose(scores[p[10] + " identifier"], Sf + b * Sf + B + wb * Sf + Wb)
+        # players 11 and 12 killed non-wanted players (with no other multipliers)
+        for name in p[11:13]:
+            assert isclose(scores[name + " identifier"], Sf + b * Sf + B)
