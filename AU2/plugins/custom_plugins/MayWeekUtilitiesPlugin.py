@@ -227,6 +227,18 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 default_value=1,
                 description="M = Fixed bonus points awarded when kills are made with a multiplier"
             ),
+            ScoringParameter(
+                name="multiple_kill_penalty_pct",
+                default_value=100,
+                description="pk = % multiplier to apply to the points awarded to the killer (after bonuses) for each "
+                            "time the killer has killed the victim previously"
+            ),
+            ScoringParameter(
+                name="multiple_death_mitigation_pct",
+                default_value=100,
+                description="pv = % multiplier to apply to the points lost by the victim (after bonuses) for each "
+                            "time the killer has killed them previously"
+            ),
         ]
         self.html_ids.update({param.name: self.identifier + "_" + param.name.lower() for param in self.scoring_parameters})
         self.plugin_state.update({param.name: param.identifier() for param in self.scoring_parameters})
@@ -240,8 +252,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             "Let I_w = 1 if the victim is Wanted, 0 otherwise.",
             "Let I_t = 1 if the kill was made as a team kill, 0 otherwise.",
             "Let I_m = 1 if the killer was benefiting from a Multiplier, 0 otherwise.",
-            "Then (temporary) points GAINED by the killer = (b*V + B) + I_w * (wb*V + Wb) + I_t * (t*V + T) + I_m * (m*V + M)",
-            "And (temporary) points LOST by the victim = (d*V + D) + I_w * (wd * V + Wd)",
+            "Let n be the number of times the killer has previously killed this victim.",
+            "Then (temporary) points GAINED by the killer = ((b*V + B) + I_w * (wb*V + Wb) + I_t * (t*V + T) + I_m * (m*V + M)) * (pk ** n)",
+            "And (temporary) points LOST by the victim = ((d*V + D) + I_w * (wd * V + Wd)) * (pv ** n)",
+            "(where ** denotes exponentiation).",
         )
 
         self.exports = [
@@ -748,7 +762,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         M = self.gsdb_get("multiplier_bonus_fixed", 0)
         Sc = self.gsdb_get("starting_score_casual", 0)
         Sf = self.gsdb_get("starting_score_full", 0)
+
         invest_prop = self.gsdb_get("Investment %") / 100
+
+        pk = self.gsdb_get("multiple_kill_penalty_pct", 100) / 100
+        pv = self.gsdb_get("multiple_death_mitigation_pct", 100) / 100
 
         wanted_manager = WantedManager()
         wanted_manager.activated = True
@@ -763,7 +781,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         perm_scores: Dict[str, float] = defaultdict(lambda: 0)
 
-        previous_kills: Dict[str, Set[str]] = defaultdict(set)  # map { identifier: set of victims }
+        previous_kills: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(lambda: 0))  # map { identifier: {victim: times killed}}
         day_investers: Dict[datetime.date, Set[str]] = defaultdict(set) # map { day: set of players who invested}
 
         multiplier_owners = set()
@@ -790,7 +808,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             if split_scores:
                 date = e.datetime.date()
                 for (killer, victim) in e.kills:
-                    if killer not in day_investers[date] and victim not in previous_kills[killer]:
+                    if killer not in day_investers[date] and previous_kills[killer][victim] == 0:
                         to_invest = temp_scores[killer] * invest_prop
                         temp_scores[killer] -= to_invest
                         perm_scores[killer] += to_invest
@@ -800,10 +818,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             point_deltas = {player: bs_allotment for (player, bs_allotment) in bs_points}
 
             for (killer, victim) in e.kills:
-                previous_kills[killer].add(victim)
-
                 is_wanted = int(wanted_manager.is_player_wanted(victim, e.datetime))
-
                 is_as_team = int(teams_enabled and (killer, victim) in kills_made_as_team)
                 is_with_multiplier = multipliers_enabled and killer in multiplier_owners
                 if team_multiplier_sharing_enabled and not is_with_multiplier:
@@ -818,16 +833,13 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                     + is_wanted * (V * wb + Wb)
                     + is_as_team * (V * t + T)
                     + is_with_multiplier * (V * m + M)
-                )
+                ) * (pk ** previous_kills[killer][victim])
                 point_deltas[victim] = point_deltas.get(victim, 0) - (
                     V * d + D
                     + is_wanted * (V * wd + Wd)
-                )
-                # useful for debugging
-                """print(f"{killer} kills {victim}")
-                print(f"V = {V}")
-                print(f"killer gains {V} * {b} + {B} + {is_wanted} * ({V} * {wb} + {Wb}) + {is_as_team} * ({V} * {t} + {T}) + {is_with_multiplier} * ({V} * {m} + {M})")
-                print(f"victim loses {V} * {d} + {D} + {is_wanted} * ({V} * {wd} + {Wd})")"""
+                ) * (pv ** previous_kills[killer][victim])
+
+                previous_kills[killer][victim] += 1
 
             # resolve deltas once all worked out
             for player in point_deltas:

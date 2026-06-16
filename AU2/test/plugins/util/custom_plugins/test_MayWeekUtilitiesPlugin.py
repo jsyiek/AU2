@@ -10,7 +10,8 @@ from AU2.test.test_utils import plugin_test, some_players, MockGame
 expected_scoring_params = [
     "starting_score_casual", "starting_score_full", "death_penalty_pct", "death_penalty_fixed", "wanted_penalty_pct",
     "wanted_penalty_fixed", "kill_bonus_pct", "kill_bonus_fixed", "wanted_bonus_pct", "wanted_bonus_fixed",
-    "team_bonus_pct", "team_bonus_fixed", "multiplier_bonus_pct", "multiplier_bonus_fixed"
+    "team_bonus_pct", "team_bonus_fixed", "multiplier_bonus_pct", "multiplier_bonus_fixed", "multiple_kill_penalty_pct",
+    "multiple_death_mitigation_pct"
 ]
 
 
@@ -141,6 +142,7 @@ class TestMayWeekUtilitiesPlugin:
         b = param_values["kill_bonus_pct"] / 100
         B = param_values["kill_bonus_fixed"]
         Sf = param_values["starting_score_full"]
+        pk = param_values["multiple_kill_penalty_pct"] / 100
 
         invest_pct = random.randint(1, 100)
         plugin.answer_config_perm_points({
@@ -204,7 +206,7 @@ class TestMayWeekUtilitiesPlugin:
         assert isclose(temp_scores2[p[0] + " identifier"],
                        temp_scores[p[0] + " identifier"] + B + b * Sf)
         assert isclose(temp_scores2[p[1] + " identifier"],
-                       temp_scores[p[1] + " identifier"] + B + b * temp_scores[p[11] + " identifier"])
+                       temp_scores[p[1] + " identifier"] + (B + b * temp_scores[p[11] + " identifier"]) * pk)
 
         # now move to the next day (but less than 24 hrs from the original kills!)
         game.new_datetime(minutes=16*60)
@@ -223,7 +225,7 @@ class TestMayWeekUtilitiesPlugin:
 
         # also check that temp scores updated correctly
         assert isclose(temp_scores3[p[0] + " identifier"],
-                       temp_scores2[p[0] + " identifier"] + B + b * temp_scores2[p[12] + " identifier"])
+                       temp_scores2[p[0] + " identifier"] + (B + b * temp_scores2[p[12] + " identifier"]) * pk)
         assert isclose(temp_scores3[p[1] + " identifier"],
                        keep_prop * temp_scores2[p[1] + " identifier"] + B + b * temp_scores2[p[10] + " identifier"])
         assert isclose(temp_scores3[p[2] + " identifier"],
@@ -362,3 +364,80 @@ class TestMayWeekUtilitiesPlugin:
         # players 11 and 12 killed non-wanted players (with no other multipliers)
         for name in p[11:13]:
             assert isclose(scores[name + " identifier"], Sf + b * Sf + B)
+
+    @plugin_test
+    def test_tapering_points(self):
+        """
+        Tests the multipliers applied to points gained / lost from repeated kills
+        """
+        plugin = MayWeekUtilitiesPlugin()
+
+        # make sure investment is disabled, as this complicates the expected scores...
+        plugin.answer_set_gimmicks({plugin.html_ids["Gimmicks"]: []})
+
+        param_values = self.set_random_scoring_parameters()
+
+        d = param_values["death_penalty_pct"] / 100
+        D = param_values["death_penalty_fixed"]
+        wd = param_values["wanted_penalty_pct"] / 100
+        Wd = param_values["wanted_penalty_fixed"]
+        b = param_values["kill_bonus_pct"] / 100
+        B = param_values["kill_bonus_fixed"]
+        wb = param_values["wanted_bonus_pct"] / 100
+        Wb = param_values["wanted_bonus_fixed"]
+        Sf = param_values["starting_score_full"]
+
+        pk = param_values["multiple_kill_penalty_pct"] / 100
+        pv = param_values["multiple_death_mitigation_pct"] / 100
+
+        p = some_players(60)
+        game = MockGame().having_assassins(p)
+
+        # setup some initial kills
+        for i in range(10):
+            game.assassin(p[i]).kills(p[i+20])
+
+        # have player 20 be killed a second time by player while wanted to test that this bonus is applied first
+        game.assassin(p[20]).is_involved_in_event(pluginState={
+            "WantedPlugin": {
+                p[20] + " identifier": (1, "test crime", "survive for 1 day")
+            }
+        }).then().new_datetime(100)
+        game.assassin(p[0]).kills(p[20])
+        # have player 21 be killed a second time, but by a different player who hasn't made a kill
+        game.assassin(p[10]).kills(p[21])
+        # have player 22 be killed a second time, by a different player making their second kill
+        game.assassin(p[1]).kills(p[22])
+        # have player 2 kill a player who hasn't been killed previously
+        game.assassin(p[2]).kills(p[30])
+
+        # for testing additional tapering
+        n_repeats = {(p[i], p[i+10]): random.randint(2, 10) for i in range(40, 50)}
+        for (killer, victim), n in n_repeats.items():
+            for _ in range(n):
+                game.assassin(killer).kills(victim)
+
+        scores, _ = plugin.calculate_scores()
+
+        ONE_KILL_SCORE = Sf + B + b*Sf
+        ONE_DEATH_SCORE = max(0, Sf - D - d*Sf)
+
+        assert isclose(scores[p[0] + " identifier"],
+                       ONE_KILL_SCORE + (B + b * ONE_DEATH_SCORE + Wb + wb * ONE_DEATH_SCORE) * pk)
+        assert isclose(scores[p[20] + " identifier"],
+                       max(0, ONE_DEATH_SCORE - (D + d * ONE_DEATH_SCORE + Wd + wd * ONE_DEATH_SCORE) * pv))
+        assert isclose(scores[p[10] + " identifier"], Sf + B + b * ONE_DEATH_SCORE)
+        assert isclose(scores[p[21] + " identifier"], max(0, ONE_DEATH_SCORE - D - d * ONE_DEATH_SCORE))
+        assert isclose(scores[p[1] + " identifier"], ONE_KILL_SCORE + B + b * ONE_DEATH_SCORE)
+        assert isclose(scores[p[22] + " identifier"], max(0, ONE_DEATH_SCORE - D - d * ONE_DEATH_SCORE))
+        assert isclose(scores[p[2] + " identifier"], ONE_KILL_SCORE + B + b * Sf)
+
+        for (killer, victim), n in n_repeats.items():
+            expected_victim_score = Sf
+            expected_killer_score = Sf
+            for i in range(n):
+                expected_killer_score += (B + b * expected_victim_score) * (pk ** i)
+                expected_victim_score -= (D + d * expected_victim_score) * (pv ** i)
+                expected_victim_score = max(0, expected_victim_score)
+            assert isclose(scores[killer + " identifier"], expected_killer_score)
+            assert isclose(scores[victim + " identifier"], expected_victim_score)
