@@ -10,7 +10,7 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
+from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
 from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
 from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
@@ -630,7 +630,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["BS Points"],
                         title="[MAY WEEK] Want to award any BS points?",
@@ -691,7 +691,7 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["BS Points"],
                         title="Want to award any BS points?",
