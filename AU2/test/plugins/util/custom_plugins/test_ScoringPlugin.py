@@ -15,7 +15,7 @@ class TestScoringPlugin:
         m = ScoreManager(assassin_ids=[name + " identifier" for name in mockGame.all_assassins
                                        if not (filter_city_watch and mockGame.assassin_model(name).is_city_watch)],
                          perma_death=perma_death)
-        for e in sorted(EVENTS_DATABASE.events.values(), key=lambda e: e.datetime):
+        for e in EVENTS_DATABASE.events_chronologically():
             m.add_event(e)
         return m
 

@@ -279,12 +279,10 @@ class CityWatchPlugin(AbstractPlugin):
 
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         message = []
-        events = list(EVENTS_DATABASE.events.values())
-        events.sort(key=lambda event: event.datetime)
 
         city_watch_rank_manager = CityWatchRankManager(auto_ranking=self.gsdb_get("Auto Rank"), city_watch_kill_ranking=self.gsdb_get("City Watch Kills Rankup"))
         death_manager = DeathManager()
-        for e in events:
+        for e in EVENTS_DATABASE.events_chronologically():
             city_watch_rank_manager.add_event(e)
             death_manager.add_event(e)
 

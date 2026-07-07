@@ -107,7 +107,7 @@ def get_active_players(death_manager: DeathManager) -> Set[str]:
     """
     active_players = []
 
-    for e in sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime):
+    for e in EVENTS_DATABASE.events_chronologically():
         death_manager.add_event(e)
         for killer, _ in e.kills:
             active_players.append(killer)
@@ -120,8 +120,6 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
     """
     Returns a list of calculated player informations (see struct above)
     """
-    events = list(EVENTS_DATABASE.events.values())
-    events.sort(key=lambda event: event.datetime)
     start_datetime: datetime.datetime = get_game_start()
 
     competency_manager = CompetencyManager(start_datetime)
@@ -130,7 +128,7 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
     # populates the death manager
     active_players = get_active_players(death_manager)
 
-    for e in events:
+    for e in EVENTS_DATABASE.events_chronologically():
         competency_manager.add_event(e)
 
     infos = {}
@@ -377,12 +375,10 @@ class CompetencyPlugin(AbstractPlugin):
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
         if hook == "SRCFPlugin_email":
-            events = list(EVENTS_DATABASE.events.values())
-            events.sort(key=lambda event: event.datetime)
 
             competency_manager = CompetencyManager(get_game_start())
             death_manager = DeathManager()
-            for e in events:
+            for e in EVENTS_DATABASE.events_chronologically():
                 competency_manager.add_event(e)
                 death_manager.add_event(e)
 
@@ -573,14 +569,12 @@ class CompetencyPlugin(AbstractPlugin):
         return [Table(deadlines, headings=headings)]
 
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
-        events = list(EVENTS_DATABASE.events.values())
-        events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
 
         competency_manager = CompetencyManager(start_datetime)
         death_manager = DeathManager()
         limit = htmlResponse[self.html_ids["Datetime"]]
-        for e in events:
+        for e in EVENTS_DATABASE.events_chronologically():
             if e.datetime > limit:
                 break
             competency_manager.add_event(e)
