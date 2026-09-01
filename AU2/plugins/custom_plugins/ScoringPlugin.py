@@ -645,8 +645,6 @@ Syntax:
                 page_content = OPENSEASON_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,
                     TABLE=table_str,
-                    NUM_DUELLISTS=max_duellists,
-                    INCO_CONDITION="" if allow_inco else "who are competent at the end of the game",
                 )
 
         navbar_entries.append(OPENSEASON_NAVBAR_ENTRY)
