@@ -16,6 +16,7 @@ from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalD
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
+from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, NavbarEntry
@@ -24,9 +25,43 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
-from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT
+from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
 from AU2.plugins.util.render_utils import event_datetime_link, get_color, render_headline_and_reports
+
+STANDINGS_TABLE_TEMPLATE = """
+<table xmlns="" class="playerlist">
+  <tr><th>Real Name</th><th>College</th><th>Points</th></tr>
+  {ROWS}
+</table>
+"""
+
+STANDINGS_ROW_TEMPLATE = """
+<tr><td>{NAME}</td><td>{COLLEGE}</td><td>{POINTS:g}</tr>
+"""
+
+DUELLISTS_INTRO_TEXT_TEMPLATE = """
+<p>Our {NUM_DUELLISTS} duellists:</p>
+"""
+
+UNDISPUTED_WINNER_TEXT = """
+<p>Our undisputed victor:</p>
+"""
+
+EXLCUDED_INCOS_INTRO_TEXT = """
+<p>Players excluded from the duel due to being inco:</p>
+"""
+
+OTHERS_INTRO_TEXT = """
+<p>The other players who survived Open Season:</p>
+"""
+
+# note: although it uses a different template, the standings page is saved as openseason.html.
+#       if we start using e.g. jinja for templates the conditional generation can be done in a single template...
+STANDINGS_PAGE_TEMPLATE: str
+STANDINGS_PAGE_TEMPLATE_PATH: pathlib.Path = ROOT_DIR / "plugins" / "custom_plugins" / "html_templates" / "standings.html"
+with open(STANDINGS_PAGE_TEMPLATE_PATH, "r", encoding="utf-8", errors="ignore") as F:
+    STANDINGS_PAGE_TEMPLATE = F.read()
 
 OPENSEASON_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
@@ -181,6 +216,9 @@ class ScoringPlugin(AbstractPlugin):
             "Stats Order": self.identifier + "_stats_order",
             "Generate Stats Page?": self.identifier + "_stats_page",
             "Download table-sort.js?": self.identifier + "_download_table_sort_js",
+            "Max Duellists": self.identifier + "_max_duellists",
+            "Allow Inco Duellists?": self.identifier + "_inco_duellists",
+            "% Points Requirement": self.identifier + "_pct_duel_points_req",
         }
 
         self.plugin_state = {
@@ -190,6 +228,9 @@ class ScoringPlugin(AbstractPlugin):
                 "Real Name", "Pseudonym", "Number of Kills", "Conkers Score"
             ]},
             "Visualise Kills?": {'id': self.identifier + "_visualise_kills", 'default': True},
+            "Max Duellists": {'id': self.identifier + "_max_duellists", 'default': 6},
+            "Allow Inco Duellists?": {'id': self.identifier + "_inco_duellists", 'default': False},
+            "% Points Requirement": {'id': self.identifier + "_pct_duel_points_requirement", 'default': 50},
         }
 
         self.assassin_plugin_state = {
@@ -218,6 +259,12 @@ class ScoringPlugin(AbstractPlugin):
                 "Scoring -> Set formula",
                 self.ask_set_formula,
                 self.answer_set_formula
+            ),
+            ConfigExport(
+                "scoring_duel_conditions",
+                "Scoring -> Set duel eligibility conditions",
+                self.ask_set_duel_conditions,
+                self.answer_set_duel_conditions,
             ),
             # TODO: move this to debug exports if that is implemented (as per https://github.com/jsyiek/AU2/issues/36)
             ConfigExport(
@@ -394,6 +441,38 @@ class ScoringPlugin(AbstractPlugin):
             self.gsdb_remove("Start")
         return [Label("[SCORING] Set open season start.")]
 
+    def ask_set_duel_conditions(self) -> List[HTMLComponent]:
+        return [
+            IntegerEntry(
+                self.html_ids["Max Duellists"],
+                "Maximum number of duellists",
+                self.gsdb_get("Max Duellists"),
+            ),
+            Checkbox(
+                self.html_ids["Allow Inco Duellists?"],
+                "Allow inco duellists?",
+                self.gsdb_get("Allow Inco Duellists?"),
+            ),
+            FloatEntry(
+                self.html_ids["% Points Requirement"],
+                "% of lowest-scoring duellist's points required to qualify for the duel",
+                self.gsdb_get("% Points Requirement"),
+            ),
+        ]
+
+    def answer_set_duel_conditions(self, html_response) -> List[HTMLComponent]:
+        max_duellists = html_response[self.html_ids["Max Duellists"]]
+        allow_inco = html_response[self.html_ids["Allow Inco Duellists?"]]
+        pct_pts_req = html_response[self.html_ids["% Points Requirement"]]
+        self.gsdb_set("Max Duellists", max_duellists)
+        self.gsdb_set("Allow Inco Duellists?", allow_inco)
+        self.gsdb_set("% Points Requirement", pct_pts_req)
+        return [
+            Label(f"[SCORING] Set duel eligibility conditions: {max_duellists} "
+                  f"top-scoring {'' if allow_inco else 'non-inco '}players with score >={pct_pts_req}% of the lowest "
+                  f"scoring duellist above them.")
+        ]
+
     def ask_set_formula(self):
         # TODO: have a Formula component that validates the formula,
         #       and give detail on formula syntax
@@ -456,6 +535,8 @@ Syntax:
     def _generate_openseason_page(self, navbar_entries: List[NavbarEntry]):
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
+        open_season_end = get_game_end()
+        is_postgame = open_season_end and get_now_dt() >= open_season_end
         if not open_season_start or open_season_start >= get_now_dt():
             return []
         # also don't generate if formula is invalid
@@ -471,43 +552,115 @@ Syntax:
                                          ident: self.aps_get(ident, "Bonus")
                                          for ident in ASSASSINS_DATABASE.get_identifiers(include_hidden=True)
                                      })
+        # needed for duel eligibility
+        competency_manager = CompetencyManager(get_game_start())
         openseason_end = get_game_end() or get_now_dt()
         for e in EVENTS_DATABASE.events_chronologically():
             # stops the duel changing the openseason page
             if e.datetime > openseason_end:
                 break
             score_manager.add_event(e)
+            competency_manager.add_event(e)
 
-        table_str = "Something went wrong..."
+        page_content = "Something went wrong..."
         if score_manager.live_assassins:
             # score_manager caches score, so calling twice is fine!
             # *negative* of score is used for sorting so that high scorers end up at the top of the page
             live_assassins = sorted((ASSASSINS_DATABASE.get(ident) for ident in score_manager.live_assassins
                                      if not ASSASSINS_DATABASE.get(ident).hidden),
                                     key=lambda a: (-score_manager.get_score(a), a.college.lower(), a.real_name.lower()))
-            rows = []
-            for a in live_assassins:
-                rows.append(
-                    OPENSEASON_ROW_TEMPLATE.format(
-                        NAME=a.real_name,
-                        ADDRESS=a.address,
-                        COLLEGE=a.college,
-                        WATER_STATUS=a.water_status,
-                        NOTES=a.notes,
-                        POINTS=score_manager.get_score(a)
+
+            max_duellists = self.gsdb_get("Max Duellists")
+            allow_inco = self.gsdb_get("Allow Inco Duellists?")
+            prop_pts_req = self.gsdb_get("% Points Requirement") / 100
+
+            if is_postgame:
+                # generate final standings
+                duellists = []
+                excluded_incos = []
+                others = []
+                points_req = 0
+                for a in live_assassins:
+                    if len(duellists) < max_duellists and (len(duellists) < 2 or score_manager.get_score(a) >= points_req):
+                        if allow_inco or not competency_manager.is_inco_at(a, openseason_end):
+                            duellists.append(a)
+                            points_req = score_manager.get_score(a) * prop_pts_req
+                        else:
+                            excluded_incos.append(a)
+                    else:
+                        others.append(a)
+
+                duellist_table_str = (
+                    (
+                        UNDISPUTED_WINNER_TEXT if len(duellists) == 1
+                        else DUELLISTS_INTRO_TEXT_TEMPLATE.format(NUM_DUELLISTS=len(duellists))
+                    ) + STANDINGS_TABLE_TEMPLATE.format(
+                        ROWS="\n".join(
+                            STANDINGS_ROW_TEMPLATE.format(
+                                NAME=a.real_name,
+                                COLLEGE=a.college,
+                                POINTS=score_manager.get_score(a),
+                            )
+                            for a in duellists
+                        )
                     )
                 )
-            table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
+                excluded_incos_str = ""
+                if excluded_incos:
+                    excluded_incos_str = EXLCUDED_INCOS_INTRO_TEXT + STANDINGS_TABLE_TEMPLATE.format(
+                        ROWS="\n".join(
+                            STANDINGS_ROW_TEMPLATE.format(
+                                NAME=a.real_name,
+                                COLLEGE=a.college,
+                                POINTS=score_manager.get_score(a),
+                            )
+                            for a in excluded_incos
+                        )
+                    )
+                others_table_str = ""
+                if others:
+                    others_table_str = OTHERS_INTRO_TEXT + STANDINGS_TABLE_TEMPLATE.format(
+                        ROWS="\n".join(
+                            STANDINGS_ROW_TEMPLATE.format(
+                                NAME=a.real_name,
+                                COLLEGE=a.college,
+                                POINTS=score_manager.get_score(a),
+                            )
+                            for a in others
+                        )
+                    )
+                page_content = STANDINGS_PAGE_TEMPLATE.format(
+                    YEAR=get_now_dt().year,
+                    NUM_DUELLISTS=len(duellists),
+                    DUELLISTS_TABLE=duellist_table_str,
+                    EXCLUDED_INCOS=excluded_incos_str,
+                    OTHERS_TABLE=others_table_str,
+                )
+
+            else:
+                # generate live open season page
+                rows = []
+                for a in live_assassins:
+                    rows.append(
+                        OPENSEASON_ROW_TEMPLATE.format(
+                            NAME=a.real_name,
+                            ADDRESS=a.address,
+                            COLLEGE=a.college,
+                            WATER_STATUS=a.water_status,
+                            NOTES=a.notes,
+                            POINTS=score_manager.get_score(a)
+                        )
+                    )
+                table_str = OPENSEASON_TABLE_TEMPLATE.format(ROWS="".join(rows))
+                page_content = OPENSEASON_PAGE_TEMPLATE.format(
+                    YEAR=get_now_dt().year,
+                    TABLE=table_str,
+                )
 
         navbar_entries.append(OPENSEASON_NAVBAR_ENTRY)
 
         with open(WEBPAGE_WRITE_LOCATION / OPENSEASON_NAVBAR_ENTRY.url, "w+", encoding="utf-8") as F:
-            F.write(
-                OPENSEASON_PAGE_TEMPLATE.format(
-                    YEAR=get_now_dt().year,
-                    TABLE=table_str
-                )
-            )
+            F.write(page_content)
 
         return [Label("[SCORING] Generated openseason page.")]
 
