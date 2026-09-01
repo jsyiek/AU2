@@ -12,6 +12,10 @@ class DigitsChallenge(HTMLComponent):
     name: str = "DigitsChallenge"
 
     def __init__(self, identifier: str, title: str):
+        # validate that can `title` includes the {digits} formatting code
+        # (.format will work regardless, but the component doesn't make sense without including the digits to repeat!)
+        if "{digits}" not in title:
+            raise ValueError(f"DigitsChallenge title '{title}' does not contain '{{digits}}'.")
         self.title = title
         self.identifier = identifier
         super().__init__()
