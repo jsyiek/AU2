@@ -208,8 +208,9 @@ class ScoringPlugin(AbstractPlugin):
             "Stats Order": self.identifier + "_stats_order",
             "Generate Stats Page?": self.identifier + "_stats_page",
             "Download table-sort.js?": self.identifier + "_download_table_sort_js",
-            "Number of Duellists": self.identifier + "_num_duellists",
+            "Max Duellists": self.identifier + "_max_duellists",
             "Allow Inco Duellists?": self.identifier + "_inco_duellists",
+            "% Points Requirement": self.identifier + "_pct_duel_points_req",
         }
 
         self.plugin_state = {
@@ -219,8 +220,9 @@ class ScoringPlugin(AbstractPlugin):
                 "Real Name", "Pseudonym", "Number of Kills", "Conkers Score"
             ]},
             "Visualise Kills?": {'id': self.identifier + "_visualise_kills", 'default': True},
-            "Number of Duellists": {'id': self.identifier + "_num_duellists", 'default': 4},
+            "Max Duellists": {'id': self.identifier + "_max_duellists", 'default': 6},
             "Allow Inco Duellists?": {'id': self.identifier + "_inco_duellists", 'default': False},
+            "% Points Requirement": {'id': self.identifier + "_pct_duel_points_requirement", 'default': 50},
         }
 
         self.assassin_plugin_state = {
@@ -434,24 +436,33 @@ class ScoringPlugin(AbstractPlugin):
     def ask_set_duel_conditions(self) -> List[HTMLComponent]:
         return [
             IntegerEntry(
-                self.html_ids["Number of Duellists"],
-                "Number of duellists",
-                self.gsdb_get("Number of Duellists"),
+                self.html_ids["Max Duellists"],
+                "Maximum number of duellists",
+                self.gsdb_get("Max Duellists"),
             ),
             Checkbox(
                 self.html_ids["Allow Inco Duellists?"],
                 "Allow inco duellists?",
                 self.gsdb_get("Allow Inco Duellists?"),
-            )
+            ),
+            FloatEntry(
+                self.html_ids["% Points Requirement"],
+                "% of lowest-scoring duellist's points required to qualify for the duel",
+                self.gsdb_get("% Points Requirement"),
+            ),
         ]
 
     def answer_set_duel_conditions(self, html_response) -> List[HTMLComponent]:
-        num_duellists = html_response[self.html_ids["Number of Duellists"]]
+        max_duellists = html_response[self.html_ids["Max Duellists"]]
         allow_inco = html_response[self.html_ids["Allow Inco Duellists?"]]
-        self.gsdb_set("Number of Duellists", num_duellists)
+        pct_pts_req = html_response[self.html_ids["% Points Requirement"]]
+        self.gsdb_set("Max Duellists", max_duellists)
         self.gsdb_set("Allow Inco Duellists?", allow_inco)
+        self.gsdb_set("% Points Requirement", pct_pts_req)
         return [
-            Label(f"[SCORING] Set duel eligibility conditions: {num_duellists} top-scoring {'' if allow_inco else 'non-inco '}players.")
+            Label(f"[SCORING] Set duel eligibility conditions: {max_duellists} "
+                  f"top-scoring {'' if allow_inco else 'non-inco '}players with score >={pct_pts_req}% of the lowest "
+                  f"scoring duellist above them.")
         ]
 
     def ask_set_formula(self):
@@ -517,7 +528,7 @@ Syntax:
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
         open_season_end = get_game_end()
-        is_postgame = get_now_dt() >= open_season_end
+        is_postgame = open_season_end and get_now_dt() >= open_season_end
         if not open_season_start or open_season_start >= get_now_dt():
             return []
         # also don't generate if formula is invalid
@@ -554,18 +565,21 @@ Syntax:
                                      if not ASSASSINS_DATABASE.get(ident).hidden),
                                     key=lambda a: (-score_manager.get_score(a), a.college.lower(), a.real_name.lower()))
 
-            num_duellists = self.gsdb_get("Number of Duellists")
+            max_duellists = self.gsdb_get("Max Duellists")
             allow_inco = self.gsdb_get("Allow Inco Duellists?")
+            prop_pts_req = self.gsdb_get("% Points Requirement") / 100
 
             if is_postgame:
                 # generate final standings
                 duellists = []
                 excluded_incos = []
                 others = []
+                points_req = 0
                 for a in live_assassins:
-                    if len(duellists) < num_duellists:
+                    if len(duellists) < max_duellists and (len(duellists) < 2 or score_manager.get_score(a) >= points_req):
                         if allow_inco or not competency_manager.is_inco_at(a, openseason_end):
                             duellists.append(a)
+                            points_req = score_manager.get_score(a) * prop_pts_req
                         else:
                             excluded_incos.append(a)
                     else:
@@ -631,7 +645,7 @@ Syntax:
                 page_content = OPENSEASON_PAGE_TEMPLATE.format(
                     YEAR=get_now_dt().year,
                     TABLE=table_str,
-                    NUM_DUELLISTS=num_duellists,
+                    NUM_DUELLISTS=max_duellists,
                     INCO_CONDITION="" if allow_inco else "who are competent at the end of the game",
                 )
 
