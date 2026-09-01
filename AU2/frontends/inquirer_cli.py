@@ -916,8 +916,7 @@ def render(html_component, dependency_context={}):
         if isinstance(selection, DangerousConfigExport):
             if explanation := selection.danger_explanation():
                 print(explanation)
-                i = random.randint(0, 1000000)
-                if str(i) != inquirer.text(f"Type {i} to access this config option"):
+                if not render(DigitsChallenge("c", "Type {digits} to access this config option"))["c"]:
                     raise KeyboardInterrupt
 
         return {html_component.identifier: selection}
