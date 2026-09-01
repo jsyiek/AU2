@@ -40,6 +40,14 @@ STANDINGS_ROW_TEMPLATE = """
 <tr><td>{NAME}</td><td>{COLLEGE}</td><td>{POINTS:g}</tr>
 """
 
+DUELLISTS_INTRO_TEXT_TEMPLATE = """
+<p>Our {NUM_DUELLISTS} duellists:</p>
+"""
+
+UNDISPUTED_WINNER_TEXT = """
+<p>Our undisputed victor:</p>
+"""
+
 EXLCUDED_INCOS_INTRO_TEXT = """
 <p>Players excluded from the duel due to being inco:</p>
 """
@@ -585,14 +593,19 @@ Syntax:
                     else:
                         others.append(a)
 
-                duellist_table_str = STANDINGS_TABLE_TEMPLATE.format(
-                    ROWS="\n".join(
-                        STANDINGS_ROW_TEMPLATE.format(
-                            NAME=a.real_name,
-                            COLLEGE=a.college,
-                            POINTS=score_manager.get_score(a),
+                duellist_table_str = (
+                    (
+                        UNDISPUTED_WINNER_TEXT if len(duellists) == 1
+                        else DUELLISTS_INTRO_TEXT_TEMPLATE.format(NUM_DUELLISTS=len(duellists))
+                    ) + STANDINGS_TABLE_TEMPLATE.format(
+                        ROWS="\n".join(
+                            STANDINGS_ROW_TEMPLATE.format(
+                                NAME=a.real_name,
+                                COLLEGE=a.college,
+                                POINTS=score_manager.get_score(a),
+                            )
+                            for a in duellists
                         )
-                        for a in duellists
                     )
                 )
                 excluded_incos_str = ""
