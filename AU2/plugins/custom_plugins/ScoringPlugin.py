@@ -22,12 +22,12 @@ from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
-from AU2.plugins.util.render_utils import get_color, render_headline_and_reports, event_url
 from AU2.plugins.util.ScoreManager import ScoreManager
 from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.util.date_utils import get_now_dt, timestamp_to_dt, dt_to_timestamp, DATETIME_FORMAT, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, get_game_end
+from AU2.plugins.util.render_utils import event_datetime_link, get_color, render_headline_and_reports
 
 STANDINGS_TABLE_TEMPLATE = """
 <table xmlns="" class="playerlist">
@@ -356,7 +356,7 @@ class ScoringPlugin(AbstractPlugin):
                                                        include_hidden=lambda a: not a.is_city_watch)
         formula = self.gsdb_get("Formula")
         score_manager = ScoreManager({a.identifier for a in full_players}, formula=formula, game_end=openseason_end)
-        events = sorted(EVENTS_DATABASE.events.values(), key=lambda e: e.datetime)
+        events = EVENTS_DATABASE.events_chronologically()
         for e in events:
             score_manager.add_event(e)
         rows = []
@@ -375,7 +375,7 @@ class ScoringPlugin(AbstractPlugin):
             # list of datetimes at which the player died, if applicable,
             # each with a link to the corresponding event on the news pages
             # note: the link may be broken for may week games... (see https://github.com/jsyiek/AU2/issues/161)
-            deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
+            deaths = [event_datetime_link(e)
                       if openseason_end is None or e.datetime < openseason_end
                       else "Duel"
                       for e in score_manager.get_death_events(p)]
@@ -554,11 +554,8 @@ Syntax:
                                      })
         # needed for duel eligibility
         competency_manager = CompetencyManager(get_game_start())
-
-        events = sorted(EVENTS_DATABASE.events.values(),
-                        key=lambda e: e.datetime)
         openseason_end = get_game_end() or get_now_dt()
-        for e in events:
+        for e in EVENTS_DATABASE.events_chronologically():
             # stops the duel changing the openseason page
             if e.datetime > openseason_end:
                 break

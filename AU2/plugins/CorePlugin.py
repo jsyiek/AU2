@@ -37,7 +37,8 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, Hoo
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.game import get_allow_html, get_game_end, get_game_start, HTML_REPORT_PREFIX, set_allow_html, \
+    set_game_end, set_game_start
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.render_utils import generate_navbar
 
@@ -76,22 +77,21 @@ GAME_TYPE_PLUGIN_MAP = {
         "UIConfigPlugin": True,
         "WantedPlugin": True,
     },
-    # Can't implement Setup Game for MayWeekUtilitiesPlugin at the moment because config options depend on whether
-    # teams are enabled or not, and doing a partial implementation would mislead users.
-    # "May Week": {
-    #     "CompetencyPlugin":False,
-    #     "LocalBackupPlugin": True,
-    #     "MafiaPlugin": False,
-    #     "MayWeekUtilitiesPlugin": True,
-    #     "PageGeneratorPlugin": True,  # needed to be able to hide events
-    #     "CityWatchPlugin": False,
-    #     "RandomGamePlugin": False,
-    #     "ScoringPlugin": False,
-    #     "TargetingPlugin": False,
-    #     "UIConfigPlugin": True,
-    #     "WantedPlugin": True,
-    # }
+    "May Week": {
+        "CompetencyPlugin":False,
+        "LocalBackupPlugin": True,
+        "MafiaPlugin": False,
+        "MayWeekUtilitiesPlugin": True,
+        "PageGeneratorPlugin": True,  # needed to be able to hide events
+        "CityWatchPlugin": False,
+        "RandomGamePlugin": False,
+        "ScoringPlugin": False,
+        "TargetingPlugin": False,
+        "UIConfigPlugin": True,
+        "WantedPlugin": True,
+    }
 }
+REQUIRES_PLAYERS_FIRST = ("Standard Game",)
 BOUNTY_PLUGINS = ("BountyNewsPlugin", "BountyPlugin")
 
 
@@ -279,6 +279,12 @@ class CorePlugin(AbstractPlugin):
                 "CorePlugin -> Set game end",
                 self.ask_set_game_end,
                 self.answer_set_game_end
+            ),
+            ConfigExport(
+                "core_plugin_set_allow_html",
+                "CorePlugin -> Allow/disallow HTML",
+                self.ask_set_html_allowed,
+                self.answer_set_html_allowed
             ),
             ConfigExport(
                 "core_plugin_suppress_exports",
@@ -519,11 +525,13 @@ class CorePlugin(AbstractPlugin):
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         return [
             *self.ask_set_game_start(),
+            *self.ask_set_html_allowed(),
         ]
 
     def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
         return [
             *self.answer_set_game_start(htmlResponse),
+            *self.answer_set_html_allowed(htmlResponse),
         ]
 
     def get_all_exports(self, include_suppressed: bool = False) -> List[Export]:
@@ -1023,6 +1031,20 @@ class CorePlugin(AbstractPlugin):
             else Label(f"[CORE] Unset game end.")
         ]
 
+    def ask_set_html_allowed(self) -> List[HTMLComponent]:
+        return [
+            Label("Below you can enable HTML in player reports and pseudonyms. "
+                  f"Any HTML reports / pseudonyms must be prefixed by {HTML_REPORT_PREFIX} to render correctly. "
+                  "HTML in headlines will always be rendered, "
+                  "regardless of this setting and without needing to be prefixed."),
+            Checkbox(self.identifier + "_allow_html", "Allow HTML in reports and pseudonyms?", get_allow_html())
+        ]
+
+    def answer_set_html_allowed(self, html_response) -> List[HTMLComponent]:
+        allow = html_response[self.identifier + "_allow_html"]
+        set_allow_html(allow)
+        return [Label(f"[CORE] {'A' if allow else 'Disa'}llowing HTML in pseudonyms / reports.")]
+
     def gather_game_types(self) -> List[str]:
         return list(GAME_TYPE_PLUGIN_MAP)
 
@@ -1048,9 +1070,9 @@ class CorePlugin(AbstractPlugin):
                 PLUGINS[plugin].enabled = to_enable
                 components.append(Label(f"[CORE] {'En' if to_enable else 'Dis'}abled {plugin}"))
 
-        # require players to be added first.
+        # for certain game types (i.e. those involving city watch or targeting...) require players to be added first.
         # this is done *after* enabling plugins, so that Setup Game can at least help to set up the correct plugins
-        if not ASSASSINS_DATABASE.assassins:
+        if game_type in REQUIRES_PLAYERS_FIRST and not ASSASSINS_DATABASE.assassins:
             components.append(
                 HiddenTextbox(
                     self.config_html_ids["Setup Error"],
@@ -1069,7 +1091,8 @@ class CorePlugin(AbstractPlugin):
             Label("AU2 has two different plugins for setting bounties."),
             Label("'BountyNewsPlugin' is the allows you to mark certain events as bounties, "
                   "causing them to be rendered on the page bounty-news.html. See May Week 2025 in the archive for an "
-                  "example."),
+                  "example. (Note however that BountyNewsPlugin currently has some issues when used in May Week)."),
+            # ^ the issues are addressed by https://github.com/jsyiek/AU2/pull/178 which is yet to be merged...
             Label("'BountyPlugin' on the other hand displays bounties in a table, on the page bounties.html. "
                   "See Lent 2025 in the archive for an example."),
             SelectorList(

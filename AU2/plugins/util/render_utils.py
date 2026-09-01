@@ -13,7 +13,7 @@ from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.WantedManager import WantedManager
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
-from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt
+from AU2.plugins.util.date_utils import datetime_to_time_str, date_to_weeks_and_days, get_now_dt, PRETTY_DATETIME_FORMAT
 from AU2.plugins.util.game import get_game_start, soft_escape
 
 NEWS_TEMPLATE: str
@@ -106,12 +106,25 @@ def default_page_allocator(e: Event) -> Optional[Chapter]:
         return Chapter(f"Week {week} News", NavbarEntry(f"news{week:02}.html", f"Week {week} Reports", week))
 
 
-def event_url(e: Event, page: Optional[str] = None) -> str:
+def event_url(e: Event, page: Optional[str] = None) -> Optional[str]:
     """
     Generates the (relative) url pointing to this event's appearance on the news pages.
     """
-    page = page or default_page_allocator(e).nav_entry.url
+    if not page:
+        ch = default_page_allocator(e)
+        if not ch:
+            return None
+        page = ch.nav_entry.url
     return f"{page}#{e._Event__secret_id}"
+
+
+def event_datetime_link(e: Event) -> str:
+    """
+    Creates an HTML <a> tag linking to a sepecified event
+    """
+    url = event_url(e)
+    dt = e.datetime.strftime(PRETTY_DATETIME_FORMAT)
+    return f'<a href="{url}">{dt}</a>' if url else dt
 
 
 class Manager(Protocol):

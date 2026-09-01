@@ -1,5 +1,6 @@
 from collections import defaultdict
 import dataclasses
+import datetime
 import functools
 from typing import DefaultDict, Dict, List, Optional, Sequence, Set
 
@@ -9,23 +10,26 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model import Event, Assassin
 from AU2.html_components import HTMLComponent
-from AU2.html_components.DependentComponents.AssassinDependentIntegerEntry import AssassinDependentIntegerEntry
+from AU2.html_components.DependentComponents.AssassinDependentFloatEntry import AssassinDependentFloatEntry
 from AU2.html_components.DependentComponents.AssassinDependentTransferEntry import AssassinDependentTransferEntry
 from AU2.html_components.DependentComponents.KillDependentSelector import KillDependentSelector
 from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
 from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
+from AU2.html_components.SimpleComponents.FloatEntry import FloatEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
+from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, ConfigExport, Export, NavbarEntry
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.render_utils import Chapter, generate_news_pages, get_color, Manager
+from AU2.plugins.util.WantedManager import WantedManager
 
 
 HEX_COLS = [
@@ -37,12 +41,12 @@ HEX_COLS = [
 ]
 
 CREW_COLOR_TEMPLATE = 'style="background-color:{HEX}"'
-TEAM_ENTRY_TEMPLATE = "<td {CREW_COLOR}>{TEAM}</td>"
-TEAM_HDR_TEMPLATE = "<th>{TEAM_STR}</th>"
+ENTRY_TEMPLATE = "<td {CREW_COLOR}>{VALUE}</td>"
+HDR_TEMPLATE = "<th>{HEADING}</th>"
 PLAYER_ROW_TEMPLATE = "<tr><td>{REAL_NAME}</td><td>{PLAYER_TYPE}</td><td>{ADDRESS}</td><td>{COLLEGE}</td><td>{WATER_STATUS}</td><td>{NOTES}</td></tr>"
 PSEUDONYM_ROW_TEMPLATE = ("<tr><td {CREW_COLOR}>{PSEUDONYM}</td>"
-                         "<td {CREW_COLOR}>{POINTS}</td>"
-                         "<td {CREW_COLOR}>{MULTIPLIER}</td>"
+                         "{POINTS_ENTRY}"
+                         "{MULTIPLIER_ENTRY}"
                          "{TEAM_ENTRY}</tr>")
 
 MAYWEEK_PLAYERS_NAVBAR_ENTRY = NavbarEntry("mw-players.html", "Players", -2)
@@ -84,23 +88,45 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def __init__(self):
         super().__init__(type(self).__name__)
 
+        self.gimmick_names = {
+            "teams": "Teams",
+            "multipliers": "Multipliers",
+            "investment": "Temporary/Permanent Points",
+        }
+
+        self.point_type_names = {
+            "temp_points": "Temporary Points",
+            "perm_points": "Permanent Points",
+            "total_points": "Total Points",
+        }
+
         self.html_ids = {
             "Team Names": self.identifier + "_team_names",
-            "Enable Teams?": self.identifier + "_enable_teams",
+            "Gimmicks": self.identifier + "_gimmicks",
             "Share Multipliers?": self.identifier + "_share_multipliers",
+            "Investment %": self.identifier + "_investment_pct",
+            "Deplete Permanent Points?": self.identifier + "_deplete_perm_pts",
+            "Perm Points Floor": self.identifier + "_perm_pts_floor",
+            "Visible Points": self.identifier + "_visible_points",
             "Assassins": self.identifier + "_assassins",
             "Team ID": self.identifier + "_team_id",
             "Team Changes": self.identifier + "_team_changes",
             "Multiplier Transfer": self.identifier + "_multiplier_transfer",
             "Kills as Team": self.identifier + "_kills_as_team",
             "BS Points": self.identifier + "_bs_points",
-            "Event Secret ID": self.identifier + "_event_secret_id"
+            "Event Secret ID": self.identifier + "_event_secret_id",
+            "Event": self.identifier + "_event_id",
         }
 
         self.plugin_state = {
             "Team Names": "team_names",
-            "Enable Teams?": "enable_teams",
+            "Gimmick Map": "gimmick_map",
             "Share Multipliers?": "share_multipliers",
+            "Investment %": "investment_pct",
+            "Invest first?": "invest_first",
+            "Deplete Permanent Points?": "deplete_perm_pts",
+            "Perm Points Floor": "perm_pts_floor",
+            "Visible Points": "visible_points",
             "Team Members": "team_members",
             "Team Changes": "team_changes",
             "Multiplier Transfers": "multiplier_transfers",
@@ -110,12 +136,22 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         self.ps_defaults = {
             "Team Names": ["Team 1", "Team 2", "Team 3"],
-            "Share Multipliers?": False
+            "Gimmick Map": {},
+            "Share Multipliers?": False,
+            "Investment %": 0,
+            "Invest first?": True,
+            "Deplete Permanent Points?": True,
+            "Perm Points Floor": None,
+            "Visible Points": list(self.point_type_names)
         }
 
         self.cosmetics = [
             "Multiplier",
             "Teams",
+            "Points",
+            "Temporary Points",
+            "Permanent Points",
+            "Total Points",
         ]
         self.html_ids.update({k: self.identifier + "_" + k.lower() for k in self.cosmetics})
         self.plugin_state.update({k: k.lower() for k in self.cosmetics})
@@ -142,8 +178,18 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 description="D = Fixed number of points lost by player when they die"
             ),
             ScoringParameter(
+                name="wanted_penalty_pct",
+                default_value=0,
+                description="wd = % of points additionally lost by a Wanted player when they die"
+            ),
+            ScoringParameter(
+                name="wanted_penalty_fixed",
+                default_value=0,
+                description="Wd = Fixed number of additional penalty points lost by a Wanted player when they die"
+            ),
+            ScoringParameter(
                 name="kill_bonus_pct",
-                default_value=135,
+                default_value=35,
                 description="b = % of victim's points gained by the killer"
             ),
             ScoringParameter(
@@ -152,34 +198,65 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 description="B = Fixed points awarded for each kill"
             ),
             ScoringParameter(
+                name="wanted_bonus_pct",
+                default_value=0,
+                description="wb = % of a Wanted victim's points additionally gained by the killer"
+            ),
+            ScoringParameter(
+                name="wanted_bonus_fixed",
+                default_value=0,
+                description="Wb = Fixed bonus points awarded for each kill of a Wanted player"
+            ),
+            ScoringParameter(
                 name="team_bonus_pct",
-                default_value=115,
-                description="t = % bonus points awarded overall when the kill is made with a team"
+                default_value=15,
+                description="t = % of victim's points additionally gained by the killer when the kill is made with a team"
             ),
             ScoringParameter(
                 name="team_bonus_fixed",
                 default_value=1,
-                description="T = Fixed points awarded when kills are made with a team"
+                description="T = Fixed bonus points awarded when kills are made with a team"
             ),
             ScoringParameter(
                 name="multiplier_bonus_pct",
-                default_value=125,
-                description="m = % bonus points obtained for a player when they kill with a multiplier"
+                default_value=25,
+                description="m = % of victim's points additionally gained by the killer when they kill with a multiplier"
             ),
             ScoringParameter(
                 name="multiplier_bonus_fixed",
                 default_value=1,
-                description="M = Fixed points awarded when kills are made with a multiplier"
-            )
+                description="M = Fixed bonus points awarded when kills are made with a multiplier"
+            ),
+            ScoringParameter(
+                name="multiple_kill_penalty_pct",
+                default_value=100,
+                description="pk = % multiplier to apply to the points awarded to the killer (after bonuses) for each "
+                            "time the killer has killed the victim previously"
+            ),
+            ScoringParameter(
+                name="multiple_death_mitigation_pct",
+                default_value=100,
+                description="pv = % multiplier to apply to the points lost by the victim (after bonuses) for each "
+                            "time the killer has killed them previously"
+            ),
         ]
         self.html_ids.update({param.name: self.identifier + "_" + param.name.lower() for param in self.scoring_parameters})
         self.plugin_state.update({param.name: param.identifier() for param in self.scoring_parameters})
 
         for p in self.scoring_parameters:
-            self.gsdb_set(p.name, p.default_value)
+            self.ps_defaults[p.name] = p.default_value
 
-        self.printable_gain_formula = "Points gained from kills: ((V*b + B)*t + T)*m + M"
-        self.printable_loss_formula = "Points lost from death: -V*d - D"
+        self.formula_explanation = (
+            "The scoring formula for each kill is defined as follows:",
+            "Let V be the victim's (temporary) points prior to the kill."
+            "Let I_w = 1 if the victim is Wanted, 0 otherwise.",
+            "Let I_t = 1 if the kill was made as a team kill, 0 otherwise.",
+            "Let I_m = 1 if the killer was benefiting from a Multiplier, 0 otherwise.",
+            "Let n be the number of times the killer has previously killed this victim.",
+            "Then (temporary) points GAINED by the killer = ((b*V + B) + I_w * (wb*V + Wb) + I_t * (t*V + T) + I_m * (m*V + M)) * (pk ** n)",
+            "And (temporary) points LOST by the victim = ((d*V + D) + I_w * (wd * V + Wd)) * (pv ** n)",
+            "(where ** denotes exponentiation).",
+        )
 
         self.exports = [
             Export(
@@ -192,10 +269,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
         self.config_exports = [
             ConfigExport(
-                identifier="may_week_enable_teams",
-                display_name="May Week -> Enable/disable Teams",
-                ask=self.ask_enable_teams,
-                answer=self.answer_enable_teams
+                identifier="may_week_set_gimmicks",
+                display_name="May Week -> Enable/disable MW gimmicks",
+                ask=self.ask_set_gimmicks,
+                answer=self.answer_set_gimmicks
             ),
             ConfigExport(
                 identifier="may_week_set_team_names",
@@ -208,6 +285,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 display_name="May Week -> Enable/disable multiplier team sharing",
                 ask=self.ask_enable_multiplier_team_sharing,
                 answer=self.answer_enable_multiplier_team_sharing
+            ),
+            ConfigExport(
+                identifier="may_week_config_perm_points",
+                display_name="May Week -> Configure Permanent Points",
+                ask=self.ask_config_perm_points,
+                answer=self.answer_config_perm_points,
             ),
             ConfigExport(
                 identifier="may_week_cosmetics",
@@ -234,10 +317,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 TeamManager_self.member_to_team.update(team_memb_changes)
                 TeamManager_self.team_to_member_map.cache_clear()
 
-            def process_events_until(self, before_event: int = float("Inf")) -> "TeamManager":
-                for e in EVENTS_DATABASE.events.values():
-                    if int(e._Event__secret_id) >= before_event:
-                        continue
+            def process_events_until(self, last: Optional[Event] = None) -> "TeamManager":
+                for e in EVENTS_DATABASE.events_chronologically(last=last):
                     self.add_event(e)
                 return self
 
@@ -251,8 +332,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 return memb_map
         self.TeamManager = TeamManager
 
-    def gsdb_get(self, plugin_state_id, default):
-        return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(self.plugin_state[plugin_state_id], default)
+    def gsdb_get(self, plugin_state_id, default = None):
+        return GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get(
+            self.plugin_state[plugin_state_id],
+            self.ps_defaults.get(plugin_state_id, default)
+        )
 
     def gsdb_set(self, plugin_state_id, data):
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]] = data
@@ -263,27 +347,32 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
     def eps_set(self, e: Event, plugin_state_id, data):
         e.pluginState.setdefault(self.identifier, {})[self.plugin_state[plugin_state_id]] = data
 
-
-    def ask_enable_teams(self):
-        return [Checkbox(
-            title="Enable teams?",
-            identifier=self.html_ids["Enable Teams?"],
-            checked=self.gsdb_get("Enable Teams?", False)
-        )]
-
-    def answer_enable_teams(self, html_response):
-        enabled = html_response[self.html_ids["Enable Teams?"]]
-        self.gsdb_set("Enable Teams?", enabled)
+    def ask_set_gimmicks(self) -> List[HTMLComponent]:
         return [
-            Label("Teams are now: " + "enabled" if enabled else "disabled")
+            SelectorList(
+                identifier=self.html_ids["Gimmicks"],
+                title="Which May Week features should be enabled?",
+                options=[(v, k) for k, v in self.gimmick_names.items()],
+                defaults=[k for k, v in self.gsdb_get("Gimmick Map", {}).items() if v]
+            )
         ]
 
+    def answer_set_gimmicks(self, html_response) -> List[HTMLComponent]:
+        gimmicks = html_response[self.html_ids["Gimmicks"]]
+        self.gsdb_set("Gimmick Map", {ident: True for ident in gimmicks})
+        return [
+            Label("[MAY WEEK] Enabled: " + ', '.join(self.gimmick_names[ident] for ident in gimmicks))
+        ]
+
+
     def ask_enable_multiplier_team_sharing(self):
-        return [Checkbox(
-            title="Should multipliers be shared within teams?",
-            identifier=self.html_ids["Share Multipliers?"],
-            checked=self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
-        )]
+        return [
+            Checkbox(
+                title="Should multipliers be shared within teams?",
+                identifier=self.html_ids["Share Multipliers?"],
+                checked=self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
+            )
+        ]
 
     def answer_enable_multiplier_team_sharing(self, html_response):
         enabled = html_response[self.html_ids["Share Multipliers?"]]
@@ -292,9 +381,57 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             Label("Team multiplier sharing is now: " + "enabled" if enabled else "disabled")
         ]
 
+    def ask_config_perm_points(self):
+        return [
+            FloatEntry(
+                title="% of Temporary Points to convert into Permanent Points when investing",
+                identifier=self.html_ids["Investment %"],
+                default=self.gsdb_get("Investment %"),
+            ),
+            Checkbox(
+                title="Transfer Permanent Points back to Temporary Points if the latter falls below 0?",
+                identifier=self.html_ids["Deplete Permanent Points?"],
+                checked=self.gsdb_get("Deplete Permanent Points?"),
+            ),
+            FloatEntry(
+                title="Floor for Permanent Points (Permanent Points will not be allowed to decrease below this value; "
+                      "leave blank for no floor)",
+                identifier=self.html_ids["Perm Points Floor"],
+                default=self.gsdb_get("Perm Points Floor"),
+                optional=True,
+            ),
+            SelectorList(
+                title="Which types of points should be shown in the player list?",
+                identifier=self.html_ids["Visible Points"],
+                options=[(v, k) for k, v in self.point_type_names.items()],
+                defaults=self.gsdb_get("Visible Points"),
+            )
+        ]
+
+    def answer_config_perm_points(self, html_response):
+        investment_pct = html_response[self.html_ids["Investment %"]]
+
+        if investment_pct < 0 or investment_pct > 100:
+            return [Label(f"[ERROR] Cannot invest {investment_pct}% of temporary points!")]
+
+        deplete_perm_pts = html_response[self.html_ids["Deplete Permanent Points?"]]
+        perm_pts_floor = html_response[self.html_ids["Perm Points Floor"]]
+        visible_point_types = html_response[self.html_ids["Visible Points"]]
+
+        self.gsdb_set("Investment %", investment_pct)
+        self.gsdb_set("Deplete Permanent Points?", deplete_perm_pts)
+        self.gsdb_set("Perm Points Floor", perm_pts_floor)
+        self.gsdb_set("Visible Points", visible_point_types)
+
+        # TODO: more informative message
+        return [Label("[MAY WEEK] Configured permanent points.")]
+
     def ask_name_teams(self):
         existing_ranks: List[str] = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-        default_text = "# Enter team names each on a new line.\n# Lines starting with hashtags will be ignored.\n"
+        default_text = ("# Enter team names each on a new line.\n"
+                        "# Lines starting with hashtags will be ignored.\n"
+                        "# Note that each team is identified by its position in this list, so if editing team names "
+                        "during a game, only add new teams to the *end* of this list.\n")
         return [
             LargeTextEntry(
                 title="Rename teams",
@@ -332,14 +469,12 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
     def ask_set_scoring_params(self):
         return [
-            Label("Set scoring parameters for the following formulae:"),
-            Label(self.printable_gain_formula),
-            Label(self.printable_loss_formula),
+            *(Label(t) for t in self.formula_explanation),  # need separate label for each line
             *(IntegerEntry(
                 title=param.description,
                 default=self.gsdb_get(param.name, param.default_value),
                 identifier=self.html_ids[param.name]
-            ) for param in self.scoring_parameters)
+            ) for param in self.scoring_parameters),
         ]
 
     def answer_set_scoring_params(self, html_response):
@@ -353,28 +488,25 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
 
     def ask_teams_summary(self) -> List[HTMLComponent]:
         return [
-            # TODO: PR #143 might be able to solve this
-            Label(f"Note: due to technical limitations, {self.identifier} processes events in the order in which they "
-                  f"were added, not in order of the datetimes assigned to each event."),
-            InputWithDropDown(identifier=self.html_ids["Event Secret ID"],
+            InputWithDropDown(identifier=self.html_ids["Event"],
                               title="Select the event AFTER which to view team status",
                               options=[
-                                  (f"({e._Event__secret_id}) "
-                                   f"[{e.datetime.strftime('%Y-%m-%d %H:%M %p')}] {e.headline[0:25].rstrip()}",
-                                   e._Event__secret_id)
-                                  for e in reversed(EVENTS_DATABASE.events.values())
+                                  (e.text_display(),
+                                   e.identifier)
+                                  for e in reversed(EVENTS_DATABASE.events_chronologically())
                               ])
         ]
 
-    def answer_teams_summary(self, htmlResponse) -> List[HTMLComponent]:
+    def answer_teams_summary(self, html_response) -> List[HTMLComponent]:
         teams_str = self.get_cosmetic_name("Teams").capitalize()
         multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
-        team_manager = self.TeamManager().process_events_until(before_event=int(
-            htmlResponse[self.html_ids["Event Secret ID"]]) + 1
-        )
+
+        event = EVENTS_DATABASE.get(html_response[self.html_ids["Event"]])
+
+        team_manager = self.TeamManager().process_events_until(event)
         team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-        multiplier_owners = self.get_multiplier_owners()
+        multiplier_owners = self.get_multiplier_owners(after=event)
         rows = []
         for team_id, team_name in sorted(enumerate(team_names), key=lambda x: x[1]):
             members = team_to_members[team_id]
@@ -390,43 +522,57 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        team_str = self.get_cosmetic_name("Teams").capitalize()
-        multiplier_str = self.get_cosmetic_name("Multiplier").lower()
-        teams_enabled = self.gsdb_get("Enable Teams?", False)
-        team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
+        gimmick_map = self.gsdb_get("Gimmick Map")
+        teams_enabled = gimmick_map.get("teams", False)
+        split_scores = gimmick_map.get("investment", False)
+        multipliers_enabled = gimmick_map.get("multipliers", False)
         team_manager = self.TeamManager()
-        scores = self.calculate_scores(team_manager=team_manager)
-        multiplier_owners = self.get_multiplier_owners()
-        multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
+        temp_scores, perm_scores = self.calculate_scores(team_manager=team_manager)
 
-        team = team_manager.member_to_team[assassin.identifier]
-        team_name = team_names[team] if team is not None else "(Individual)"
+        score_str = self.get_cosmetic_name("Points")
+        score = temp_scores[assassin.identifier] + perm_scores[assassin.identifier]
+        response = [(score_str, score)]
+        if split_scores:
+            temp_score_str = self.get_cosmetic_name("Temporary Points")
+            perm_score_str = self.get_cosmetic_name("Permanent Points")
+            response.extend((
+                (temp_score_str, temp_scores[assassin.identifier]),
+                (perm_score_str, perm_scores[assassin.identifier]),
+            ))
 
-        return [
-            ("Score", scores[assassin.identifier]),
-            # will render as plural, but eh
-            *((team_str, team_name) for _ in range(teams_enabled)),
-            (f"Has {multiplier_str}", "Y" if assassin.identifier in multiplier_owners else "N"),
-            (f"Benefits from {multiplier_str}", "Y" if assassin.identifier in multiplier_beneficiaries else "N")
-        ]
+        if teams_enabled:
+            team_str = self.get_cosmetic_name("Teams").capitalize()
+            team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
+            team = team_manager.member_to_team[assassin.identifier]
+            team_name = team_names[team] if team is not None else "(Individual)"
+            response.extend(((team_str, team_name),))
+
+        if multipliers_enabled:
+            multiplier_str = self.get_cosmetic_name("Multiplier").lower()
+            multiplier_owners = self.get_multiplier_owners()
+            multiplier_beneficiaries = self.get_multiplier_beneficiaries(multiplier_owners, team_manager)
+            response.extend((
+                (f"Has {multiplier_str}", "Y" if assassin.identifier in multiplier_owners else "N"),
+                (f"Benefits from {multiplier_str}", "Y" if assassin.identifier in multiplier_beneficiaries else "N"),
+            ))
+        return response
 
     def render_event_summary(self, event: Event) -> List[AttributePairTableRow]:
         response = []
-
-        if self.gsdb_get("Enable Teams?", False):
-            team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
-            team_str = self.get_cosmetic_name("Teams").capitalize()
-            for i, (a_id, t_id) in enumerate(self.eps_get(event, "Team Changes", {}).items()):
-                a = ASSASSINS_DATABASE.get(a_id)
-                change_str = f"{a.snapshot()} " + (
-                    f"joins {team_names[t_id]}" if t_id is not None
-                    else "goes it alone"
-                )
-                response.append((f"{team_str} Change {i+1}", change_str))
-            for i, (killer_id, victim_id) in enumerate(self.eps_get(event, "Kills as Team", [])):
-                killer = ASSASSINS_DATABASE.get(killer_id)
-                victim = ASSASSINS_DATABASE.get(victim_id)
-                response.append((f"{team_str} Kill {i+1} ", f"{killer.snapshot()} kills {victim.snapshot()}"))
+        
+        team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
+        team_str = self.get_cosmetic_name("Teams").capitalize()
+        for i, (a_id, t_id) in enumerate(self.eps_get(event, "Team Changes", {}).items()):
+            a = ASSASSINS_DATABASE.get(a_id)
+            change_str = f"{a.snapshot()} " + (
+                f"joins {team_names[t_id]}" if t_id is not None
+                else "goes it alone"
+            )
+            response.append((f"{team_str} Change {i+1}", change_str))
+        for i, (killer_id, victim_id) in enumerate(self.eps_get(event, "Kills as Team", [])):
+            killer = ASSASSINS_DATABASE.get(killer_id)
+            victim = ASSASSINS_DATABASE.get(victim_id)
+            response.append((f"{team_str} Kill {i+1} ", f"{killer.snapshot()} kills {victim.snapshot()}"))
 
         multiplier_str = self.get_cosmetic_name("Multiplier").capitalize()
         for i, (old_owner, receiver) in enumerate(self.eps_get(event, "Multiplier Transfers", [])):
@@ -441,13 +587,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return response
 
     def get_cosmetic_name(self, name: str) -> str:
-        return self.gsdb_get(name, name.lower())
+        return self.gsdb_get(name, name)
 
-    def get_multiplier_owners(self, before_event: int = float("inf")) -> List[str]:
+    def get_multiplier_owners(self, after: Optional[Event] = None) -> List[str]:
         owners = set()
-        for event in EVENTS_DATABASE.events.values():
-            if int(event._Event__secret_id) >= before_event:
-                continue
+        for event in EVENTS_DATABASE.events_chronologically(last=after):
             key = self.plugin_state["Multiplier Transfers"]
             for (loser, gainer) in event.pluginState.get(self.identifier, {}).get(key, []):
                 if loser is not None and loser in owners:
@@ -457,7 +601,10 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return list(owners)
 
     def get_multiplier_beneficiaries(self, multiplier_owners: List[str], team_manager) -> List[str]:
-        teams_enabled = self.gsdb_get("Enable Teams?", False)
+        gimmick_map = self.gsdb_get("Gimmick Map")
+        if not gimmick_map.get("multipliers", False):
+            return []
+        teams_enabled = gimmick_map.get("teams", False)
         if teams_enabled:
             member_to_team = team_manager.member_to_team
             team_to_members = team_manager.team_to_member_map()
@@ -473,26 +620,33 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return multiplier_beneficiaries
 
     def on_event_request_create(self) -> List[HTMLComponent]:
+        gimmick_map = self.gsdb_get("Gimmick Map")
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
+        multipliers_enabled = gimmick_map.get("multipliers", False)
         teams_str = self.get_cosmetic_name("Teams").lower()
-        teams_enabled = self.gsdb_get("Enable Teams?", False)
+        teams_enabled = gimmick_map.get("teams", False)
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["BS Points"],
                         title="[MAY WEEK] Want to award any BS points?",
                     ),
-                    Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
-                          "transferred again after this!"),
-                    AssassinDependentTransferEntry(
-                        assassins_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Multiplier Transfer"],
-                        owners=self.get_multiplier_owners(),
-                        title=f"[MAY WEEK] Any {multiplier_str} transfers? (None -> A adds a new {multiplier_str}, A -> None deletes it)"
+                    *(
+                        (
+                            Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has "
+                                  f"already transferred again after this!"),
+                            AssassinDependentTransferEntry(
+                                assassins_list_identifier="CorePlugin_assassin_pseudonym",
+                                identifier=self.html_ids["Multiplier Transfer"],
+                                owners=[],  # cannot determine for now...
+                                title=f"[MAY WEEK] Any {multiplier_str} transfers?",
+                                transfer_item_name=multiplier_str,
+                            ),
+                        ) if multipliers_enabled else ()
                     ),
 
                     *(AssassinDependentInputWithDropDown(
@@ -517,7 +671,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def on_event_create(self, e: Event, html_response) -> List[HTMLComponent]:
-        self.eps_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
+        if self.html_ids["Multiplier Transfer"] in html_response:
+            self.eps_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
         self.eps_set(e, "BS Points",  html_response[self.html_ids["BS Points"]])
         if self.html_ids["Kills as Team"] in html_response:
             self.eps_set(e, "Kills as Team", html_response[self.html_ids["Kills as Team"]])
@@ -526,28 +681,35 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         return [Label("[MAY WEEK] Success!")]
 
     def on_event_request_update(self, e: Event) -> List[HTMLComponent]:
+        gimmick_map = self.gsdb_get("Gimmick Map")
         multiplier_str = self.get_cosmetic_name("Multiplier").lower()
+        multipliers_enabled = gimmick_map.get("multipliers", False)
         teams_str = self.get_cosmetic_name("Teams").lower()
-        teams_enabled = self.gsdb_get("Enable Teams?", False)
+        teams_enabled = gimmick_map.get("teams", False)
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
         return [
             Dependency(
                 dependentOn="CorePlugin_assassin_pseudonym",
                 htmlComponents=[
-                    AssassinDependentIntegerEntry(
+                    AssassinDependentFloatEntry(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
                         identifier=self.html_ids["BS Points"],
                         title="Want to award any BS points?",
                         default=self.eps_get(e, "BS Points", {})
                     ),
-                    Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has already "
-                          "transferred again after this!"),
-                    AssassinDependentTransferEntry(
-                        assassins_list_identifier="CorePlugin_assassin_pseudonym",
-                        identifier=self.html_ids["Multiplier Transfer"],
-                        owners=self.get_multiplier_owners(before_event=int(e._Event__secret_id)),
-                        title=f"[MAY WEEK] Any {multiplier_str} transfers?",
-                        default=self.eps_get(e, "Multiplier Transfers", [])
+                    *(
+                        (
+                            Label(f"[MAY WEEK] WARNING! Changing this will not play nicely if the {multiplier_str} has "
+                                  f"already transferred again after this!"),
+                            AssassinDependentTransferEntry(
+                                assassins_list_identifier="CorePlugin_assassin_pseudonym",
+                                identifier=self.html_ids["Multiplier Transfer"],
+                                owners=[], # cannot determine for now...
+                                title=f"[MAY WEEK] Any {multiplier_str} transfers?",
+                                default=self.eps_get(e, "Multiplier Transfers", []),
+                                transfer_item_name=multiplier_str,
+                            ),
+                        ) if multipliers_enabled else ()
                     ),
                     *(AssassinDependentInputWithDropDown(
                         pseudonym_list_identifier="CorePlugin_assassin_pseudonym",
@@ -572,7 +734,8 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         ]
 
     def on_event_update(self, e: Event, html_response) -> List[HTMLComponent]:
-        self.eps_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
+        if self.html_ids["Multiplier Transfer"] in html_response:
+            self.eps_set(e, "Multiplier Transfers", html_response[self.html_ids["Multiplier Transfer"]])
         self.eps_set(e, "BS Points",  html_response[self.html_ids["BS Points"]])
         if self.html_ids["Kills as Team"] in html_response:
             self.eps_set(e, "Kills as Team", html_response[self.html_ids["Kills as Team"]])
@@ -580,11 +743,19 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             self.eps_set(e, "Team Changes", html_response[self.html_ids["Team Changes"]])
         return [Label("[MAY WEEK] Success!")]
 
-    def calculate_scores(self, before_event: int = float("inf"), team_manager = None) -> Dict[str, float]:
+    def calculate_scores(self, team_manager = None) -> (Dict[str, float], Dict[str, float]):
+        """
+        Returns:
+            (temporary points, permanent points)
+        """
         d = self.gsdb_get("death_penalty_pct", 0) / 100
         D = self.gsdb_get("death_penalty_fixed", 0)
+        wd = self.gsdb_get("wanted_penalty_pct", 0) / 100
+        Wd = self.gsdb_get("wanted_penalty_fixed", 0)
         b = self.gsdb_get("kill_bonus_pct", 0) / 100
         B = self.gsdb_get("kill_bonus_fixed", 0)
+        wb = self.gsdb_get("wanted_bonus_pct", 0) / 100
+        Wb = self.gsdb_get("wanted_bonus_fixed", 0)
         t = self.gsdb_get("team_bonus_pct", 0) / 100
         T = self.gsdb_get("team_bonus_fixed", 0)
         m = self.gsdb_get("multiplier_bonus_pct", 0) / 100
@@ -592,22 +763,40 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         Sc = self.gsdb_get("starting_score_casual", 0)
         Sf = self.gsdb_get("starting_score_full", 0)
 
+        invest_prop = self.gsdb_get("Investment %") / 100
+
+        pk = self.gsdb_get("multiple_kill_penalty_pct", 100) / 100
+        pv = self.gsdb_get("multiple_death_mitigation_pct", 100) / 100
+
+        wanted_manager = WantedManager()
+        wanted_manager.activated = True
         # passing a team manager allows us to extract team information after this function runs
         team_manager = team_manager or self.TeamManager()
 
-        scores: Dict[str, float] = {a.identifier: Sf if not a.is_city_watch else Sc for a in ASSASSINS_DATABASE.get_filtered(
+
+        temp_scores: Dict[str, float] = {a.identifier: Sf if not a.is_city_watch else Sc for a in ASSASSINS_DATABASE.get_filtered(
             include_hidden = lambda _: True  # probably not necessary in May Week (since no resurrection as city watch),
                                              # but just in case...
         )}
-        multiplier_owners = set()
-        teams_enabled = self.gsdb_get("Enable Teams?", False)
-        team_multiplier_sharing_enabled = teams_enabled and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
 
-        # unfortunately events have to processed in order of secret id (i.e. in the order they were created)
-        # so that the multiplier transfer interface in Event -> Create / Event -> Update  works correctly...
-        for e in EVENTS_DATABASE.events.values():
-            if int(e._Event__secret_id) > before_event:
-                continue
+        perm_scores: Dict[str, float] = defaultdict(lambda: 0)
+
+        previous_kills: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(lambda: 0))  # map { identifier: {victim: times killed}}
+        day_investers: Dict[datetime.date, Set[str]] = defaultdict(set) # map { day: set of players who invested}
+
+        multiplier_owners = set()
+        gimmick_map = self.gsdb_get("Gimmick Map")
+        teams_enabled = gimmick_map.get("teams", False)
+        multipliers_enabled = gimmick_map.get("multipliers", False)
+        team_multiplier_sharing_enabled = (
+                teams_enabled and multipliers_enabled
+                and self.gsdb_get("Share Multipliers?", self.ps_defaults["Share Multipliers?"])
+        )
+        split_scores = gimmick_map.get("investment", False)
+        deplete_perm_pts = split_scores and self.gsdb_get("Deplete Permanent Points?")
+        perm_pts_floor = self.gsdb_get("Perm Points Floor")
+
+        for e in EVENTS_DATABASE.events_chronologically():
             kills_made_as_team = self.eps_get(e, "Kills as Team", [])
             bs_points = self.eps_get(e, "BS Points", {}).items()
 
@@ -616,33 +805,54 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
             member_to_team = team_manager.member_to_team
             team_to_members = team_manager.team_to_member_map()
 
+            if split_scores:
+                date = e.datetime.date()
+                for (killer, victim) in e.kills:
+                    if killer not in day_investers[date] and previous_kills[killer][victim] == 0:
+                        to_invest = temp_scores[killer] * invest_prop
+                        temp_scores[killer] -= to_invest
+                        perm_scores[killer] += to_invest
+                        day_investers[date].add(killer)
+
             # updates happen atomically, so we calculate them as a batch and then add them back in
             point_deltas = {player: bs_allotment for (player, bs_allotment) in bs_points}
 
             for (killer, victim) in e.kills:
-                is_as_team = teams_enabled and (killer, victim) in kills_made_as_team
-                is_with_multiplier = killer in multiplier_owners
+                is_wanted = int(wanted_manager.is_player_wanted(victim, e.datetime))
+                is_as_team = int(teams_enabled and (killer, victim) in kills_made_as_team)
+                is_with_multiplier = multipliers_enabled and killer in multiplier_owners
                 if team_multiplier_sharing_enabled and not is_with_multiplier:
                     # check whether the killer is in the same team as someone with a multiplier
                     is_with_multiplier = any(memb in multiplier_owners for memb in team_to_members[member_to_team[killer]])
+                is_with_multiplier = int(is_with_multiplier)
 
-                # apply team and multiplier bonuses (% and fixed) iff they apply
-                # (side note: maybe calling the items that grant bonuses multipliers is a little confusing in this
-                #  context, since they are neither the only ways to get multiplicative bonuses (teams do that)
-                #  nor do they only grant multiplicative bonuses)
-                t_now = t if is_as_team else 1
-                T_now = T if is_as_team else 0
-                m_now = m if is_with_multiplier else 1
-                M_now = M if is_with_multiplier else 0
+                V = temp_scores[victim]
 
-                point_deltas[killer] = point_deltas.get(killer, 0) + ((scores[victim]*b + B)*t_now + T_now)*m_now + M_now
-                point_deltas[victim] = point_deltas.get(victim, 0) - scores[victim]*d - D
+                point_deltas[killer] = point_deltas.get(killer, 0) + (
+                    V * b + B
+                    + is_wanted * (V * wb + Wb)
+                    + is_as_team * (V * t + T)
+                    + is_with_multiplier * (V * m + M)
+                ) * (pk ** previous_kills[killer][victim])
+                point_deltas[victim] = point_deltas.get(victim, 0) - (
+                    V * d + D
+                    + is_wanted * (V * wd + Wd)
+                ) * (pv ** previous_kills[killer][victim])
+
+                previous_kills[killer][victim] += 1
 
             # resolve deltas once all worked out
             for player in point_deltas:
-                # use max or else you can LOSE points by killing someone!
-                # (specifically, if killing a player with negative points would lose you points)
-                scores[player] = max(0, scores[player] + point_deltas[player])
+                # keep temp points >= 0, as killing a player with negative points would lose you points!
+                new_score = temp_scores[player] + point_deltas[player]
+                if new_score < 0:
+                    if deplete_perm_pts:
+                        new_perm_score = perm_scores[player] + new_score
+                        if perm_pts_floor is not None:
+                            new_perm_score = max(new_perm_score, perm_pts_floor)
+                        perm_scores[player] = new_perm_score
+                    new_score = 0
+                temp_scores[player] = new_score
 
             # work out any multiplier transfers
             for (loser, gainer) in e.pluginState.get(self.identifier, {}).get(self.plugin_state["Multiplier Transfers"], []):
@@ -651,7 +861,11 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 if gainer is not None:
                     multiplier_owners.add(gainer)
 
-        return scores
+            # update wantedness; we do this *after* calculating scores so that if a victim somehow goes wanted in the
+            # same event they died, the killers don't get a bonus from that
+            wanted_manager.add_event(e)
+
+        return temp_scores, perm_scores
 
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         """
@@ -663,14 +877,20 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         The may week news page collates all the events onto a single page (rather than paginating like
         PageGeneratorPlugin) and applies May Week name colouring (i.e. crews share a colour, don't colour city watch
         (casual players) differently, don't colour dead players differently outside the event in which they died, don't
-        colourincos).
+        colour incos).
         """
 
         # player info page
+
+        gimmick_map = self.gsdb_get("Gimmick Map")
+        teams_enabled = gimmick_map.get("teams", False)
+        multipliers_enabled = gimmick_map.get("multipliers", False)
+        split_scores = gimmick_map.get("investment", False)
+        visible_point_types = self.gsdb_get("Visible Points")
+
         team_manager = self.TeamManager()
-        scores = self.calculate_scores(team_manager=team_manager)
+        temp_scores, perm_scores = self.calculate_scores(team_manager=team_manager)
         multiplier_owners = set(self.get_multiplier_owners())
-        teams_enabled = self.gsdb_get("Enable Teams?", False)
         member_to_team = team_manager.member_to_team
         team_to_members = team_manager.team_to_member_map()
         team_names = self.gsdb_get("Team Names", self.ps_defaults["Team Names"])
@@ -680,25 +900,46 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         for (i, team) in enumerate(team_to_members):
             team_to_hex_col[team] = HEX_COLS[i % len(HEX_COLS)]
 
-        # discard hidden players from scores -- in case a dummy casual player is added to represent a civilian
-        for hidden_id in ASSASSINS_DATABASE.get_identifiers(include = lambda _: False,
-                                                            include_hidden = lambda _: True):
-            scores.pop(hidden_id, None)
+        # total score is sum of temp and perm scores
+        scores = {
+            identifier: temp_scores[identifier] + perm_scores[identifier]
+            for identifier in ASSASSINS_DATABASE.get_identifiers(include_hidden = False)
+        }
 
         pseudonym_rows = []
         for (score, a_id) in sorted(((v, k) for (k, v) in scores.items()), reverse=True):
-            # PSEUDONYM_ROW_TEMPLATE = "<tr {CREW_COLOR}><td>{RANK}</td><td>{PSEUDONYM}</td><td>{POINTS}</td><td>{MULTIPLIER}</td></tr>{TEAM_ENTRY}"
             team_id = member_to_team[a_id]
             crew_color = (CREW_COLOR_TEMPLATE.format(HEX=team_to_hex_col[team_id]) if team_id is not None else "")
-            team_entry = (TEAM_ENTRY_TEMPLATE.format(TEAM=team_names[team_id], CREW_COLOR=crew_color) if team_id is not None else "")
+            team_entry = ENTRY_TEMPLATE.format(
+                VALUE=team_names[team_id] if team_id is not None else "",
+                CREW_COLOR=crew_color
+            ) if teams_enabled else ""
+            multiplier_entry = ENTRY_TEMPLATE.format(
+                VALUE="Y" if a_id in multiplier_beneficiaries else "",
+                CREW_COLOR=crew_color
+            ) if multipliers_enabled else ""
+
+            # if using temporary/permanent points, user can configure which of the three headings they want rendered in
+            # the player list.  e.g. in MW2024, only total + permanent points were shown, and not temporary points on
+            # their own
+            score_values = {
+                "temp_points": temp_scores[a_id],
+                "perm_points": perm_scores[a_id],
+                "total_points": score
+            }
+            points_entry = "".join(
+                ENTRY_TEMPLATE.format(CREW_COLOR=crew_color, VALUE=score_values[score_type])
+                for score_type in visible_point_types
+            ) if split_scores else ENTRY_TEMPLATE.format(CREW_COLOR=crew_color, VALUE=score)
+
             assassin = ASSASSINS_DATABASE.get(a_id)
             pseudonym_rows.append(
                 PSEUDONYM_ROW_TEMPLATE.format(
                     CREW_COLOR=crew_color,
                     PSEUDONYM=assassin.all_pseudonyms(),
-                    POINTS=score,
-                    MULTIPLIER="Y" if a_id in multiplier_beneficiaries else "",
-                    TEAM_ENTRY=team_entry
+                    POINTS_ENTRY=points_entry,
+                    MULTIPLIER_ENTRY=multiplier_entry,
+                    TEAM_ENTRY=team_entry,
                 )
             )
 
@@ -723,10 +964,16 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
                 PSEUDONYM_ROWS = "\n".join(pseudonym_rows),
                 PLAYER_ROWS = "\n".join(player_rows),
                 YEAR = get_now_dt().year,
-                MULTIPLIER_STR = self.gsdb_get("Multiplier", "Multiplier"),
-                TEAM_COLUMN_HDR = TEAM_HDR_TEMPLATE.format(
-                    TEAM_STR = self.get_cosmetic_name("Teams") if teams_enabled else ""
-                )
+                MULTIPLIER_COLUMN_HDR = HDR_TEMPLATE.format(
+                    HEADING = self.get_cosmetic_name("Multiplier"),
+                ) if multipliers_enabled else "",
+                TEAM_COLUMN_HDR = HDR_TEMPLATE.format(
+                    HEADING = self.get_cosmetic_name("Teams")
+                ) if teams_enabled else "",
+                POINTS_HDR = "".join(
+                    HDR_TEMPLATE.format(HEADING = self.get_cosmetic_name(self.point_type_names[point_type]))
+                    for point_type in visible_point_types
+                ) if split_scores else HDR_TEMPLATE.format(HEADING = self.get_cosmetic_name("Points"))
             ))
 
         # may week news page
@@ -761,3 +1008,28 @@ class MayWeekUtilitiesPlugin(AbstractPlugin):
         )
 
         return [Label("[MAY WEEK] Success!")]
+
+    def on_request_setup_game(self, _) -> List[HTMLComponent]:
+        return [
+            *self.ask_set_gimmicks(),
+            Label("[IMPORTANT] Below you will be asked to set various parameters for May Week features. "
+                  "Due to technical limitations this may include parameters for some of the features that you did not "
+                  "enable above. Such parameters may be safely ignored."),
+            *self.ask_set_scoring_params(),
+            Label("[MAY WEEK] Below you can set team names. Players are assigned to teams in Events, as teams may "
+                  "change over the course of the game."),
+            *self.ask_name_teams(),
+            *self.ask_enable_multiplier_team_sharing(),
+            *self.ask_config_perm_points(),
+            *self.ask_tweak_cosmetics(),
+        ]
+
+    def on_setup_game(self, html_response) -> List[HTMLComponent]:
+        return [
+            *self.answer_set_gimmicks(html_response),
+            *self.answer_set_scoring_params(html_response),
+            *self.answer_name_teams(html_response),
+            *self.answer_enable_multiplier_team_sharing(html_response),
+            *self.answer_config_perm_points(html_response),
+            *self.answer_tweak_cosmetics(html_response),
+        ]

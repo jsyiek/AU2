@@ -114,6 +114,18 @@ def float_validator(_, current):
         return False
     return True
 
+def optional_float_validator(_, current):
+    try:
+        if current is None:
+            raise KeyboardInterrupt
+        # allow null values
+        if current == "":
+            return True
+        s = float(current)
+    except ValueError:
+        return False
+    return True
+
 
 def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
     """
@@ -380,7 +392,12 @@ def render(html_component, dependency_context={}):
         # (also turn into a set so that `in` is faster)
         html_component.default = {tuple(l) for l in html_component.default}
 
-        potential_transfers = {}
+        # TODO: below is the original implementation of this component, however it requires knowledge of the current
+        #       multiplier owners, which forces the MW plugin to (unintuitively!) process events in the order they were
+        #       added rather than their in-game datetimes.
+        #       If https://github.com/jsyiek/AU2/pull/164 this can be fixed, but for now it is replaced by a less
+        #       sophisticated implementation that does not use the current multiplier holders.
+        """potential_transfers = {}
         defaults = []
         owners = [a for a in html_component.owners if a in assassins]
         receivers = [a for a in assassins if a not in owners]
@@ -400,7 +417,27 @@ def render(html_component, dependency_context={}):
         )]
         # TODO: Confirm what happens if option in default isn't in choices
         a = inquirer_prompt_with_abort(q)["q"]
-        a = tuple(potential_transfers[k] for k in a)
+        a = tuple(potential_transfers[k] for k in a)"""
+        # temporary interface: just ask who gained / lost multipliers, without using existing holders
+        default_gainers = {g_id for _, g_id in html_component.default if g_id}
+        default_losers = {l_id for l_id, _ in html_component.default if l_id}
+        print(html_component.title)
+        q = [inquirer.Checkbox(
+            name="gainers",
+            message=f"Select players to GAIN {html_component.transfer_item_name} (if applicable)",
+            choices=assassins,
+            default=list(default_gainers),
+        ), inquirer.Checkbox(
+            name="losers",
+            message=f"Select players to LOSE {html_component.transfer_item_name} (if applicable)",
+            choices=assassins,
+            default=list(default_losers),
+        )]
+        response = inquirer_prompt_with_abort(q)
+
+        # convert into transfers, since this is the expected return format of this component...
+        a = [(None, g_id) for g_id in response["gainers"]] + [(l_id, None) for l_id in response["losers"]]
+
         return {html_component.identifier: a}
 
     # dependent component
@@ -636,7 +673,7 @@ def render(html_component, dependency_context={}):
         q = [inquirer.Text(
             name="int",
             message=escape_format_braces(html_component.title),
-            default=html_component.default,
+            default=str(html_component.default),  # note: str needed to stop 0 being turned into empty string by inquirer
             validate=integer_validator
         )]
         integer = inquirer_prompt_with_abort(q)["int"]
@@ -646,11 +683,12 @@ def render(html_component, dependency_context={}):
         q = [inquirer.Text(
             name="float",
             message=escape_format_braces(html_component.title),
-            default=html_component.default,
-            validate=float_validator
+            # note: str needed to stop 0 being turned into empty string by inquirer
+            default="" if html_component.default is None else str(html_component.default),
+            validate=optional_float_validator if html_component.optional else float_validator
         )]
         number = inquirer_prompt_with_abort(q)["float"]
-        return {html_component.identifier: float(number)}
+        return {html_component.identifier: float(number) if number != "" else None}
 
     elif isinstance(html_component, PathEntry):
         q = [inquirer.Path(
