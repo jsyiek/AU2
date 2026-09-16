@@ -16,7 +16,7 @@ from AU2.html_components.SpecialComponents.EditablePseudonymList import Editable
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
-from AU2.html_components.DerivativeComponents.DigitsChallenge import DigitsChallenge, verify_DigitsChallenge
+from AU2.html_components.SpecialComponents.DigitsChallenge import DigitsChallenge
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
@@ -32,8 +32,7 @@ from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTex
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
-    AttributePairTableRow, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, AttributePairTableRow
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
@@ -778,15 +777,15 @@ class CorePlugin(AbstractPlugin):
         return [
             HiddenTextbox(self.HTML_SECRET_ID, event_id),
             Label(f"You are about to delete the event [{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline}"),
-            *DigitsChallenge(
-                identifier_prefix=self.identifier,
+            DigitsChallenge(
+                identifier=self.identifier,
                 title="Type {digits} to confirm event deletion"
             ),
         ]
 
     def answer_core_plugin_delete_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
-        if verify_DigitsChallenge(self.identifier, html_response_args):
+        if html_response_args[self.identifier]:
             del EVENTS_DATABASE.events[ident]
             return [Label("[CORE] Delete acknowledged.")]
         else:
@@ -981,14 +980,14 @@ class CorePlugin(AbstractPlugin):
             Label(
                 title="(You can type anything else and the reset will be aborted.)"
             ),
-            *DigitsChallenge(
-                identifier_prefix=self.identifier,
+            DigitsChallenge(
+                identifier=self.identifier,
                 title="Type {digits} to reset the database"
             ),
         ]
 
     def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
-        if not verify_DigitsChallenge(self.identifier, htmlResponse):
+        if not htmlResponse[self.identifier]:
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):

@@ -47,6 +47,7 @@ from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
 from AU2.html_components.SimpleComponents.PathEntry import PathEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SpecialComponents.DigitsChallenge import DigitsChallenge
 from AU2.html_components.SpecialComponents.EditablePseudonymList import EditablePseudonymList, PseudonymData, \
     ListUpdates
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
@@ -915,11 +916,20 @@ def render(html_component, dependency_context={}):
         if isinstance(selection, DangerousConfigExport):
             if explanation := selection.danger_explanation():
                 print(explanation)
-                i = random.randint(0, 1000000)
-                if str(i) != inquirer.text(f"Type {i} to access this config option"):
+                if not render(DigitsChallenge("c", "Type {digits} to access this config option"))["c"]:
                     raise KeyboardInterrupt
 
         return {html_component.identifier: selection}
+
+    elif isinstance(html_component, DigitsChallenge):
+        retry = True
+        while retry:
+            i = str(random.randint(0, 1000000))
+            if i == inquirer.text(html_component.title.format(digits=i)):
+                return {html_component.identifier: True}
+            else:
+                retry = inquirer.confirm("Incorrect! Retry?")
+        return {html_component.identifier: False}
 
     else:
         raise Exception("Unknown component type:", type(html_component))
