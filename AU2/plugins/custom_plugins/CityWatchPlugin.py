@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict
+from typing import Dict, List, Tuple
 
 from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -120,11 +120,11 @@ class CityWatchPlugin(AbstractPlugin):
             *self.answer_set_special_ranks(htmlResponse),
         ]
 
-    def gather_dead_full_players(self) -> List[str]:
+    def gather_dead_full_players(self) -> List[Tuple[str, str]]:
         death_manager = DeathManager()
         for e in EVENTS_DATABASE.events.values():
             death_manager.add_event(e)
-        return ASSASSINS_DATABASE.get_identifiers(include=(lambda a: death_manager.is_dead(a) and not a.is_city_watch))
+        return ASSASSINS_DATABASE.get_display_name_ident_pairs(include=(lambda a: death_manager.is_dead(a) and not a.is_city_watch))
 
     def ask_resurrect_as_city_watch(self, ident: str):
         components = [HiddenTextbox(identifier=self.html_ids["Assassin"], default=ident),
@@ -144,7 +144,7 @@ class CityWatchPlugin(AbstractPlugin):
         return [Label(f"[CITY WATCH] Resurrected {ident} as {new_assassin.identifier}.")]
 
     def ask_set_special_ranks(self):
-        all_city_watch = [a.identifier for a in ASSASSINS_DATABASE.assassins.values() if a.is_city_watch]
+        all_city_watch = ASSASSINS_DATABASE.get_display_name_ident_pairs(include=lambda a: a.is_city_watch, include_hidden=True)
         return [
             Label("This only affects the displayed rank on the website"),
             SelectorList(

@@ -40,10 +40,14 @@ class FailedToCreateChainException(Exception):
     pass
 
 
+def targetable(a: Assassin) -> bool:
+    return not a.is_city_watch
+
+
 def filter_to_targetable(idents: Iterable[str]) -> List[str]:
     """Filters an iterable of assassin identifiers to a list of only those that are involved in targeting,
     i.e. full players"""
-    return [ident for ident in idents if not ASSASSINS_DATABASE.get(ident).is_city_watch]
+    return [ident for ident in idents if targetable(ASSASSINS_DATABASE.get(ident))]
 
 
 @registered_plugin
@@ -203,7 +207,8 @@ class TargetingPlugin(AbstractPlugin):
             SelectorList(
                 identifier=self.html_ids["Seeds"],
                 title="Choose which assassins should be seeded",
-                options=sorted(filter_to_targetable(ASSASSINS_DATABASE.assassins)),
+                options=ASSASSINS_DATABASE.get_display_name_ident_pairs(
+                    include=targetable, include_hidden=True),
                 defaults=GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("seeds", [])
             )
         ]

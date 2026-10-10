@@ -33,7 +33,7 @@ class TestCityWatchPlugin:
 
         # check that the list of players that can be resurrected is correct
         # (only the dead, non-hidden full players should be shown!)
-        assert set(plugin.gather_dead_full_players()) == {p[i] + " identifier" for i in range(k, 2 * k - 1)}
+        assert set(t[1] for t in plugin.gather_dead_full_players()) == {p[i] + " identifier" for i in range(k, 2 * k - 1)}
 
         # check that players get resurrected correctly
         ##############################################
@@ -70,4 +70,4 @@ class TestCityWatchPlugin:
         assert new_assassin.pseudonym_datetimes == {}
         # check the list of resurrectable assassins is correct after resurrection
         assert old_assassin.hidden
-        assert set(plugin.gather_dead_full_players()) == {p[i] + " identifier" for i in range(k + 1, 2 * k - 1)}
+        assert set(t[1] for t in plugin.gather_dead_full_players()) == {p[i] + " identifier" for i in range(k + 1, 2 * k - 1)}
