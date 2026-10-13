@@ -16,7 +16,7 @@ from AU2.html_components.SpecialComponents.EditablePseudonymList import Editable
 from AU2.html_components.SpecialComponents.ConfigOptionsList import ConfigOptionsList
 from AU2.html_components.DependentComponents.AssassinDependentReportEntry import AssassinDependentReportEntry
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
-from AU2.html_components.DerivativeComponents.DigitsChallenge import DigitsChallenge, verify_DigitsChallenge
+from AU2.html_components.SpecialComponents.DigitsChallenge import DigitsChallenge
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
@@ -32,12 +32,12 @@ from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTex
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.HtmlEntry import HtmlEntry
 from AU2.plugins import CUSTOM_PLUGINS_DIR
-from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, DangerousConfigExport, \
-    AttributePairTableRow, NavbarEntry
+from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, ConfigExport, HookedExport, AttributePairTableRow
 from AU2.plugins.AvailablePlugins import __PluginMap
 from AU2.plugins.constants import COLLEGES, HEADLINE_TRUNCATION_CUTOFF, WATER_STATUSES
 from AU2.plugins.sanity_checks import SANITY_CHECKS
-from AU2.plugins.util.game import get_game_start, set_game_start, get_game_end, set_game_end
+from AU2.plugins.util.game import get_allow_html, get_game_end, get_game_start, HTML_REPORT_PREFIX, set_allow_html, \
+    set_game_end, set_game_start
 from AU2.plugins.util.date_utils import get_now_dt
 from AU2.plugins.util.render_utils import generate_navbar
 
@@ -76,22 +76,21 @@ GAME_TYPE_PLUGIN_MAP = {
         "UIConfigPlugin": True,
         "WantedPlugin": True,
     },
-    # Can't implement Setup Game for MayWeekUtilitiesPlugin at the moment because config options depend on whether
-    # teams are enabled or not, and doing a partial implementation would mislead users.
-    # "May Week": {
-    #     "CompetencyPlugin":False,
-    #     "LocalBackupPlugin": True,
-    #     "MafiaPlugin": False,
-    #     "MayWeekUtilitiesPlugin": True,
-    #     "PageGeneratorPlugin": True,  # needed to be able to hide events
-    #     "CityWatchPlugin": False,
-    #     "RandomGamePlugin": False,
-    #     "ScoringPlugin": False,
-    #     "TargetingPlugin": False,
-    #     "UIConfigPlugin": True,
-    #     "WantedPlugin": True,
-    # }
+    "May Week": {
+        "CompetencyPlugin":False,
+        "LocalBackupPlugin": True,
+        "MafiaPlugin": False,
+        "MayWeekUtilitiesPlugin": True,
+        "PageGeneratorPlugin": True,  # needed to be able to hide events
+        "CityWatchPlugin": False,
+        "RandomGamePlugin": False,
+        "ScoringPlugin": False,
+        "TargetingPlugin": False,
+        "UIConfigPlugin": True,
+        "WantedPlugin": True,
+    }
 }
+REQUIRES_PLAYERS_FIRST = ("Standard Game",)
 BOUNTY_PLUGINS = ("BountyNewsPlugin", "BountyPlugin")
 
 
@@ -279,6 +278,12 @@ class CorePlugin(AbstractPlugin):
                 "CorePlugin -> Set game end",
                 self.ask_set_game_end,
                 self.answer_set_game_end
+            ),
+            ConfigExport(
+                "core_plugin_set_allow_html",
+                "CorePlugin -> Allow/disallow HTML",
+                self.ask_set_html_allowed,
+                self.answer_set_html_allowed
             ),
             ConfigExport(
                 "core_plugin_suppress_exports",
@@ -519,11 +524,13 @@ class CorePlugin(AbstractPlugin):
     def on_request_setup_game(self, game_type: str) -> List[HTMLComponent]:
         return [
             *self.ask_set_game_start(),
+            *self.ask_set_html_allowed(),
         ]
 
     def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
         return [
             *self.answer_set_game_start(htmlResponse),
+            *self.answer_set_html_allowed(htmlResponse),
         ]
 
     def get_all_exports(self, include_suppressed: bool = False) -> List[Export]:
@@ -770,15 +777,15 @@ class CorePlugin(AbstractPlugin):
         return [
             HiddenTextbox(self.HTML_SECRET_ID, event_id),
             Label(f"You are about to delete the event [{event.datetime.strftime('%Y-%m-%d %H:%M %p')}] {event.headline}"),
-            *DigitsChallenge(
-                identifier_prefix=self.identifier,
+            DigitsChallenge(
+                identifier=self.identifier,
                 title="Type {digits} to confirm event deletion"
             ),
         ]
 
     def answer_core_plugin_delete_event(self, html_response_args: Dict):
         ident = html_response_args[self.HTML_SECRET_ID]
-        if verify_DigitsChallenge(self.identifier, html_response_args):
+        if html_response_args[self.identifier]:
             del EVENTS_DATABASE.events[ident]
             return [Label("[CORE] Delete acknowledged.")]
         else:
@@ -973,14 +980,14 @@ class CorePlugin(AbstractPlugin):
             Label(
                 title="(You can type anything else and the reset will be aborted.)"
             ),
-            *DigitsChallenge(
-                identifier_prefix=self.identifier,
+            DigitsChallenge(
+                identifier=self.identifier,
                 title="Type {digits} to reset the database"
             ),
         ]
 
     def answer_reset_database(self, htmlResponse) -> List[HTMLComponent]:
-        if not verify_DigitsChallenge(self.identifier, htmlResponse):
+        if not htmlResponse[self.identifier]:
             return [Label("[CORE] Aborting. You entered the code incorrectly.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
@@ -1023,6 +1030,20 @@ class CorePlugin(AbstractPlugin):
             else Label(f"[CORE] Unset game end.")
         ]
 
+    def ask_set_html_allowed(self) -> List[HTMLComponent]:
+        return [
+            Label("Below you can enable HTML in player reports and pseudonyms. "
+                  f"Any HTML reports / pseudonyms must be prefixed by {HTML_REPORT_PREFIX} to render correctly. "
+                  "HTML in headlines will always be rendered, "
+                  "regardless of this setting and without needing to be prefixed."),
+            Checkbox(self.identifier + "_allow_html", "Allow HTML in reports and pseudonyms?", get_allow_html())
+        ]
+
+    def answer_set_html_allowed(self, html_response) -> List[HTMLComponent]:
+        allow = html_response[self.identifier + "_allow_html"]
+        set_allow_html(allow)
+        return [Label(f"[CORE] {'A' if allow else 'Disa'}llowing HTML in pseudonyms / reports.")]
+
     def gather_game_types(self) -> List[str]:
         return list(GAME_TYPE_PLUGIN_MAP)
 
@@ -1048,9 +1069,9 @@ class CorePlugin(AbstractPlugin):
                 PLUGINS[plugin].enabled = to_enable
                 components.append(Label(f"[CORE] {'En' if to_enable else 'Dis'}abled {plugin}"))
 
-        # require players to be added first.
+        # for certain game types (i.e. those involving city watch or targeting...) require players to be added first.
         # this is done *after* enabling plugins, so that Setup Game can at least help to set up the correct plugins
-        if not ASSASSINS_DATABASE.assassins:
+        if game_type in REQUIRES_PLAYERS_FIRST and not ASSASSINS_DATABASE.assassins:
             components.append(
                 HiddenTextbox(
                     self.config_html_ids["Setup Error"],
@@ -1069,7 +1090,8 @@ class CorePlugin(AbstractPlugin):
             Label("AU2 has two different plugins for setting bounties."),
             Label("'BountyNewsPlugin' is the allows you to mark certain events as bounties, "
                   "causing them to be rendered on the page bounty-news.html. See May Week 2025 in the archive for an "
-                  "example."),
+                  "example. (Note however that BountyNewsPlugin currently has some issues when used in May Week)."),
+            # ^ the issues are addressed by https://github.com/jsyiek/AU2/pull/178 which is yet to be merged...
             Label("'BountyPlugin' on the other hand displays bounties in a table, on the page bounties.html. "
                   "See Lent 2025 in the archive for an example."),
             SelectorList(

@@ -5,7 +5,8 @@ from typing import Optional, List
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
-from AU2.database.model import Event, Assassin
+from AU2.database.model import Assassin, Event
+from AU2.plugins.util.DeathManager import DeathManager
 
 DEFAULT_START_COMPETENCY = 14
 DEFAULT_EXTENSION = 7
@@ -28,6 +29,7 @@ class CompetencyManager:
         # setdefault so that reversion to an older version of AU2 won't implicitly set this back to Manual
         self.auto_competency = GENERIC_STATE_DATABASE.arb_state.setdefault("auto_competency", "Auto") != "Manual"
         self.attempts_since_kill = defaultdict(int)
+        self.death_manager = DeathManager()
 
     def add_event(self, e: Event):
         for (aID, extn) in e.pluginState.get("CompetencyPlugin", {}).get("competency", {}).items():
@@ -42,7 +44,7 @@ class CompetencyManager:
         if self.auto_competency:
             for (killer, victim) in e.kills:
                 victim_model = ASSASSINS_DATABASE.get(victim)
-                if victim_model.is_city_watch:
+                if victim_model.is_city_watch or self.death_manager.is_dead(victim_model):
                     continue
                 self.attempts_since_kill[killer] = 0
                 # Allows overriding auto competency on a case-by-case basis
@@ -74,6 +76,8 @@ class CompetencyManager:
                         days=e.pluginState.get("CompetencyPlugin", {})
                             .get("current_default", GENERIC_STATE_DATABASE.arb_int_state.get(ID_DEFAULT_EXTN, DEFAULT_EXTENSION)))
                 )
+
+            self.death_manager.add_event(e)
 
     def is_inco_at(self, a: Assassin, date: datetime.datetime):
         """

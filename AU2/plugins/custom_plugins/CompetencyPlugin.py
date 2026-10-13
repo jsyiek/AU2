@@ -18,6 +18,7 @@ from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDrop
 from AU2.html_components.SimpleComponents.LargeTextEntry import LargeTextEntry
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
+from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
 from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SimpleComponents.NamedSmallTextbox import NamedSmallTextbox
@@ -29,7 +30,7 @@ from AU2.plugins.custom_plugins.SRCFPlugin import Email
 from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, DEFAULT_START_COMPETENCY, \
     DEFAULT_EXTENSION, CompetencyManager
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.date_utils import get_now_dt, DATETIME_FORMAT
+from AU2.plugins.util.date_utils import DATETIME_FORMAT, dt_to_timestamp, get_now_dt, timestamp_to_dt
 from AU2.plugins.util.game import get_game_start, get_game_end
 
 INCOS_TABLE_TEMPLATE = """
@@ -107,7 +108,7 @@ def get_active_players(death_manager: DeathManager) -> Set[str]:
     """
     active_players = []
 
-    for e in sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime):
+    for e in EVENTS_DATABASE.events_chronologically():
         death_manager.add_event(e)
         for killer, _ in e.kills:
             active_players.append(killer)
@@ -120,8 +121,6 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
     """
     Returns a list of calculated player informations (see struct above)
     """
-    events = list(EVENTS_DATABASE.events.values())
-    events.sort(key=lambda event: event.datetime)
     start_datetime: datetime.datetime = get_game_start()
 
     competency_manager = CompetencyManager(start_datetime)
@@ -130,7 +129,7 @@ def get_player_infos(from_date=get_now_dt()) -> Dict[str, PlayerInfo]:
     # populates the death manager
     active_players = get_active_players(death_manager)
 
-    for e in events:
+    for e in EVENTS_DATABASE.events_chronologically():
         competency_manager.add_event(e)
 
     infos = {}
@@ -177,7 +176,8 @@ class CompetencyPlugin(AbstractPlugin):
             "Gigabolt": self.identifier + "_gigabolt",
             "Headline": self.identifier + "_gigabolt_headline",
             "Umpire": self.identifier + "_umpire",
-            "Search": self.identifier + "_search"
+            "Search": self.identifier + "_search",
+            "First Incobash": self.identifier + "_first_incobash",
         }
 
         self.plugin_state = {
@@ -187,7 +187,8 @@ class CompetencyPlugin(AbstractPlugin):
             "ATTEMPT TRACKING": "attempt_tracking",
             "COMPETENCY": "competency",
             "ATTEMPTS": "attempts",
-            "CURRENT DEFAULT": "current_default"
+            "CURRENT DEFAULT": "current_default",
+            "FIRST INCOBASH": "first_incobash",
         }
 
         Assassin.__last_emailed_competency = self.assassin_property("last_emailed_competency", None, store_default=False)
@@ -226,6 +227,12 @@ class CompetencyPlugin(AbstractPlugin):
                 display_name="Competency -> Toggle Attempt Tracking",
                 ask=self.ask_toggle_attempt_tracking,
                 answer=self.answer_toggle_attempt_tracking
+            ),
+            ConfigExport(
+                identifier="CompetencyPlugin_first_incobash",
+                display_name="Competency -> Set First Incobash",
+                ask=self.ask_first_incobash,
+                answer=self.answer_first_incobash
             )
         ]
 
@@ -234,11 +241,13 @@ class CompetencyPlugin(AbstractPlugin):
         # and changing these would only be helpful to someone who has a good idea of what they're doing
         return [
             *self.set_default_competency_deadline_ask(),
+            *self.ask_first_incobash(),
         ]
 
-    def on_setup_game(self, htmlResponse) -> List[HTMLComponent]:
+    def on_setup_game(self, html_response) -> List[HTMLComponent]:
         return [
-            *self.set_default_competency_deadline_answer(htmlResponse),
+            *self.set_default_competency_deadline_answer(html_response),
+            *self.answer_first_incobash(html_response),
         ]
 
     def gigabolt_ask(self):
@@ -375,14 +384,29 @@ class CompetencyPlugin(AbstractPlugin):
             )
         return response
 
+    def ask_first_incobash(self) -> List[HTMLComponent]:
+        return [
+            Label("Below you can set the date of the first incobash, which will prevent the incompetents list being "
+                  "published before this."),
+            OptionalDatetimeEntry(self.html_ids["First Incobash"],
+                                  "Enter date and time of the (first) incobash",
+                                  timestamp_to_dt(GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["FIRST INCOBASH"]))),
+        ]
+
+    def answer_first_incobash(self, html_response) -> List[HTMLComponent]:
+        first_incobash = html_response[self.html_ids["First Incobash"]]
+        GENERIC_STATE_DATABASE.arb_state[self.plugin_state["FIRST INCOBASH"]] = dt_to_timestamp(first_incobash)
+        return [Label(
+            f"[COMPETENCY] First incobash set to {datetime.datetime.strftime(first_incobash, DATETIME_FORMAT)}"
+            if first_incobash else "[COMPETENCY] No first incobash set."
+        )]
+
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
         if hook == "SRCFPlugin_email":
-            events = list(EVENTS_DATABASE.events.values())
-            events.sort(key=lambda event: event.datetime)
 
             competency_manager = CompetencyManager(get_game_start())
             death_manager = DeathManager()
-            for e in events:
+            for e in EVENTS_DATABASE.events_chronologically():
                 competency_manager.add_event(e)
                 death_manager.add_event(e)
 
@@ -399,17 +423,20 @@ class CompetencyPlugin(AbstractPlugin):
                 else:
                     deadline_str = competency_manager.deadlines[recipient.identifier].strftime("%Y-%m-%d %H:%M")
                     content = f"Your competence deadline is at: {deadline_str}"
+
+                new_competency_ts = competency_manager.deadlines[recipient.identifier].timestamp()
+
                 email.add_content(
                     self.identifier,
                     content=content,
-                    require_send=recipient.__last_emailed_competency != competency_manager.deadlines[recipient.identifier]
+                    require_send=recipient.__last_emailed_competency != new_competency_ts
                 )
 
                 # only record emailed competency if emails will actually be sent
                 # the component is named confusingly. here, True = *do* send emails!
                 # TODO: would be good to be able to do this *after* emails sent...
                 if htmlResponse.get("SRCFPlugin_dry_run", True):
-                    recipient.__last_emailed_competency = competency_manager.deadlines[recipient.identifier]
+                    recipient.__last_emailed_competency = new_competency_ts
 
         return []
 
@@ -570,14 +597,12 @@ class CompetencyPlugin(AbstractPlugin):
         return [Table(deadlines, headings=headings)]
 
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
-        events = list(EVENTS_DATABASE.events.values())
-        events.sort(key=lambda event: event.datetime)
         start_datetime: datetime.datetime = get_game_start()
+        limit = htmlResponse[self.html_ids["Datetime"]]
 
         competency_manager = CompetencyManager(start_datetime)
         death_manager = DeathManager()
-        limit = htmlResponse[self.html_ids["Datetime"]]
-        for e in events:
+        for e in EVENTS_DATABASE.events_chronologically():
             if e.datetime > limit:
                 break
             competency_manager.add_event(e)
@@ -588,10 +613,14 @@ class CompetencyPlugin(AbstractPlugin):
         # note that `dead_incos` includes hidden assassins,
         # otherwise a player would disappear from the list of corpses when resurrected as part of the city watch
         dead_incos = competency_manager.inco_corpses
+
+        # if it's before the incobash we don't display any incos!
+        first_incobash_dt = timestamp_to_dt(GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["FIRST INCOBASH"]))
+        show_incos = (first_incobash_dt is None) or first_incobash_dt <= limit
         alive_incos: List[Assassin] = [i for i in competency_manager.get_incos_at(limit)
                                        if not i.hidden
                                        and competency_manager.is_inco_at(i, limit)
-                                       and not death_manager.is_dead(i)]
+                                       and not death_manager.is_dead(i)] if show_incos else []
 
         tables = []
         if alive_incos:
