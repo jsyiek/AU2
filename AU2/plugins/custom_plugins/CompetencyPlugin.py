@@ -599,8 +599,6 @@ class CompetencyPlugin(AbstractPlugin):
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         start_datetime: datetime.datetime = get_game_start()
         limit = htmlResponse[self.html_ids["Datetime"]]
-        first_incobash_dt = timestamp_to_dt(GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["FIRST INCOBASH"]))
-        show_incos = (first_incobash_dt is None) or first_incobash_dt <= limit
 
         competency_manager = CompetencyManager(start_datetime)
         death_manager = DeathManager()
@@ -616,7 +614,9 @@ class CompetencyPlugin(AbstractPlugin):
         # otherwise a player would disappear from the list of corpses when resurrected as part of the city watch
         dead_incos = competency_manager.inco_corpses
 
-        # if it's before the incobash we treat no-one as inco
+        # if it's before the incobash we don't display any incos!
+        first_incobash_dt = timestamp_to_dt(GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["FIRST INCOBASH"]))
+        show_incos = (first_incobash_dt is None) or first_incobash_dt <= limit
         alive_incos: List[Assassin] = [i for i in competency_manager.get_incos_at(limit)
                                        if not i.hidden
                                        and competency_manager.is_inco_at(i, limit)
