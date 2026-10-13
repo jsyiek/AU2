@@ -21,11 +21,7 @@ from AU2.plugins.custom_plugins.SRCFPlugin import Email
 EMAIL_TARGETS_TEMPLATE = """\
 Your targets are:
 
-{TARGET1}
-
-{TARGET2}
-
-{TARGET3}
+{TARGETS}
 """
 
 EMAIL_SINGLE_TARGET_TEMPLATE = """\
@@ -374,9 +370,7 @@ class TargetingPlugin(AbstractPlugin):
                     )
 
                 email_content = EMAIL_TARGETS_TEMPLATE.format(
-                    TARGET1=target_strs[0],
-                    TARGET2=target_strs[1],
-                    TARGET3=target_strs[2]
+                    TARGETS="\n\n\n".join(target_strs)
                 )
 
                 # only send email if targets for this user have changed
