@@ -453,9 +453,31 @@ class ScoringPlugin(AbstractPlugin):
                 "Allow inco duellists?",
                 self.gsdb_get("Allow Inco Duellists?"),
             ),
+            Label("Below you can set a minimum points requirement for the duel, as a percentage."),
+            Label("Specifically, players qualify for the duel in descending order of points, and this stops either when"
+                  " the number of duellists reaches the maximum (set above), or when a player has fewer than this "
+                  "percentage of the points of the lowest-scoring duellist so far. However, this rule is ignored for "
+                  "the second duellist."),
+            Label("For example, the default value is 50, which corresponds to the current rules requiring duellists to "
+                  "have at least HALF the points of the lowest scoring duellist above them. Then suppose at the end of "
+                  "open season we have the following standings:"),
+            Label("    Player A: 100 points, competent"),
+            Label("    Player B: 80 points, inco"),
+            Label("    Player C: 40 points, competent"),
+            Label("    Player D: 30 points, competent"),
+            Label("    Player E: 20 points, inco"),
+            Label("    Player F: 10 points, competent"),
+            Label("    ..."),
+            Label("If we have the default config of disallowing inco duellists, and a maximum of 6 duellists, then the "
+                  "duellists are players A, C, D."),
+            Label("Player B is disqualified for being inco. Players A and C qualify as the two highest-scoring non-inco"
+                  " players. Player D qualifies because 30 points >= half of 40 points (Player C's score). Player E is"
+                  " disqualified for being inco, and then Player F and any lower-scoring players does not qualify as 10"
+                  " < half of 30 (Player D's score). If Player E were not inco, however, then both Players E and F "
+                  "would qualify as duellists."),
             FloatEntry(
                 self.html_ids["% Points Requirement"],
-                "% of lowest-scoring duellist's points required to qualify for the duel",
+                "Minimum qualification %",
                 self.gsdb_get("% Points Requirement"),
             ),
         ]
@@ -572,7 +594,7 @@ Syntax:
 
             max_duellists = self.gsdb_get("Max Duellists")
             allow_inco = self.gsdb_get("Allow Inco Duellists?")
-            prop_pts_req = self.gsdb_get("% Points Requirement") / 100
+            minimum_qualification_percent = self.gsdb_get("% Points Requirement") / 100
 
             if is_postgame:
                 # generate final standings
@@ -584,7 +606,7 @@ Syntax:
                     if len(duellists) < max_duellists and (len(duellists) < 2 or score_manager.get_score(a) >= points_req):
                         if allow_inco or not competency_manager.is_inco_at(a, openseason_end):
                             duellists.append(a)
-                            points_req = score_manager.get_score(a) * prop_pts_req
+                            points_req = score_manager.get_score(a) * minimum_qualification_percent
                         else:
                             excluded_incos.append(a)
                     else:
