@@ -130,12 +130,24 @@ class ChainGenerator:
                 # constraints are only relaxed to prevent an impasse
                 # thus, once the chain is lengthened they should be enforced again
                 no_teammates, no_mutuals, no_triangles = True, True, True
+
+        # The chain is represented as a terminating list, but actually represents something cyclical.
+        # If we extend the chain to use all the players then these constraints become relevant and need to be checked.
+        if len(unused_players) == 0 and not (
+                self.check_constraints(chain[0], chain[-1], chain[-2],
+                                       no_triangles=no_triangles, no_teammates=no_teammates, no_mutuals=no_mutuals)
+                and self.check_constraints(chain[1], chain[0], chain[-1],
+                                           no_triangles=no_triangles, no_teammates=no_teammates, no_mutuals=no_mutuals)
+        ):
+            # if the chain is invalid, then adding the last player was invalid.
+            unused_players = [chain.pop(-1)]  # this is fine because we only get here if there are no (other) unused players
+
         return unused_players
 
     def new_chain(self,
-                  enforce_no_triangles: bool = True,
-                  enforce_teams: bool = True,
-                  enforce_no_mutuals: bool = True) -> List[str]:
+                  no_triangles: bool = True,
+                  no_teammates: bool = True,
+                  no_mutuals: bool = True) -> List[str]:
         """Generate chain that satisfies constraints"""
 
         # shuffle list of players
@@ -152,20 +164,20 @@ class ChainGenerator:
             # then if this doesn't help, we allow teammates to target each other
             # finally if even that fails we allow mutual targeting
             if len(remaining_players) == remaining_before:
-                if not enforce_teams:
+                if not no_teammates:
                     remaining_players = self.lengthen_chain(chain, remaining_players, no_teammates=False)
                     self.broke_team_constraint = True
                 else:
                     raise FailedToCreateChainException()
                 if len(remaining_players) == remaining_before:
-                    if not enforce_no_triangles:
+                    if not no_triangles:
                         remaining_players = self.lengthen_chain(chain, remaining_players,
                                                                 no_triangles=False, no_teammates=False)
                         self.broke_triangle_constraint = True
                     else:
                         raise FailedToCreateChainException()
                     if len(remaining_players) == remaining_before:
-                        if enforce_no_mutuals:
+                        if not no_mutuals:
                             remaining_players = self.lengthen_chain(chain, remaining_players,
                                                                     no_triangles=False,
                                                                     no_teammates=False,
@@ -173,15 +185,6 @@ class ChainGenerator:
                             self.broke_mutual_constraint = True
                         else:
                             raise FailedToCreateChainException()
-
-        # The chain is represented as a terminating list, but actually
-        # represents something cyclical. Our earlier checks don't enforce
-        # constraints hold with targets on either end of the list, so we check here.
-        if not (
-                self.check_constraints(chain[0], chain[-1], chain[-2])
-                and self.check_constraints(chain[1], chain[0], chain[-1])
-        ):
-            raise FailedToCreateChainException()
 
         # save the new edges
         for (targeter, targetee) in zip(chain, itertools.chain(chain[1:], [chain[0]])):
@@ -229,7 +232,8 @@ class TargetingPlugin(AbstractPlugin):
                 "targeting_set_teams",
                 "Targeting Graph -> Set teams",
                 self.ask_set_teams,
-                self.answer_set_teams
+                self.answer_set_teams,
+                self.danger_explanation
             ),
             DangerousConfigExport(
                 "targeting_set_random_seed",
@@ -393,8 +397,8 @@ class TargetingPlugin(AbstractPlugin):
             # we still record the last emailed event because it's useful for detecting whether any emails have been sent
             # out
             if EVENTS_DATABASE.events and htmlResponse.get("SRCFPlugin_dry_run", True):
-                max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e._Event__secret_id)
-                GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event._Event__secret_id
+                max_event: Event = max((e for e in EVENTS_DATABASE.events.values()), key=lambda e: e.get_numerical_id())
+                GENERIC_STATE_DATABASE.arb_state[self.identifier]["last_emailed_event"] = max_event.get_numerical_id()
             return response
         return []
 
@@ -418,7 +422,7 @@ class TargetingPlugin(AbstractPlugin):
             return ("Targets have already been sent out to players. "
                    "Changing targeting settings will change players' targets!")
         else:
-            ""
+            return ""
 
     def ask_set_seeds(self):
         return [
@@ -497,7 +501,7 @@ class TargetingPlugin(AbstractPlugin):
         ]
 
     def render_assassin_summary(self, assassin: Assassin) -> List[AttributePairTableRow]:
-        graph = self.compute_targets([]) # we don't care about any issues that arise
+        graph = self.compute_targets([])  # we don't care about any issues that arise
         response: List[AttributePairTableRow] = []
         if assassin.identifier not in graph:
             return []
@@ -602,9 +606,9 @@ class TargetingPlugin(AbstractPlugin):
             try:
                 enforce_constraints = i < RELAXATION_THRESHOLD
                 chains.append(chain_generator.new_chain(
-                                        enforce_teams=enforce_constraints and (consecutive_fails < NO_TEAMS_THRESHOLD),
-                                        enforce_no_triangles=enforce_constraints and (consecutive_fails < NO_TRIANGLES_THRESHOLD),
-                                        enforce_no_mutuals=enforce_constraints and (consecutive_fails < NO_MUTALS_THRESHOLD)
+                                        no_teammates=enforce_constraints and (consecutive_fails < NO_TEAMS_THRESHOLD),
+                                        no_triangles=enforce_constraints and (consecutive_fails < NO_TRIANGLES_THRESHOLD),
+                                        no_mutuals=enforce_constraints and (consecutive_fails < NO_MUTALS_THRESHOLD)
                 ))
                 consecutive_fails = 0
                 if len(chains) == TARGETS_PER_PLAYER:
@@ -766,10 +770,10 @@ class TargetingPlugin(AbstractPlugin):
         # (but event datetime isn't)
         # using secret ID means users can't screw with the determinacy
         events = [e_model for e_model in EVENTS_DATABASE.events.values()]
-        events.sort(key=lambda e: e._Event__secret_id)
+        events.sort(key=lambda e: e.get_numerical_id())
 
         for e in events:
-            if int(e._Event__secret_id) > max_event:
+            if e.get_numerical_id() > max_event:
                 break
 
             deaths = filter_to_targetable((victim for (_, victim) in e.kills))
