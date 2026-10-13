@@ -184,9 +184,10 @@ class TestMayWeekUtilitiesPlugin:
         assert isclose(perm_scores[p[1] + " identifier"], invest_prop * Sf)
         assert isclose(temp_scores[p[1] + " identifier"], keep_prop * Sf + B + b * Sf + bs_points)
 
-        # no other players should have any permanent points at this stage either
+        # no other players should have any permanent points at this stage either (but they might have lost some through
+        # death)
         for name in p[2:]:
-            assert perm_scores[name + " identifier"] == 0
+            assert perm_scores[name + " identifier"] <= 0
 
         # now, move later in same day and add more kills for the same players. They shouldn't invest any more!
         game.new_datetime(minutes=4*60)
