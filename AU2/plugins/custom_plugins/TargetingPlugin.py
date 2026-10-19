@@ -435,15 +435,18 @@ class TargetingPlugin(AbstractPlugin):
 
     def ask_set_teams(self):
         return [
-            TeamsEditor(self.html_ids["Teams"], "",
-                        filter_to_targetable(ASSASSINS_DATABASE.assassins),
+            Label("The targeting algorithm will seek to avoid players within the same team targeting each other. "
+                  "Note that seeding will take precedence over teams when the algorithm can only satisfy one of these "
+                  "constraints."),
+            TeamsEditor(self.html_ids["Teams"], "Teams to be respected by the targeting algorithm",
+                        filter_to_targetable(sorted(ASSASSINS_DATABASE.assassins, key=lambda s: s.lower())),
                         GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("teams", []))
         ]
 
     def answer_set_teams(self, htmlResponse):
         teams = htmlResponse[self.html_ids["Teams"]]
         GENERIC_STATE_DATABASE.arb_state.setdefault(self.identifier, {})["teams"] = teams
-        return [Label("[TARGETING] Success!")]
+        return [Label("[TARGETING] Successfully updated teams!")]
 
     def ask_set_random_seed(self):
         return [
