@@ -343,8 +343,6 @@ class TargetingPlugin(AbstractPlugin):
 
     def on_hook_respond(self, hook: str, htmlResponse, data) -> List[HTMLComponent]:
         if hook == "SRCFPlugin_email":
-            # if graph computation time becomes an issue, we could yield the `last_graph` and then compute
-            # current_graph without needing to recompute
             response = []
             current_graph = self.compute_targets(response)
 
@@ -543,6 +541,13 @@ class TargetingPlugin(AbstractPlugin):
         start over if we hit a dead end. Finding Hamiltonian cycles is an NP problem but we expect the graph to be dense
         enough that in practice they'll be easy to find. Hence I didn't bother with backtracking, and instead allowed
         for constraints to be dropped if valid cycles can't be found.
+
+        IMPORTANT: If you ever think about editing this function, don't.
+                   If you still want to, make sure any change you make is
+                   DETERMINISTIC with respect to the initial seed.
+
+        UNDER NO CIRCUMSTANCES SHOULD YOU CHANGE THIS FUNCTION IN THE MIDDLE
+        OF THE GAME WITHOUT RISK OF SEVERE CONSEQUENCES.
         """
 
         teams = [set(t) for t in GENERIC_STATE_DATABASE.arb_state.get(self.identifier, {}).get("teams", [])]
@@ -555,7 +560,7 @@ class TargetingPlugin(AbstractPlugin):
 
         players = filter_to_targetable(ASSASSINS_DATABASE.assassins)
 
-        # Targeting graphs with 7 or less players are non-trivial to generate random graphs for, and don't
+        # Targeting graphs with 7 or fewer players are non-trivial to generate random graphs for, and don't
         # last long anyway.
         if len(players) <= 7:
             response.append(Label("[TARGETING] Refusing to generate a targeting graph (too few full players)."))
@@ -572,7 +577,7 @@ class TargetingPlugin(AbstractPlugin):
         # player -> teams mapping for checking seeding constraints
         player_teammate_mapping = {p: {teammate for t in teams for teammate in t if p in t} for p in players}
 
-        # generate initial targets via "chains"
+
         TARGETS_PER_PLAYER = self.get_targeting_param("targets_per_player")
 
         # controls how quickly to give up on enforcing constraints (rather than restarting from scratch)
@@ -586,6 +591,10 @@ class TargetingPlugin(AbstractPlugin):
         NO_TRIANGLES_THRESHOLD = self.get_targeting_param("no_triangles_threshold")
         NO_MUTALS_THRESHOLD = self.get_targeting_param("no_mutuals_threshold")
 
+        # we generate the initial targeting graph by generating 3 'chains', which are lists of all targetable players
+        # in different permutations each representating a Hamiltonian cycle that will be in the targeting graph.
+        # the ChainGenerator object handles the logic to enforce the various constraints on the targeting graph and to
+        # catch when constraints are relaxed, if allowed.
         chain_generator = ChainGenerator(
             players=players,
             targeting_graph={},
@@ -597,6 +606,9 @@ class TargetingPlugin(AbstractPlugin):
         consecutive_fails = 0
         chains = []
         for i in range(MAX_TRIES):
+            # in certain cases (especially with the complexity of the teams constraint) it may be difficult to generate
+            # a valid initial graph. If this is the case, we allow ChainGenerator to relax constraints, for the sake of
+            # starting the game.
             try:
                 enforce_constraints = i < RELAXATION_THRESHOLD
                 chains.append(chain_generator.new_chain(
@@ -725,11 +737,10 @@ class TargetingPlugin(AbstractPlugin):
 
             return chain
 
+        TARGETS_PER_PLAYER = self.get_targeting_param("targets_per_player")
         while True:
             try:
-                chain_one = new_unique_chain()
-                chain_two = new_unique_chain()
-                chain_three = new_unique_chain()
+                chains = [new_unique_chain() for _ in range(TARGETS_PER_PLAYER)]
                 break
             except FailedToCreateChainException:
                 # edge case where chain one and two create an impossibility result for chain three to exist
@@ -739,7 +750,7 @@ class TargetingPlugin(AbstractPlugin):
         # who the player P is targeting
         targeting_graph = {P: [] for P in players}
 
-        for c in [chain_one, chain_two, chain_three]:
+        for c in chains:
             for (targeter, targetee) in zip(c, c[1:] + [c[0]]):
                 targeting_graph[targeter].append(targetee)
 
@@ -754,6 +765,7 @@ class TargetingPlugin(AbstractPlugin):
             player_teams: Sequence[Set[str]] = ()
     ) -> Dict[str, List[str]]:
 
+        # 'inverse' of targeting graph: i.e. maps from players to those who have them as a target
         targeters_graph = {}
         for p, targets in targeting_graph.items():
             for t in targets:
