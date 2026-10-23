@@ -20,8 +20,8 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.CityWatchRankManager import DEFAULT_RANKS, CityWatchRankManager, DEFAULT_CITY_WATCH_RANK, AUTO_RANK_DEFAULT, \
     MANUAL_RANK_DEFAULT, CITY_WATCH_KILLS_RANKUP_DEFAULT
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.date_utils import get_now_dt, PRETTY_DATETIME_FORMAT
-from AU2.plugins.util.render_utils import event_url
+from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.render_utils import event_datetime_link
 
 CITY_WATCH_TABLE_TEMPLATE = """
 <p xmlns="">
@@ -279,12 +279,10 @@ class CityWatchPlugin(AbstractPlugin):
 
     def on_page_generate(self, htmlResponse, navbar_entries) -> List[HTMLComponent]:
         message = []
-        events = list(EVENTS_DATABASE.events.values())
-        events.sort(key=lambda event: event.datetime)
 
         city_watch_rank_manager = CityWatchRankManager(auto_ranking=self.gsdb_get("Auto Rank"), city_watch_kill_ranking=self.gsdb_get("City Watch Kills Rankup"))
         death_manager = DeathManager()
-        for e in events:
+        for e in EVENTS_DATABASE.events_chronologically():
             city_watch_rank_manager.add_event(e)
             death_manager.add_event(e)
 
@@ -298,8 +296,7 @@ class CityWatchPlugin(AbstractPlugin):
             city_watch.sort(key=lambda a: (-int(city_watch_rank_manager.get_relative_rank(a.identifier)), a.real_name))
             rows = []
             for a in city_watch:
-                deaths = [f'<a href="{event_url(e)}">{e.datetime.strftime(PRETTY_DATETIME_FORMAT)}</a>'
-                          for e in death_manager.get_death_events(a)]
+                deaths = [event_datetime_link(e) for e in death_manager.get_death_events(a)]
                 rows.append(
                     CITY_WATCH_TABLE_ROW_TEMPLATE.format(
                         RANK=city_watch_rank_manager.get_rank_name(a.identifier),

@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -27,6 +27,19 @@ class EventsDatabase(PersistentFile):
         Fetches an event given an identifier, if it exists, otherwise returns None
         """
         return self.events.get(identifier, None)
+
+    def events_chronologically(self, last: Optional[Event] = None) -> List[Event]:
+        """
+        Returns events in chronological order.
+
+        Args:
+            last (Optional[Event]): The last event to return. If `None`, all events will be returned.
+        """
+        events_up_to_cutoff = (
+            (e for e in self.events.values()
+             if e.datetime < last.datetime or (e.datetime == last.datetime and e.get_numerical_id() <= last.get_numerical_id()))
+        ) if last else self.events.values()
+        return sorted(events_up_to_cutoff, key=lambda e: (e.datetime, e.get_numerical_id()))
 
     def _refresh(self):
         """
