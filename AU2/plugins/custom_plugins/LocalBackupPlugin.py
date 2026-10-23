@@ -4,6 +4,7 @@ from typing import List
 
 from AU2 import BASE_WRITE_LOCATION
 from AU2.database import refresh_databases
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -59,6 +60,7 @@ class LocalBackupPlugin(AbstractPlugin):
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
                 shutil.copy(BASE_WRITE_LOCATION / f, backup_path / f)
+
         return [Label("[BACKUP] Success!")]
 
     def ask_restore_backup(self) -> List[HTMLComponent]:
@@ -83,4 +85,11 @@ class LocalBackupPlugin(AbstractPlugin):
             shutil.copy(backup_path / f, BASE_WRITE_LOCATION / f)
 
         refresh_databases()
+        # clear the last uploaded timestamp when restoring backups, so that SRCFPlugin treats it like resetting the
+        # databases.
+        # (note: it would be more fiddly to clear the timestamp when *creating* a backup as backups are made from disk
+        # rather than memory)
+        GENERIC_STATE_DATABASE.last_uploaded = None
+        GENERIC_STATE_DATABASE.save()
+
         return [Label(f"[BACKUP] Restored {chosen_backup}")]

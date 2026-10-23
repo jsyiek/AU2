@@ -817,7 +817,7 @@ class SRCFPlugin(AbstractPlugin):
             if local_last_upload is None:
                 # note: this case also occurs when upgrading AU2 from a version that uses uniqueId rather than
                 # timestamps for versioning, but we ignore that case as this change will be made between games
-                print("[SRCF Plugin] Your databases appear to be from A NEW GAME.")
+                print("[SRCF Plugin] Your databases appear to be from A NEW GAME OR A RESTORED LOCAL BACKUP.")
                 self._choose_upload_or_download(sftp)
             elif local_last_upload < remote_last_upload:
                 self._confirm_download(sftp)
