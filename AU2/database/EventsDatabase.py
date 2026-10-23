@@ -11,7 +11,7 @@ from AU2.database.model import PersistentFile, Event
 @dataclass_json
 @dataclass
 class EventsDatabase(PersistentFile):
-    WRITE_LOCATION = os.path.join(BASE_WRITE_LOCATION, "EventsSummary.json")
+    WRITE_LOCATION = BASE_WRITE_LOCATION / "EventsSummary.json"
 
     # map from identifier to event
     events: Dict[str, Event]

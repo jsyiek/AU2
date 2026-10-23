@@ -1,5 +1,6 @@
 import os
 from dataclasses_json import dataclass_json
+from abc import abstractmethod
 
 
 @dataclass_json
@@ -29,3 +30,7 @@ class PersistentFile:
                 dump = F.read()
             return cls.from_json(dump)
         return cls({})
+
+    @abstractmethod
+    def _refresh(self):
+        """Reload the database from disk"""

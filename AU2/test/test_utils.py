@@ -5,7 +5,7 @@ from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.model import PersistentFile, Assassin, Event
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database import refresh_databases
 from AU2.html_components.HTMLComponent import HTMLComponent
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.HiddenJSON import HiddenJSON
