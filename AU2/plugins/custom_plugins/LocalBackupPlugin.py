@@ -3,7 +3,7 @@ import shutil
 from typing import List
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database import refresh_databases
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown

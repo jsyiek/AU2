@@ -18,7 +18,6 @@ class GenericStateDatabase(PersistentFile):
     uniqueId: int = 0  # see get_unique_str
 
     last_uploaded: Optional[int] = None
-    uploader: Optional[str] = None
 
     # map from plugin identifier to whether it is enabled
     plugin_map: Dict[str, bool] = field(default_factory=dict)
@@ -55,6 +54,7 @@ class GenericStateDatabase(PersistentFile):
             return
 
         self.uniqueId = loaded.uniqueId
+        self.last_uploaded = loaded.last_uploaded
         self.plugin_map = loaded.plugin_map
         self.arb_state = loaded.arb_state
         self.arb_int_state = loaded.arb_int_state

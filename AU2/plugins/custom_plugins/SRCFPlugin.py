@@ -2,6 +2,7 @@ import contextlib
 import datetime
 import os
 import re
+import stat
 import time
 import pathlib
 from typing import Optional, List
@@ -10,12 +11,11 @@ import inquirer
 import paramiko
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE, AssassinsDatabase
-from AU2.database.EventsDatabase import EVENTS_DATABASE, EventsDatabase
-from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE, GenericStateDatabase
-from AU2.database import save_all_databases
-from AU2.database.model import Assassin
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
+from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database import save_all_databases, refresh_databases, UPLOAD_ORDER
+from AU2.database.model import Assassin, PersistentFile
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
@@ -38,7 +38,6 @@ SSH_PORT = 22
 # not concrete paths for the machine AU2 is running on!
 ASSASSINS_PATH = pathlib.PurePosixPath("/societies/assassins")
 AU2_DATA_PATH = ASSASSINS_PATH / "AU2_files"
-DATABASES = AU2_DATA_PATH / "databases"  # this appears to be unused?
 LOGS = AU2_DATA_PATH / "logs"
 
 LOCK_FILE = AU2_DATA_PATH / "lockfile.txt"
@@ -50,6 +49,11 @@ PUBLISH_LOG = LOGS / "publish.log"
 REMOTE_WEBPAGES_PATH = ASSASSINS_PATH / "public_html"
 REMOTE_BACKUP_LOCATION = AU2_DATA_PATH / "backups"
 REMOTE_DATABASE_LOCATION = AU2_DATA_PATH / "databases"
+
+
+def remote_database_path(db: PersistentFile) -> pathlib.PurePosixPath:
+    return REMOTE_DATABASE_LOCATION / os.path.basename(db.WRITE_LOCATION)
+
 
 EMAIL_TEMPLATE = """\
 MAIL FROM:assassins-umpire@srcf.net
@@ -591,6 +595,11 @@ class SRCFPlugin(AbstractPlugin):
         backup_path = REMOTE_BACKUP_LOCATION / backup_name
         self._makedirs(sftp, backup_path)
         self._log_to(sftp, EDIT_LOG, f"Creating backup at {backup_path}")
+        # we should be mindful that this means that if a local config database is introduced in future and a user for
+        # some reason downgrades AU2 they will end up including that database in the backup, so it should not contain
+        # any sensitive data (i.e. SRCF password). On the other hand, if a new database (e.g. for templates) were
+        # introduced in future and a user downgraded AU2, this does ensure that that database is also backed up despite
+        # the older version of AU2 not being aware of it.
         for f in self._find_jsons(BASE_WRITE_LOCATION):
             localpath = BASE_WRITE_LOCATION / f
             remotepath = backup_path / f
@@ -654,25 +663,18 @@ class SRCFPlugin(AbstractPlugin):
         """
         Publishes all databases (as saved to file)
         """
-        old_gsb = GenericStateDatabase.load()
-        # ensure that timestamp is saved in the database being uploaded...
-        GENERIC_STATE_DATABASE.last_uploaded = self._get_remote_time()
-        GENERIC_STATE_DATABASE.uploader = self.username
-        GENERIC_STATE_DATABASE.save()
-        try:
-            for database in self._find_jsons(BASE_WRITE_LOCATION):
-                localpath = BASE_WRITE_LOCATION / database
-                remotepath = REMOTE_DATABASE_LOCATION / database
-                self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
-                sftp.put(localpath, str(remotepath))
-                self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
-        except BaseException:
-            # if error, rollback local copies of databases
-            old_gsb.save()
-            # also revert timestamp in memory in case the exception is caught again
-            GENERIC_STATE_DATABASE.last_uploaded = old_gsb.last_uploaded
-            GENERIC_STATE_DATABASE.uploader = old_gsb.uploader
-            raise
+        for database in UPLOAD_ORDER:
+            localpath = database.WRITE_LOCATION
+            remotepath = remote_database_path(database)
+
+            self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
+            sftp.put(localpath, str(remotepath))
+            self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+        # now that the local GSD has been uploaded its timestamp should correspond to the remote GSD
+        new_timestamp = self._get_remote_gsd_timestamp(sftp)
+        GENERIC_STATE_DATABASE.last_uploaded = new_timestamp
+
+        # TODO: deal with edge case where multiple users uploading concurrently
 
     def _lock(self, sftp: paramiko.SFTPClient):
         """
@@ -742,21 +744,28 @@ class SRCFPlugin(AbstractPlugin):
             if db.endswith(".json"):
                 yield db
 
-    def _get_remote_time(self) -> int:
-        """Returns the UNIX timestamp on SRCF"""
-        with self._get_ssh_client() as ssh_client:
-            # get timestamp on SERVER
-            (_, stdout, _) = ssh_client.exec_command(f"date +%s")
-            return int(stdout.readline())
+    def _get_remote_gsd_timestamp(self, sftp: paramiko.SFTPClient) -> int:
+        """Returns the last modified timestamp of the remote GenericStateDatabase"""
+        gsd_stat = sftp.stat(str(remote_database_path(GENERIC_STATE_DATABASE)))
+        return stat.ST_MTIME(gsd_stat)
 
     def _download_databases(self, sftp: paramiko.SFTPClient):
-        for database in self._find_jsons(BASE_WRITE_LOCATION):
-            localpath = BASE_WRITE_LOCATION / database
-            remotepath = REMOTE_DATABASE_LOCATION / database
+        # do this first so that we don't accidentally get a timestamp *ahead* of the downloaded GSD if someone uploads
+        # whilst we are downloading
+        remote_timestamp = self._get_remote_gsd_timestamp(sftp)
+
+        # the order doesn't really matter for downloading, but we might as well use the same tuple when downloading
+        for database in UPLOAD_ORDER:
+            localpath = database.WRITE_LOCATION
+            remotepath = remote_database_path(database)
 
             self._log_to(sftp, ACCESS_LOG, f"Trying to read {database}")
             sftp.get(str(remotepath), localpath)
             self._log_to(sftp, ACCESS_LOG, f"Read {database}")
+
+        refresh_databases()
+        GENERIC_STATE_DATABASE.last_uploaded = remote_timestamp
+        GENERIC_STATE_DATABASE.save()  # ensure timestamp is saved on disk!
 
     def _confirm_download(self, sftp: paramiko.SFTPClient):
         print("[SRCF Plugin] Your databases appear to be BEHIND the copies on SRCF. "
@@ -802,70 +811,35 @@ class SRCFPlugin(AbstractPlugin):
             print("[SRCF Plugin] Success!")
 
     def _sync(self, sftp: paramiko.SFTPClient):
-        remotepath = REMOTE_DATABASE_LOCATION / os.path.basename(GENERIC_STATE_DATABASE.WRITE_LOCATION)
-        exists = True
         try:
-            sftp.stat(str(remotepath))
-        except FileNotFoundError:
-            exists = False
-        if exists:
-            localpath = BASE_WRITE_LOCATION / "TemporaryGenericStateDatabase.json"
-            sftp.get(str(remotepath), localpath)
-
-            with open(localpath, "r") as F:
-                dump = F.read()
-
-            remote_gsd = GenericStateDatabase.from_json(dump)
-            os.remove(localpath)
-
+            remote_last_upload = self._get_remote_gsd_timestamp(sftp)
             local_last_upload = GENERIC_STATE_DATABASE.last_uploaded
-            remote_last_upload = remote_gsd.last_uploaded
-            if local_last_upload is None and remote_last_upload is not None:
+            if local_last_upload is None:
+                # note: this case also occurs when upgrading AU2 from a version that uses uniqueId rather than
+                # timestamps for versioning, but we ignore that case as this change will be made between games
                 print("[SRCF Plugin] Your databases appear to be from A NEW GAME.")
                 self._choose_upload_or_download(sftp)
-            elif remote_last_upload is None:
-                # If no upload timestamp on server db fall back to 'old style' versioning
-                if remote_gsd.uniqueId > GENERIC_STATE_DATABASE.uniqueId:
-                    self._confirm_download(sftp)
-                elif remote_gsd.uniqueId < GENERIC_STATE_DATABASE.uniqueId:
-                    self._confirm_upload(
-                        sftp,
-                        "[SRCF Plugin] Your databases appear to be AHEAD of the copies on SRCF. "
-                        "Do you want to bring the REMOTE copies up to date?"
-                    )
-                else:
-                    print("[SRCF Plugin] Your local database APPEARS up to date. This may be the case if only small "
-                          "changes were made.")
-                    self._choose_upload_or_download(sftp)
-            elif remote_last_upload > local_last_upload:
+            elif local_last_upload < remote_last_upload:
                 self._confirm_download(sftp)
-            elif remote_last_upload == local_last_upload:
-                if remote_gsd.uploader == GENERIC_STATE_DATABASE.uploader:
-                    self._confirm_upload(
-                        sftp,
-                        "[SRCF Plugin] Your databases appear to be AHEAD OR UP TO DATE WITH the copies on SRCF. "
-                        "Do you want to bring the REMOTE copies up to date?"
-                    )
-                else:
-                    # Edge case where two users manage to have the same upload timestamp
-                    readable_upload_ts = datetime.datetime.utcfromtimestamp(remote_last_upload).strftime('%Y-%m-%d %H:%M:%S')
-                    print(f"[SRCF Plugin] Unable to determine whether your databases are ahead, behind or up to date "
-                          f"with the copies on SCRF, uploaded by {remote_gsd.uploader} at {readable_upload_ts}.")
-                    self._choose_upload_or_download(sftp)
+            elif local_last_upload == remote_last_upload:
+                self._confirm_upload(
+                    sftp,
+                    "[SRCF Plugin] Your databases appear to be AHEAD OR UP TO DATE WITH the copies on SRCF. "
+                    "Do you want to bring the REMOTE copies up to date?"
+                )
             else:
-                # in this case, remote_last_upload < local_last_upload,
+                # in this case local_last_upload > remote_last_upload
                 # which should be impossible, unless the user is somehow connecting to a different server
                 # it may be helpful for testing purposes to at some point add config options for the hostname etc
-                # hence why I am including this case
+                # hence why I am including this case rather than throwing an error
                 print("[SRCF Plugin] You appear to be connecting to A NEW SERVER.")
                 self._choose_upload_or_download(sftp)
 
-        else:
+        except FileNotFoundError:
             self._makedirs(sftp, REMOTE_DATABASE_LOCATION)
             self._publish_databases(sftp)
-            print("[SRCF Plugin] No databases were found in the SRCF, so local copies have been uploaded.")
+            print("[SRCF Plugin] No databases were found on SRCF, so local copies have been uploaded.")
 
-        refresh_databases()
         return []
 
     @contextlib.contextmanager
