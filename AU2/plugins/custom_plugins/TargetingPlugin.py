@@ -903,15 +903,20 @@ class TargetingPlugin(AbstractPlugin):
         The problem is constraint satisfaction so a Prolog-style "generate-and-test" is sufficient.
         """
 
-        deaths_adj = list(set([d for d in deaths if d in targeting_graph]))
-        visited = []
+        # remove duplicated deaths
+        # note that we can't just convert to set because this is non-deterministic!!
+        processable_deaths = []
+        visited = set()
         for d in deaths:
-            if d not in deaths_adj or d in visited:
+            if d in visited or d not in targeting_graph:
                 response.append(
-                    Label(f"WARNING: {d} has been killed more than once. Skipping this player when updating graph..."))
-            visited.append(d)
+                    Label(f"WARNING: {d} has been killed more than once. Skipping this player when updating graph...")
+                )
+            else:
+                processable_deaths.append(d)
+                visited.add(d)
 
-        deaths = deaths_adj
+        deaths = processable_deaths
 
         # collect a list of [non-unique] players who need new targets
         targeters = sum((targeters_graph[d] for d in deaths), start=[])
