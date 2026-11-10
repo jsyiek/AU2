@@ -13,8 +13,9 @@ from AU2.html_components.SimpleComponents.HiddenTextbox import HiddenTextbox
 from AU2.html_components.SimpleComponents.IntegerEntry import IntegerEntry
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.SelectorList import SelectorList
+from AU2.html_components.SimpleComponents.Table import Table
 from AU2.html_components.SpecialComponents.TeamsEditor import TeamsEditor
-from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, DangerousConfigExport
+from AU2.plugins.AbstractPlugin import AbstractPlugin, AttributePairTableRow, DangerousConfigExport, Export
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.custom_plugins.SRCFPlugin import Email
 
@@ -214,7 +215,14 @@ class TargetingPlugin(AbstractPlugin):
 
     def __init__(self):
         super().__init__("TargetingPlugin")
-        self.exports = []
+        self.exports = [
+            Export(
+                "targeting_debug_graph",
+                "Targeting -> Graph Diagnostics",
+                self.ask_debug_graph,
+                self.answer_debug_graph,
+            )
+        ]
 
         self.config_exports = [
             DangerousConfigExport(
@@ -1018,3 +1026,49 @@ class TargetingPlugin(AbstractPlugin):
 
             return True
         return False
+
+    def ask_debug_graph(self) -> List[HTMLComponent]:
+        return []
+
+    def answer_debug_graph(self, _) -> List[HTMLComponent]:
+        """Export to help with debugging the targeting graph.
+        Lists changes since the last emailed targets, and triangles and mutual targets in both the cached and computed
+        graphs"""
+        computed_targ_graph = self.compute_targets([])
+        cached_targ_graph = {a.identifier: a.__last_emailed_targets for a in ASSASSINS_DATABASE.get_filtered(include_hidden=True)}
+        BLANK = ((),)
+        components = []
+
+        # differences
+        differences = []
+        for ident, targs in computed_targ_graph.items():
+            cached_targs = cached_targ_graph.get(ident, ())
+            new_targs = [t for t in targs if t not in cached_targs]
+            old_targs = [t for t in cached_targs if t not in targs]
+            differences.extend(zip((ident for _ in new_targs), old_targs, new_targs))
+
+        components.extend((
+            Label("Target changes between cached and computed targets:"),
+            Table(differences or BLANK, headings=("Player".ljust(40), "Old Target".ljust(40), "New Target".ljust(40)))
+        ))
+
+        # constraints
+        for targ_graph, name in ((computed_targ_graph, "Computed Targets:"), (cached_targ_graph, "Cached Targets:")):
+            mutuals = []
+            triangles = []
+            for a1, targs1 in targ_graph.items():
+                for a2 in targs1:
+                    for a3 in targ_graph[a2]:
+                        if a3 == a1 and (a2, a1) not in mutuals:
+                            mutuals.append((a1, a2))
+                        if a1 in targ_graph[a3] and (a2, a3, a1) not in triangles and (a3, a1, a2) not in triangles:
+                            triangles.append((a1, a2, a3))
+            components.extend((
+                Label(name),
+                Label(f"{len(triangles)} Triangles"),
+                Table(triangles or BLANK),
+                Label(f"{len(mutuals)} Mutual targets"),
+                Table(mutuals or BLANK),
+            ))
+
+        return components
