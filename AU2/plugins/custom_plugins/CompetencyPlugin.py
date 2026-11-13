@@ -613,7 +613,7 @@ class CompetencyPlugin(AbstractPlugin):
         # `inco_corpses` is a list of tuples (Assassin, Event) where the Event is the event of their death
         # it includes hidden assassins, otherwise a player would disappear from the list of corpses when resurrected as
         # part of the city watch
-        inco_corpses = competency_manager.inco_corpses
+        inco_deaths = competency_manager.inco_deaths
 
         # if it's before the incobash we don't display any incos!
         first_incobash_dt = timestamp_to_dt(GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["FIRST INCOBASH"]))
@@ -641,10 +641,10 @@ class CompetencyPlugin(AbstractPlugin):
                 INCOS_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
 
-        if inco_corpses:
-            inco_corpses.sort(key=lambda a: (a[0].college, a[0].real_name, a[1]))
+        if inco_deaths:
+            inco_deaths.sort(key=lambda a: (a[0].college, a[0].real_name, a[1]))
             rows = []
-            for a, death_event in inco_corpses:
+            for a, death_event in inco_deaths:
                 rows.append(
                     DEAD_INCOS_TABLE_ROW_TEMPLATE.format(
                         NAME=a.real_name,
