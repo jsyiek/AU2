@@ -12,7 +12,7 @@ setuptools.setup(
     packages=setuptools.find_packages(include=['AU2*']),
     include_package_data=True,
     install_requires=reqs,
-    python_requires='>=3.9',
+    python_requires='>=3.11',
     entry_points={
         'console_scripts': [
             "au2 = AU2.__main__:safe_main",
