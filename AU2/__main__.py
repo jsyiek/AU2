@@ -2,7 +2,7 @@ import sys
 import time
 import traceback
 
-PYTHON_VERSION_REQUIREMENT = (3, 9)
+PYTHON_VERSION_REQUIREMENT = (3, 11)
 
 # check Python version to give a helpful message
 # need to do this before importing AU2 files because type hints can cause errors in old versions of python
