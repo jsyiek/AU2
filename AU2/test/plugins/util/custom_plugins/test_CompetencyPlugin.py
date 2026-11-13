@@ -217,7 +217,7 @@ class TestCompetencyPlugin:
 
         # now check the inco corpses
         manager = self.get_manager(game, auto_competency=auto_competency)
-        inco_corpses = manager.inco_corpses
+        inco_corpses = [c[0] for c in manager.inco_deaths]
 
         # neither the live, competent players,
         # nor the first set of players who died while competent,
