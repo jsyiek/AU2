@@ -32,13 +32,14 @@ from AU2.plugins.util.CompetencyManager import ID_GAME_START, ID_DEFAULT_EXTN, D
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import DATETIME_FORMAT, dt_to_timestamp, get_now_dt, timestamp_to_dt
 from AU2.plugins.util.game import get_game_start, get_game_end
+from AU2.plugins.util.render_utils import event_datetime_link
 
 INCOS_TABLE_TEMPLATE = """
 <p xmlns="">
       This is the list of incompetents:
    </p>
-<table xmlns="" class="playerlist">
-  <tr><th>Real Name</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th>Notes</th></tr>
+<table xmlns="" class="playerlist table-sort table-arrows">
+  <tr><th>Real Name</th><th>Address</th><th>College</th><th>Room Water Weapons Status</th><th class="disable-sort">Notes</th></tr>
   {ROWS}
 </table>
 """
@@ -51,14 +52,14 @@ DEAD_INCOS_TABLE_TEMPLATE = """
 <p xmlns="">
    	And what follows is a list of corpses:
    </p>
-<table xmlns="" class="playerlist">
-  <tr><th>Name</th><th>College</th><th>Pseudonym</th></tr>
+<table xmlns="" class="playerlist table-sort table-arrows">
+  <tr><th>Name</th><th>College</th><th>Pseudonym</th><th class='data-sort'>Death</th></tr>
   {ROWS}
 </table>
 """
 
 DEAD_INCOS_TABLE_ROW_TEMPLATE = """
-<tr><td>{NAME}</td><td>{COLLEGE}</td><td>{PSEUDONYM}</td></tr>
+<tr><td>{NAME}</td><td>{COLLEGE}</td><td>{PSEUDONYM}</td><td data-sort='{DEATH_TS}'>{DEATH}</td></tr>
 """
 
 NO_INCOS = """<p xmlns="">Hmm, how interesting... no one is incompetent yet.</p>"""
@@ -608,11 +609,11 @@ class CompetencyPlugin(AbstractPlugin):
             competency_manager.add_event(e)
             death_manager.add_event(e)
 
-        # dead incos != incos who are currently dead,
-        # but rather players who died while inco.
-        # note that `dead_incos` includes hidden assassins,
-        # otherwise a player would disappear from the list of corpses when resurrected as part of the city watch
-        dead_incos = competency_manager.inco_corpses
+        # dead incos != incos who are currently dead, but rather players who died while inco.
+        # `inco_corpses` is a list of tuples (Assassin, Event) where the Event is the event of their death
+        # it includes hidden assassins, otherwise a player would disappear from the list of corpses when resurrected as
+        # part of the city watch
+        inco_corpses = competency_manager.inco_corpses
 
         # if it's before the incobash we don't display any incos!
         first_incobash_dt = timestamp_to_dt(GENERIC_STATE_DATABASE.arb_state.get(self.plugin_state["FIRST INCOBASH"]))
@@ -640,15 +641,17 @@ class CompetencyPlugin(AbstractPlugin):
                 INCOS_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
 
-        if dead_incos:
-            dead_incos.sort(key=lambda a: (a.college, a.real_name))
+        if inco_corpses:
+            inco_corpses.sort(key=lambda a: (a[0].college, a[0].real_name, a[1]))
             rows = []
-            for a in dead_incos:
+            for a, death_event in inco_corpses:
                 rows.append(
                     DEAD_INCOS_TABLE_ROW_TEMPLATE.format(
                         NAME=a.real_name,
                         COLLEGE=a.college,
-                        PSEUDONYM=a.all_pseudonyms()
+                        PSEUDONYM=a.all_pseudonyms(),
+                        DEATH_TS=dt_to_timestamp(death_event.datetime),
+                        DEATH=event_datetime_link(death_event),
                     )
                 )
             tables.append(

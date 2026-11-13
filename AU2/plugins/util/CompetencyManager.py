@@ -22,7 +22,7 @@ class CompetencyManager:
     def __init__(self, game_start: datetime.datetime):
         # from assassin ID to deadline
         self.deadlines = defaultdict(lambda: self.game_start + self.initial_competency_period)
-        self.inco_corpses: List[Assassin] = []
+        self.inco_corpses: List[Assassin, Event] = []
         self.game_start = game_start
         self.initial_competency_period = datetime.timedelta(days=GENERIC_STATE_DATABASE.arb_int_state.get(ID_GAME_START, DEFAULT_START_COMPETENCY))
         self.activated = GENERIC_STATE_DATABASE.plugin_map.get("CompetencyPlugin", False)
@@ -40,7 +40,7 @@ class CompetencyManager:
         for (_, victim) in e.kills:
             victim_model = ASSASSINS_DATABASE.get(victim)
             if self.is_inco_at(victim_model, e.datetime):
-                self.inco_corpses.append(victim_model)
+                self.inco_corpses.append((victim_model, e))
         if self.auto_competency:
             for (killer, victim) in e.kills:
                 victim_model = ASSASSINS_DATABASE.get(victim)
