@@ -29,7 +29,7 @@ from AU2.plugins.AbstractPlugin import AbstractPlugin, Export, HookedExport, Con
 from AU2.plugins.CorePlugin import registered_plugin
 from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
-from AU2.plugins.util.date_utils import get_now_dt
+from AU2.plugins.util.date_utils import dt_to_timestamp, get_now_dt, timestamp_to_dt
 
 SRCF_WEBSITE = "shell.srcf.net"
 SSH_PORT = 22
@@ -653,7 +653,7 @@ class SRCFPlugin(AbstractPlugin):
             self._log_to(sftp, ACCESS_LOG, "Checked lock.")
         if re.match(r"^[a-zA-Z0-9]+,[0-9]+$", lock):
             username, time_str = lock.split(",")
-            unix_ts = datetime.datetime.utcfromtimestamp(int(time_str))
+            unix_ts = timestamp_to_dt(int(time_str))
             return username, unix_ts
         print("[SRCF Plugin] Found corrupted lock file. Deleting.")
         sftp.remove(str(LOCK_FILE))
@@ -689,7 +689,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         if not self.logged_in:
             return
-        unix_ts = int(get_now_dt().timestamp())
+        unix_ts = dt_to_timestamp(get_now_dt())
         self._makedirs(sftp, os.path.dirname(LOCK_FILE))
         self._log_to(sftp, ACCESS_LOG, "Claimed lock.")
         with sftp.file(str(LOCK_FILE), "w+") as F:
