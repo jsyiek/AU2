@@ -2,7 +2,6 @@ import contextlib
 import datetime
 import os
 import re
-import stat
 import time
 import pathlib
 from typing import Optional, List
@@ -433,10 +432,10 @@ class SRCFPlugin(AbstractPlugin):
 
                     self._log_to(sftp, PUBLISH_LOG, "Tried to send emails.")
                     save_all_databases()  # needed to make sure emailed competency deadlines and targets are uploaded
-                    self._publish_databases(sftp)
-                    components.append(Label(f"[SRCFPlugin] Uploaded database."))
-                    autobackup_name = self._autobackup(sftp)
+                    autobackup_name = self._autobackup(sftp) # save backup first in case of upload clashes
                     components.append(Label(f"[SRCFPlugin] Created remote backup {autobackup_name}"))
+                    if self._publish_databases(sftp):
+                        components.append(Label(f"[SRCFPlugin] Uploaded database."))
         return components
 
     def ask_ignore_lock(self) -> List[HTMLComponent]:
@@ -569,6 +568,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         if not htmlResponse[self.html_ids["ignore_lock"]]:
             return [Label("[SRCF Plugin] Aborted.")]
+        components = []
         with self._get_client() as sftp:
             if htmlResponse[self.html_ids["requires_claiming"]]:
                 print("[SRCF Plugin] Claiming lock...")
@@ -583,13 +583,12 @@ class SRCFPlugin(AbstractPlugin):
                 self._log_to(sftp, PUBLISH_LOG, f"Published {page}")
                 os.remove(localpath)
 
-            self._publish_databases(sftp)
-            automatic_backup = self._autobackup(sftp)
+            automatic_backup = self._autobackup(sftp) # make backup first in case of upload clashes
+            components.append(Label(f"[SRCFPlugin] Automatically created backup {automatic_backup}"))
+            if self._publish_databases(sftp):
+                components.append(Label("[SRCFPlugin] Successfuly published locally generated pages and uploaded database."))
 
-        return [
-            Label("[SRCFPlugin] Successfuly published locally generated pages and uploaded database."),
-            Label(f"[SRCFPlugin] Automatically created backup {automatic_backup}")
-        ]
+        return components
 
     def _backup_to_remote(self, sftp, backup_name: str):
         backup_path = REMOTE_BACKUP_LOCATION / backup_name
@@ -639,7 +638,7 @@ class SRCFPlugin(AbstractPlugin):
             self._backup_to_remote(sftp, backup_name)
         return [Label("[SRCF Plugin] Success!")]
 
-    def _read_lock_file(self, sftp: paramiko.SFTPClient) -> (Optional[str], Optional[datetime.datetime]):
+    def _read_lock_file(self, sftp: paramiko.SFTPClient, as_int: bool = False) -> (Optional[str], Optional[datetime.datetime | int]):
         """
         Reads a lock file. Deletes it if it's corrupted.
         """
@@ -653,15 +652,21 @@ class SRCFPlugin(AbstractPlugin):
             self._log_to(sftp, ACCESS_LOG, "Checked lock.")
         if re.match(r"^[a-zA-Z0-9]+,[0-9]+$", lock):
             username, time_str = lock.split(",")
-            unix_ts = timestamp_to_dt(int(time_str))
-            return username, unix_ts
+            time_int = int(time_str)
+            if as_int:
+                return username, time_int
+            else:
+                return username, timestamp_to_dt(time_int)
         print("[SRCF Plugin] Found corrupted lock file. Deleting.")
         sftp.remove(str(LOCK_FILE))
         return None, None
 
-    def _publish_databases(self, sftp: paramiko.SFTPClient):
+    def _publish_databases(self, sftp: paramiko.SFTPClient) -> bool:
         """
         Publishes all databases (as saved to file)
+
+        Returns:
+            bool: True if the databases uploaded correctly, False (or raises an exception) otherwise
         """
         lock_val = self._lock(sftp)
         for database in UPLOAD_ORDER:
@@ -673,15 +678,15 @@ class SRCFPlugin(AbstractPlugin):
             self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
 
         # after publishing, check the lock, to stop concurrent uploads
-        new_lock_val = self._read_lock_file(sftp)
+        new_lock_val = self._read_lock_file(sftp, as_int=True)
         if lock_val != new_lock_val:
             print(f"[SRCFPlugin] ERROR: user {new_lock_val[0]} claimed the lock during upload.")
-            self._choose_upload_or_download(sftp)
-            return
+            return False
 
         # now that the local GSD has been uploaded its timestamp should correspond to the remote GSD
         new_timestamp = self._get_remote_gsd_timestamp(sftp)
         GENERIC_STATE_DATABASE.last_uploaded = new_timestamp
+        return True
 
     def _lock(self, sftp: paramiko.SFTPClient) -> (str, int):
         """
@@ -689,7 +694,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         if not self.logged_in:
             return
-        unix_ts = dt_to_timestamp(get_now_dt())
+        unix_ts = int(dt_to_timestamp(get_now_dt()))
         self._makedirs(sftp, os.path.dirname(LOCK_FILE))
         self._log_to(sftp, ACCESS_LOG, "Claimed lock.")
         with sftp.file(str(LOCK_FILE), "w+") as F:
@@ -739,9 +744,11 @@ class SRCFPlugin(AbstractPlugin):
         self.password = password
         try:
             with self._get_client() as sftp:
+                self.logged_in = True  # needed so that _lock works correctly
                 self._sync(sftp)
 
         except paramiko.ssh_exception.AuthenticationException:
+            self.logged_in = False
             self.username = ""
             self.password = ""
             return False
@@ -755,7 +762,7 @@ class SRCFPlugin(AbstractPlugin):
     def _get_remote_gsd_timestamp(self, sftp: paramiko.SFTPClient) -> int:
         """Returns the last modified timestamp of the remote GenericStateDatabase"""
         gsd_stat = sftp.stat(str(remote_database_path(GENERIC_STATE_DATABASE)))
-        return stat.ST_MTIME(gsd_stat)
+        return gsd_stat.st_mtime
 
     def _download_databases(self, sftp: paramiko.SFTPClient):
         # do this first so that we don't accidentally get a timestamp *ahead* of the downloaded GSD if someone uploads
@@ -795,8 +802,8 @@ class SRCFPlugin(AbstractPlugin):
             default=True)
         ])
         if a is not None and a["confirm"]:
-            self._publish_databases(sftp)
-            print("[SRCF Plugin] Success!")
+            if self._publish_databases(sftp):
+                print("[SRCF Plugin] Success!")
         else:
             print("[SRCF Plugin] Did not update REMOTE copies.")
 
@@ -815,8 +822,8 @@ class SRCFPlugin(AbstractPlugin):
             self._download_databases(sftp)
             print("[SRCF Plugin] Success!")
         elif a["confirm"] == "Upload":
-            self._publish_databases(sftp)
-            print("[SRCF Plugin] Success!")
+            if self._publish_databases(sftp):
+                print("[SRCF Plugin] Success!")
 
     def _sync(self, sftp: paramiko.SFTPClient):
         try:
@@ -845,8 +852,8 @@ class SRCFPlugin(AbstractPlugin):
 
         except FileNotFoundError:
             self._makedirs(sftp, REMOTE_DATABASE_LOCATION)
-            self._publish_databases(sftp)
-            print("[SRCF Plugin] No databases were found on SRCF, so local copies have been uploaded.")
+            if self._publish_databases(sftp):
+                print("[SRCF Plugin] No databases were found on SRCF, so local copies have been uploaded.")
 
         return []
 
