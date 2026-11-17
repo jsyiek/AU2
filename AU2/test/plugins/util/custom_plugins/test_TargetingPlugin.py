@@ -3,7 +3,7 @@ import time
 
 from typing import Dict, List
 
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database import refresh_databases
 from AU2.plugins.custom_plugins.TargetingPlugin import TargetingPlugin
 from AU2.test.test_utils import plugin_test, some_players, MockGame
 

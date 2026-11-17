@@ -3,7 +3,8 @@ import shutil
 from typing import List
 
 from AU2 import BASE_WRITE_LOCATION
-from AU2.database.model.database_utils import refresh_databases
+from AU2.database import refresh_databases
+from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.html_components import HTMLComponent
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -16,7 +17,7 @@ from AU2.plugins.util.date_utils import get_now_dt
 @registered_plugin
 class LocalBackupPlugin(AbstractPlugin):
 
-    BACKUP_LOCATION = os.path.join(BASE_WRITE_LOCATION, "backup")
+    BACKUP_LOCATION = BASE_WRITE_LOCATION / "backup"
     if not os.path.exists(BACKUP_LOCATION):
         os.mkdir(BACKUP_LOCATION)
 
@@ -54,11 +55,12 @@ class LocalBackupPlugin(AbstractPlugin):
         ]
 
     def answer_backup(self, htmlResponse) -> List[HTMLComponent]:
-        backup_path = os.path.join(self.BACKUP_LOCATION, htmlResponse[self.html_ids["Backup Name"]])
+        backup_path = self.BACKUP_LOCATION / htmlResponse[self.html_ids["Backup Name"]]
         os.mkdir(backup_path)
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
-                shutil.copy(os.path.join(BASE_WRITE_LOCATION, f), os.path.join(backup_path, f))
+                shutil.copy(BASE_WRITE_LOCATION / f, backup_path / f)
+
         return [Label("[BACKUP] Success!")]
 
     def ask_restore_backup(self) -> List[HTMLComponent]:
@@ -77,10 +79,17 @@ class LocalBackupPlugin(AbstractPlugin):
             return [Label("[BACKUP] Aborted.")]
         for f in os.listdir(BASE_WRITE_LOCATION):
             if f.endswith(".json"):
-                os.remove(os.path.join(BASE_WRITE_LOCATION, f))
-        backup_path = os.path.join(self.BACKUP_LOCATION, chosen_backup)
+                os.remove(BASE_WRITE_LOCATION / f)
+        backup_path = self.BACKUP_LOCATION / chosen_backup
         for f in os.listdir(backup_path):
-            shutil.copy(os.path.join(backup_path, f), os.path.join(BASE_WRITE_LOCATION, f))
+            shutil.copy(backup_path / f, BASE_WRITE_LOCATION / f)
 
         refresh_databases()
+        # clear the last uploaded timestamp when restoring backups, so that SRCFPlugin treats it like resetting the
+        # databases.
+        # (note: it would be more fiddly to clear the timestamp when *creating* a backup as backups are made from disk
+        # rather than memory)
+        GENERIC_STATE_DATABASE.last_uploaded = None
+        GENERIC_STATE_DATABASE.save()
+
         return [Label(f"[BACKUP] Restored {chosen_backup}")]
