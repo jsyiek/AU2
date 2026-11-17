@@ -663,6 +663,7 @@ class SRCFPlugin(AbstractPlugin):
         """
         Publishes all databases (as saved to file)
         """
+        lock_val = self._lock(sftp)
         for database in UPLOAD_ORDER:
             localpath = database.WRITE_LOCATION
             remotepath = remote_database_path(database)
@@ -670,23 +671,30 @@ class SRCFPlugin(AbstractPlugin):
             self._log_to(sftp, PUBLISH_LOG, f"Trying to save {database}")
             sftp.put(localpath, str(remotepath))
             self._log_to(sftp, PUBLISH_LOG, f"Saved {database}")
+
+        # after publishing, check the lock, to stop concurrent uploads
+        new_lock_val = self._read_lock_file(sftp)
+        if lock_val != new_lock_val:
+            print(f"[SRCFPlugin] ERROR: user {new_lock_val[0]} claimed the lock during upload.")
+            self._choose_upload_or_download(sftp)
+            return
+
         # now that the local GSD has been uploaded its timestamp should correspond to the remote GSD
         new_timestamp = self._get_remote_gsd_timestamp(sftp)
         GENERIC_STATE_DATABASE.last_uploaded = new_timestamp
 
-        # TODO: deal with edge case where multiple users uploading concurrently
-
-    def _lock(self, sftp: paramiko.SFTPClient):
+    def _lock(self, sftp: paramiko.SFTPClient) -> (str, int):
         """
         Claims a lock.
         """
         if not self.logged_in:
             return
-        unix_ts = get_now_dt().timestamp()
+        unix_ts = int(get_now_dt().timestamp())
         self._makedirs(sftp, os.path.dirname(LOCK_FILE))
         self._log_to(sftp, ACCESS_LOG, "Claimed lock.")
         with sftp.file(str(LOCK_FILE), "w+") as F:
-            F.write(f"{self.username},{int(unix_ts)}")
+            F.write(f"{self.username},{unix_ts}")
+        return self.username, unix_ts
 
     def _makedirs(self, sftp: paramiko.SFTPClient, dir_path: pathlib.PurePosixPath):
         """
