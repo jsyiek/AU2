@@ -54,6 +54,8 @@ class WantedManager:
         if last_event['event_time'] + last_event['wanted_duration'] > time:
             return True
 
+        return False
+
     def get_wanted_player_deaths(self, city_watch=False):
         wanted_deaths = []
         for player_id in self.wanted_events:

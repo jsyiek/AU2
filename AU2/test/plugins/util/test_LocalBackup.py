@@ -19,15 +19,20 @@ class TestLocalBackupPlugin:
 
         plugin = CorePlugin()
 
+        # if fail DigitsChallenge, database shouldn't be nuked
+        plugin.answer_reset_database({
+            plugin.identifier: False,
+        })
+
         Database.has_assassin(p[0])                         \
                 .having.identifier(p[0] + " identifier")   \
                 .having.college(p[0] + " college")
 
         Database.has_events(4)
 
+        # but if DigitsChallenge is passed, database should have been nuked
         plugin.answer_reset_database({
-            plugin.identifier + "_DigitsChallenge_HiddenTextbox": "12345",
-            plugin.identifier + "_DigitsChallenge_NamedSmallTextbox": "12345",
+            plugin.identifier: True,
         })
 
         for player in p:

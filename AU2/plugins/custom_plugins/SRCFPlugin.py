@@ -31,6 +31,8 @@ from AU2.plugins.constants import WEBPAGE_WRITE_LOCATION
 from AU2.plugins.util.DeathManager import DeathManager
 from AU2.plugins.util.date_utils import get_now_dt
 
+from socket import gaierror
+
 SRCF_WEBSITE = "shell.srcf.net"
 SSH_PORT = 22
 
@@ -721,6 +723,12 @@ class SRCFPlugin(AbstractPlugin):
         except paramiko.ssh_exception.AuthenticationException:
             self.username = ""
             self.password = ""
+            print("Invalid username/password.")
+            return False
+        except (gaierror, paramiko.ssh_exception.NoValidConnectionsError):
+            self.username = ""
+            self.password = ""
+            print("Could not connect to server. Check your internet connection, and whether SRCF is down.")
             return False
         return True
 

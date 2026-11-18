@@ -159,7 +159,7 @@ class WantedPlugin(AbstractPlugin):
         messages = []
         # sort by datetime to ensure we read events in chronological order
         # (umpires messing with event timings could affect the canon timeline!)
-        events = sorted(list(EVENTS_DATABASE.events.values()), key=lambda event: event.datetime)
+        events = EVENTS_DATABASE.events_chronologically()
 
         city_watch_ranks_enabled = GENERIC_STATE_DATABASE.plugin_map.get("CityWatchPlugin", False)
 
@@ -231,7 +231,7 @@ class WantedPlugin(AbstractPlugin):
             tables.append(
                 CITY_WATCH_TABLE_TEMPLATE.format(ROWS="".join(rows))
             )
-        if wanted_player_deaths or wanted_player_deaths:
+        if wanted_player_deaths or wanted_city_watch_deaths:
             tables.append(DEAD_WANTED_INTRO_TEXT)
         if wanted_player_deaths:
             rows = []

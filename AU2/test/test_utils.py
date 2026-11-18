@@ -1,5 +1,5 @@
 import datetime
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from AU2 import TIMEZONE
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
@@ -290,7 +290,7 @@ class ProxyAssassin:
         """
         return self.with_accomplices(*others)
 
-    def kills(self, *victims: str, headline: str = "") -> ProxyEvent:
+    def kills(self, *victims: str, headline: str = "", manual_competency: Optional[int] = 14) -> ProxyEvent:
         """
         Submits an event to the Events database where this assassin (with accomplice help) kills (an)other(s)
 
@@ -301,10 +301,12 @@ class ProxyAssassin:
         Returns:
             ProxyEvent: a representation of the event created
         """
-        event = self.is_involved_in_event(assassins=victims,
-                                          headline=headline,
-                                          kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in victims],
-                                          pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): 14 for a in self.assassins}}})
+        event = self.is_involved_in_event(
+            assassins=victims,
+            headline=headline,
+            kills=[(self.__ident(self.assassins[0]), self.__ident(v)) for v in victims],
+            pluginState={"CompetencyPlugin": {"competency": {self.__ident(a): manual_competency for a in self.assassins}}} if manual_competency else {}
+        )
 
         for v in victims:
             event.mockGame.has_died(v)
