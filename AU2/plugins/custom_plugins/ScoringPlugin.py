@@ -12,8 +12,9 @@ from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
 from AU2.database.model.Assassin import Assassin
 from AU2.database.model.Event import Event
+from AU2.html_components.DependentComponents.IfElse import IfElse, Literal, ComponentValue, Equal, Not
 from AU2.html_components.HTMLComponent import HTMLComponent
-from AU2.html_components.MetaComponents.Branch import Branch
+from AU2.html_components.MetaComponents.Dependency import Dependency
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
@@ -551,18 +552,83 @@ class ScoringPlugin(AbstractPlugin):
 
     def ask_set_duel_conditions(self) -> List[HTMLComponent]:
         pts_reqs_settings = (
-            FloatEntry(
-                self.html_ids["% Points Requirement"],
-                "Minimum qualification %",
-                self.gsdb_get("% Points Requirement"),
-            ),
-            Checkbox(
-                self.html_ids["Soft-force Duel?"],
-                "Ignore points requirement for second duellist?",
-                self.gsdb_get("Soft-force Duel?"),
-            ),
         )
         return [
+            Dependency(dependentOn=self.html_ids["Points Requirement Type"],
+                       htmlComponents=[
+                           InputWithDropDown(self.html_ids["Points Requirement Type"],
+                                             title="Type of points requirement to use",
+                                             options=[
+                                                 ("% of lowest-qualifying duellist's points", "lowest_qualifier"),
+                                                 ("% of highest-qualifying duellist's points", "highest_qualifier"),
+                                                 ("No points requirement", "none")
+                                             ],
+                                             selected=self.gsdb_get("Points Requirement Type")
+                           ),
+                           # explanation for 'lowest-qualifying duellist' mode
+                           IfElse(Equal(
+                               ComponentValue[str](self.html_ids["Points Requirement Type"]),
+                               Literal("lowest_qualifier")
+                           ), then=[Label(line) for line in (
+"Below you can set a minimum points requirement for the duel, as a percentage of the score of the lowest-scoring "
+"duellist.",
+"Specifically, players qualify for the duel in descending order of points, and this stops either when"
+" the number of duellists reaches the maximum (set below), or when a player has fewer than this "
+"percentage of the points of the lowest-scoring duellist so far.",
+"For example, the default value is 50, which corresponds to the current rules requiring duellists to "
+"have at least HALF the points of the lowest scoring duellist above them. Then suppose at the end of "
+"open season we have the following standings:",
+"    Player A: 100 points, competent",
+"    Player B: 80 points, inco",
+"    Player C: 40 points, competent",
+"    Player D: 30 points, competent",
+"    Player E: 20 points, inco",
+"    Player F: 10 points, competent",
+"    ...",
+"If AU2 has the default config of ignoring the points requirement for the second duellist, disallowing inco duellists,"
+" and a maximum of 6 duellists, then the duellists are players A, C, D, because:",
+"   - Player B is disqualified for being inco.",
+"   - Players A and C qualify as the two highest-scoring non-inco players.",
+"   - Player D qualifies because 30 points >= half of 40 points (Player C's score)",
+"   - Player E is disqualified for being inco.",
+"   - Player F and any lower-scoring players does not qualify as Player F's score 10 < half of 30 (Player D's score).",
+"If Player E were not inco, however, then both Players E and F would additionally qualify as duellists.",
+"If AU2 is set to *not* ignore the points requirement for the second duellist, then A wins without a duel because:",
+"   - Player B is disqualified for being inco.",
+"   - Player C and below do not qualify because Player C's score 40 < half of 100 (Player A's score).",
+"If Player B were not inco however, the duelists would be Players A, B, C, D because:",
+"   - Player B has score 80 >= half of 100 (Player A's score).",
+"   - Player C has score 40 >= half of 80 (Player B's score).",
+"   - The subsequent players' eligibilities are identical to the first scenario.",
+                           )]),
+                           # explanation for 'highest-qualifying duellist' mode
+                           # this is much easier to explain.
+                           IfElse(Equal(
+                               ComponentValue[str](self.html_ids["Points Requirement Type"]),
+                               Literal("highest_qualifier")
+                           ), then=(Label(
+                                   "Below you can set a minimum points requirement for the duel, as a percentage"
+                                   " of the score of the top-scoring duellist."
+                           ),)),
+                           # only show qualification % and soft-forcing configs if we're using a mode that uses them!
+                           # currently that's everything except 'No points requirement'.
+                           IfElse(Not(Equal(
+                               ComponentValue(self.html_ids["Points Requirement Type"]),
+                               Literal("none")
+                           )), then=(
+                               FloatEntry(
+                                   self.html_ids["% Points Requirement"],
+                                   "Minimum qualification %",
+                                   self.gsdb_get("% Points Requirement"),
+                               ),
+                               Checkbox(
+                                   self.html_ids["Soft-force Duel?"],
+                                   "Ignore points requirement for second duellist?",
+                                   self.gsdb_get("Soft-force Duel?"),
+                               ),
+                           ))
+                        ]
+            ),
             IntegerEntry(
                 self.html_ids["Max Duellists"],
                 "Maximum number of duellists",
@@ -572,52 +638,6 @@ class ScoringPlugin(AbstractPlugin):
                 self.html_ids["Allow Inco Duellists?"],
                 "Allow inco duellists?",
                 self.gsdb_get("Allow Inco Duellists?"),
-            ),
-            Branch(self.html_ids["Points Requirement Type"],
-                   title="Type of points requirement to use?",
-                   options=[
-                       ("% of lowest-qualifying duellist's points", "lowest_qualifier"),
-                       ("% of highest-qualifying duellis's points", "highest_qualifier"),
-                       ("No points requirement", "none")
-                   ],
-                   selected=self.gsdb_get("Points Requirement Type"),
-                   components_map={
-                       "lowest_qualifier": (
-                           # TODO: sort out what happens w explanation when not soft-forcing!
-                           Label("Below you can set a minimum points requirement for the duel, as a percentage."),
-                           Label(
-                               "Specifically, players qualify for the duel in descending order of points, and this stops either when"
-                               " the number of duellists reaches the maximum (set above), or when a player has fewer than this "
-                               "percentage of the points of the lowest-scoring duellist so far. However, this rule is ignored for "
-                               "the second duellist."),
-                           Label(
-                               "For example, the default value is 50, which corresponds to the current rules requiring duellists to "
-                               "have at least HALF the points of the lowest scoring duellist above them. Then suppose at the end of "
-                               "open season we have the following standings:"),
-                           Label("    Player A: 100 points, competent"),
-                           Label("    Player B: 80 points, inco"),
-                           Label("    Player C: 40 points, competent"),
-                           Label("    Player D: 30 points, competent"),
-                           Label("    Player E: 20 points, inco"),
-                           Label("    Player F: 10 points, competent"),
-                           Label("    ..."),
-                           Label(
-                               "If we have the default config of disallowing inco duellists, and a maximum of 6 duellists, then the "
-                               "duellists are players A, C, D."),
-                           Label(
-                               "Player B is disqualified for being inco. Players A and C qualify as the two highest-scoring non-inco"
-                               " players. Player D qualifies because 30 points >= half of 40 points (Player C's score). Player E is"
-                               " disqualified for being inco, and then Player F and any lower-scoring players does not qualify as 10"
-                               " < half of 30 (Player D's score). If Player E were not inco, however, then both Players E and F "
-                               "would qualify as duellists."),
-                           *pts_reqs_settings
-                        ),
-                       "highest_qualifier": (
-                           Label("Below you can set a minimum points requirement for the duel, as a percentage of the "
-                                 "highest-scoring duellist's points."),
-                           *pts_reqs_settings
-                        ),
-                   }
             ),
         ]
 

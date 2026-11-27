@@ -31,12 +31,12 @@ from AU2.html_components.DependentComponents.AssassinDependentSelector import As
 from AU2.html_components.DependentComponents.AssassinDependentTextEntry import AssassinDependentTextEntry
 from AU2.html_components.DependentComponents.AssassinDependentInputWithDropdown import AssassinDependentInputWithDropDown
 from AU2.html_components.DependentComponents.AssassinPseudonymPair import AssassinPseudonymPair
+from AU2.html_components.DependentComponents.IfElse import IfElse
 from AU2.html_components.SimpleComponents.Checkbox import Checkbox
 from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
-from AU2.html_components.MetaComponents.Branch import Branch
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
 from AU2.html_components.HiddenComponent import HiddenComponent
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -156,78 +156,70 @@ def inquirer_prompt_with_abort(*args, **kwargs) -> Any:
     return output
 
 
-def render(html_component, dependency_context={}):
+def render_components(components: Sequence[HTMLComponent],
+                      dependency_context: Optional[Dict[str, Any]] = None,
+                      backwards: bool = False):
+    if backwards and not components:
+        raise KeyboardInterrupt()
+
+    if dependency_context is None:
+        dependency_context = {}
+    dependency_context: Dict[str, Any]
+
+    inp = {}
+    iteration = 0
+    last_step = -1 if backwards else 1
+    while iteration < len(components):
+        if iteration == -1:
+            raise KeyboardInterrupt()
+        try:
+            result = render(components[iteration], dependency_context, backwards = last_step == -1)
+            inp.update(result)
+            dependency_context.update(result)
+            iteration += 1
+            last_step = 1
+        except KeyboardInterrupt:
+            iteration -= 1
+            last_step = -1
+    return inp
+
+
+def render(html_component, dependency_context={}, backwards: bool = False):
     """
     dependency context is a MUTABLE DEFAULT ARGUMENT
     if you are modifying it THEN MODIFY A COPY
     TODO: don't use a mutable default arg!
     """
-    if isinstance(html_component, Dependency):
-        iteration = 0
-        last_step = 1
-        while iteration < len(html_component.htmlComponents):
-            if iteration == -1:
-                raise KeyboardInterrupt
-            try:
-                if iteration == 0:
-                    # we can guarantee the necessary context is at front of Dependency
-                    needed = html_component.htmlComponents[0]
-                    # if this fails check the sorting function (merge_dependency)
-                    assert (needed.identifier == html_component.dependentOn)
-                    out = render(needed, dependency_context)
-                    new_dependency = dependency_context.copy()
-                    new_dependency.update(out)
-                elif iteration > 0:
-                    h = html_component.htmlComponents[iteration]
-                    if h.noInteraction and last_step == -1:
-                        iteration -= 1
-                        continue
-                    value = render(h, new_dependency)
-                    if value.get("skip", False) and last_step == -1:
-                        iteration -= 1
-                        continue
-                    out.update(value)
-                iteration += 1
-                last_step = 1
-            except KeyboardInterrupt:
-                iteration -= 1
-                last_step = -1
 
-        if "skip" in out:
-            del out["skip"]
+    if backwards and html_component.noInteraction:
+        raise KeyboardInterrupt()
+
+    if isinstance(html_component, Dependency):
+        # we can guarantee the necessary context is at front of Dependency
+        needed = html_component.htmlComponents[0]
+        # if this fails check the sorting function (merge_dependency)
+        assert (needed.identifier == html_component.dependentOn)
+
+        # this structure ensures that if we ctrl-C out of a component in a dependency, it takes us to the previous
+        # component.
+        while True:
+            out = render(needed, dependency_context, backwards)
+            new_dependency = dependency_context.copy()
+            new_dependency.update(out)
+            try:
+                out.update(render_components(html_component.htmlComponents[1:], new_dependency))
+                break
+            except KeyboardInterrupt:
+                backwards = True
+                pass
+
         return out
 
-    elif isinstance(html_component, Branch):
-        iteration = -1
-        last_step = 1
-        subcomponents = ()
-        response = {}
-        # This is based on the Dependency code above
-        # TODO: refactor to use shared rendering of lists of components. Which is implemented in PR #164
-        #       (https://github.com/jsyiek/AU2/pull/164), but the other changes there are controversial.
-        while iteration < len(subcomponents):
-            if iteration == -1:
-                response = render(html_component.as_InputWithDropdown(), dependency_context)
-                branch = response[html_component.identifier]
-                subcomponents = html_component.components_map.get(branch, ())
-                iteration = 0
-                continue
-            try:
-                h = subcomponents[iteration]
-                if h.noInteraction and last_step == -1:
-                    iteration -= 1
-                    continue
-                value = render(h, dependency_context)
-                if value.get("skip", False) and last_step == -1:
-                    iteration -= 1
-                    continue
-                response.update(value)
-                iteration += 1
-                last_step = 1
-            except KeyboardInterrupt:
-                iteration -= 1
-                last_step = -1
-        return response
+    elif isinstance(html_component, IfElse):
+        if html_component.condition.evaluate(dependency_context):
+            return render_components(html_component.then, dependency_context, backwards)
+        else:
+            return render_components(html_component.otherwise, dependency_context, backwards)
 
     elif isinstance(html_component, Searchable):
         answer = ""
@@ -258,7 +250,9 @@ def render(html_component, dependency_context={}):
         assassins = list(set([a[0] for a in html_component.assassins] + [a for a in html_component.default.keys()]))
         assassins.sort()
         if not assassins:
-            return {html_component.identifier: {}, "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: {}}
         q = [
             inquirer.Checkbox(
                 name="q",
@@ -295,7 +289,9 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping and not reports:
-            return {html_component.identifier: [], "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: []}
 
         assassin_pseudonyms = {aId : pseudonyms for (aId, pseudonyms) in html_component.assassins if aId in assassins_mapping}
         Report = Tuple[str, Optional[int], str]
@@ -403,11 +399,11 @@ def render(html_component, dependency_context={}):
         dependent = html_component.assassins_list_identifier
         assert dependent in dependency_context
         assassins_mapping = dependency_context[dependent]
-        if not assassins_mapping:
-            return {html_component.identifier: [], "skip": True}
         assassins = list(assassins_mapping.keys())
         if len(assassins) <= 1:
-            return {html_component.identifier: tuple(), "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: tuple()}
         potential_kills = {}
         defaults = []
         for a1 in assassins:
@@ -433,11 +429,11 @@ def render(html_component, dependency_context={}):
         dependent = html_component.assassins_list_identifier
         assert dependent in dependency_context
         assassins_mapping = dependency_context[dependent]
-        if not assassins_mapping:
-            return {html_component.identifier: [], "skip": True}
         assassins = list(assassins_mapping.keys())
         if len(assassins) == 0:
-            return {html_component.identifier: tuple(), "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: tuple()}
 
         # correct the defaults format -- sometimes it seems to end up as tuples
         # (also turn into a set so that `in` is faster)
@@ -507,7 +503,9 @@ def render(html_component, dependency_context={}):
 
         # if there are no kills don't render anything
         if not mapping:
-            return {html_component.identifier: [], "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: []}
 
         q = [inquirer.Checkbox(
             name="q",
@@ -538,7 +536,9 @@ def render(html_component, dependency_context={}):
         assassins_mapping = dependency_context[dependent]
 
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: {}}
         q = [inquirer.Checkbox(
             name="q",
             message=escape_format_braces(html_component.title),
@@ -581,7 +581,9 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: [], "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: []}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name=html_component.identifier,
@@ -597,7 +599,9 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: {}}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -623,7 +627,9 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: {}}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -650,7 +656,9 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: {}}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -677,7 +685,9 @@ def render(html_component, dependency_context={}):
         assert (dependent in dependency_context)
         assassins_mapping = dependency_context[dependent]
         if not assassins_mapping:
-            return {html_component.identifier: {}, "skip": True}
+            if backwards:
+                raise KeyboardInterrupt()
+            return {html_component.identifier: {}}
         assassins = [a for a in assassins_mapping]
         q = [inquirer.Checkbox(
             name="assassins",
@@ -1144,34 +1154,17 @@ def main():
         if abort:
             continue
 
-        inp = {}
         components = exp.ask(*params, **kwargs)
         components = replace_overrides(components)
         components = merge_dependency(components)
-        iteration = 0
-        last_step = 1
-        while iteration < len(components):
-            try:
-                if iteration == -1:
-                    break
-                if last_step == -1 and components[iteration].noInteraction:
-                    iteration -= 1
-                    continue
-                result = render(components[iteration])
-                if result.get("skip", False) and last_step == -1:
-                    iteration -= 1
-                    continue
-                inp.update(result)
-                iteration += 1
-                last_step = 1
-            except KeyboardInterrupt:
-                iteration -= 1
-                last_step = -1
-        if iteration != -1:
-            components = exp.answer(inp)
-            for component in components:
-                render(component)
 
+        try:
+            inp = render_components(components)
+        except KeyboardInterrupt:
+            continue
+        else:
+            components = exp.answer(inp)
+            render_components(components)
             print("Saving databases...")
             save_all_databases()
 
