@@ -71,10 +71,8 @@ class IfElse(HTMLComponent):
     name: str = "IfElse"
 
     def __init__(self, condition: Expression[bool],
-                 then: Sequence[HTMLComponent], otherwise: Sequence[HTMLComponent] = (),
-                 noInteraction: bool = False):
+                 then: Sequence[HTMLComponent], otherwise: Sequence[HTMLComponent] = ()):
         self.condition = condition
         self.then = then
         self.otherwise = otherwise
-        self.noInteraction = noInteraction
         super().__init__()
