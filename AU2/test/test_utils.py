@@ -138,6 +138,9 @@ class MockGame:
     def get_remaining_players(self):
         return list(self.assassins)
 
+    def get_remaining_player_models(self) -> List[Assassin]:
+        return [self.assassin(name).model(name) for name in self.assassins]
+
     def refresh_deaths_from_db(self):
         for e in list(EVENTS_DATABASE.events.values()):
             for (_, victim) in e.kills:

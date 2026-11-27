@@ -7,16 +7,17 @@ from AU2.plugins.util.CompetencyManager import CompetencyManager
 from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
 
 
-class TestCompetencyPlugin:
+def get_competency_manager(mockGame, auto_competency=False, initial_competency_period=7) -> CompetencyManager:
+    m = CompetencyManager(game_start=mockGame.game_start)
+    m.activated = True
+    m.auto_competency = auto_competency
+    m.initial_competency_period = datetime.timedelta(days=initial_competency_period)
+    for e in EVENTS_DATABASE.events.values():
+        m.add_event(e)
+    return m
 
-    def get_manager(self, mockGame, auto_competency=False, initial_competency_period=7) -> CompetencyManager:
-        m = CompetencyManager(game_start=mockGame.game_start)
-        m.activated = True
-        m.auto_competency = auto_competency
-        m.initial_competency_period = datetime.timedelta(days=initial_competency_period)
-        for e in EVENTS_DATABASE.events.values():
-            m.add_event(e)
-        return m
+
+class TestCompetencyPlugin:
 
     @plugin_test
     def test_competency_manager_simple(self):
@@ -31,7 +32,7 @@ class TestCompetencyPlugin:
         for i in range(50):
             game.assassin(p[i]).kills(p[i + 50])
 
-        manager = self.get_manager(game)
+        manager = get_competency_manager(game)
         query_date = manager.game_start + datetime.timedelta(days=7, seconds=30)
 
         incos = manager.get_incos_at(query_date)
@@ -54,7 +55,7 @@ class TestCompetencyPlugin:
         p = some_players(200)
         game = MockGame().having_assassins(p)
 
-        manager = self.get_manager(game)
+        manager = get_competency_manager(game)
 
         incos = manager.get_incos_at(manager.game_start)
 
@@ -104,7 +105,7 @@ class TestCompetencyPlugin:
         for i in range(5):
             game.assassin(p[i]).kills(p[i + 5], manual_competency=None)
 
-        manager = self.get_manager(game, auto_competency=True, initial_competency_period=0)
+        manager = get_competency_manager(game, auto_competency=True, initial_competency_period=0)
         query_date = manager.game_start + datetime.timedelta(days=1, seconds=30)
 
         incos = manager.get_incos_at(query_date)
@@ -132,7 +133,7 @@ class TestCompetencyPlugin:
                 .add_attempts(p[4])
                 .add_attempts(p[4]))
 
-        manager = self.get_manager(game, auto_competency=True, initial_competency_period=0)
+        manager = get_competency_manager(game, auto_competency=True, initial_competency_period=0)
         query_date = manager.game_start + datetime.timedelta(days=1, seconds=30)
 
         incos = manager.get_incos_at(query_date)
@@ -216,7 +217,7 @@ class TestCompetencyPlugin:
             game.assassin(p[i]).kills(p[j])
 
         # now check the inco corpses
-        manager = self.get_manager(game, auto_competency=auto_competency)
+        manager = get_competency_manager(game, auto_competency=auto_competency)
         inco_corpses = manager.inco_corpses
 
         # neither the live, competent players,
@@ -253,7 +254,7 @@ class TestCompetencyPlugin:
         for i in range(10, 15):
             game.assassin(p[i]).kills(p[i - 5], manual_competency=None)
 
-        manager = self.get_manager(game, auto_competency=True, initial_competency_period=0)
+        manager = get_competency_manager(game, auto_competency=True, initial_competency_period=0)
         query_date = manager.game_start + datetime.timedelta(days=1, seconds=30)
 
         incos = manager.get_incos_at(query_date)
