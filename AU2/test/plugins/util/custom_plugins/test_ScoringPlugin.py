@@ -1,20 +1,24 @@
 import random
 import math
-from typing import Dict
+from typing import Dict, List
 
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
+from AU2.database.model import Assassin
 from AU2.plugins.custom_plugins.ScoringPlugin import ScoringPlugin
 from AU2.plugins.util.ScoreManager import ScoreManager
+from AU2.test.plugins.util.custom_plugins.test_CompetencyPlugin import get_competency_manager
 from AU2.test.test_utils import MockGame, some_players, plugin_test, dummy_event
 
 
 class TestScoringPlugin:
 
-    def get_manager(self, mockGame, perma_death: bool = True, filter_city_watch = True) -> ScoreManager:
+    def get_manager(self, mockGame, formula="", perma_death: bool = True, filter_city_watch = True, bonuses = {}) -> ScoreManager:
         m = ScoreManager(assassin_ids=[name + " identifier" for name in mockGame.all_assassins
                                        if not (filter_city_watch and mockGame.assassin_model(name).is_city_watch)],
-                         perma_death=perma_death)
+                         perma_death=perma_death,
+                         formula=formula,
+                         bonuses=bonuses)
         for e in EVENTS_DATABASE.events_chronologically():
             m.add_event(e)
         return m
@@ -239,3 +243,143 @@ class TestScoringPlugin:
 
         # check the open season list is correct
         assert manager.live_assassins == {idents[4], idents[5]}
+
+    @plugin_test
+    def test_standings_example(self):
+        """Test that standings are generated correctly with the example from the help text, i.e.
+            Player 0: 100 points, competent
+            Player 1: 80 points, inco
+            Player 2: 40 points, competent
+            Player 3: 30 points, competent
+            Player 4: 20 points, inco
+            Player 5: 10 points, competent
+        """
+
+        n = 10
+        p = some_players(n)
+        game = MockGame().having_assassins(p)
+        plugin = ScoringPlugin()
+        idents = [name + " identifier" for name in p]
+
+        # assume initial competency of 1 day, skip to day 2 to make everyone inco
+        initial_competency = 1
+        game.new_datetime(2 * 24 * 60)
+
+        # let players 0, 2, 3, 5 make kills for competency
+        game.assassin(p[0]).kills(p[6])
+        game.assassin(p[2]).kills(p[7])
+        game.assassin(p[3]).kills(p[8])
+        game.assassin(p[5]).kills(p[9])
+
+        # set points using bonuses (which will be multiplied by 10)
+        formula = "10 * b"
+        bonuses = {
+            idents[0]: 10,
+            idents[1]: 8,
+            idents[2]: 4,
+            idents[3]: 3,
+            idents[4]: 2,
+            idents[5]: 1,
+        }
+
+        score_manager = self.get_manager(game, formula=formula, bonuses=bonuses)
+
+        # verify scores
+        for ident, bonus in bonuses.items():
+            assert score_manager._score(ident) == bonus * 10
+
+        competency_manager = get_competency_manager(game, initial_competency_period=initial_competency)
+
+        def get_standings(max_duellists: int = 6,
+                          allow_inco: bool = False,
+                          pts_req_type: str = "lowest_qualifier",
+                          pct_pts_req: float = 50,
+                          soft_force: bool = True,
+                          ):
+            plugin.answer_set_duel_conditions({
+                plugin.html_ids["Max Duellists"]: max_duellists,
+                plugin.html_ids["Allow Inco Duellists?"]: allow_inco,
+                plugin.html_ids["Points Requirement Type"]: pts_req_type,
+                plugin.html_ids["% Points Requirement"]: pct_pts_req,
+                plugin.html_ids["Soft-force Duel?"]: soft_force
+            })
+            return plugin.get_standings(
+                live_assassins=game.get_remaining_player_models(),
+                score_manager=score_manager,
+                competency_manager=competency_manager,
+                openseason_end=game.new_datetime(1)
+            )
+
+        """Requirements as per the main rules
+        First two non-inco players 0 & 2 qualify.
+        Player 3 satisfies points req because has >=50% of player 2's score.
+        Everyone else is either inco or has < 50% of player 3's score.
+        """
+        duellists, excluded_incos, others = get_standings(6, False, "lowest_qualifier", 50, True)
+        assert tuple(a.identifier for a in duellists) == (idents[0], idents[2], idents[3])
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1], idents[4])
+        assert tuple(a.identifier for a in others) == (idents[5],)
+
+        """As above but without soft-forcing.
+        Only the inco player 1 satisfies the points requirement so player 1 wins outright."""
+        duellists, excluded_incos, others = get_standings(6, False, "lowest_qualifier", 50, False)
+        assert tuple(a.identifier for a in duellists) == (idents[0],)
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1],)
+        assert tuple(a.identifier for a in others) == tuple(idents[2:6])
+
+        """As above but with a 30% points requirement.
+        Now everyone satisfies it."""
+        duellists, excluded_incos, others = get_standings(6, False, "lowest_qualifier", 30, False)
+        assert tuple(a.identifier for a in duellists) == (idents[0], idents[2], idents[3], idents[5])
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1], idents[4])
+        assert len(others) == 0
+
+        """As above but with a 35% points requirement.
+        Only player 5 fails it."""
+        duellists, excluded_incos, others = get_standings(6, False, "lowest_qualifier", 35, False)
+        assert tuple(a.identifier for a in duellists) == (idents[0], idents[2], idents[3])
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1], idents[4])
+        assert tuple(a.identifier for a in others) == (idents[5],)
+
+        """Requirements as per the main rules but allowing incos.
+        Everyone qualifies."""
+        duellists, excluded_incos, others = get_standings(6, True, "lowest_qualifier", 35, True)
+        assert tuple(a.identifier for a in duellists) == tuple(idents[0:6])
+        assert len(excluded_incos) == 0
+        assert len(others) == 0
+
+        """No points requirement and max 5 duellists, no incos
+        Only 4 non-inco players so these all qualify"""
+        duellists, excluded_incos, others = get_standings(5, False, "none")
+        assert tuple(a.identifier for a in duellists) == (idents[0], idents[2], idents[3], idents[5])
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1], idents[4])
+        assert len(others) == 0
+
+        """No points requirement and max 3 duellists, no incos.
+        Now player 5 doesn't qualify, and the reasoning for player 4 is different."""
+        duellists, excluded_incos, others = get_standings(3, False, "none")
+        assert tuple(a.identifier for a in duellists) == (idents[0], idents[2], idents[3],)
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1],)
+        assert tuple(a.identifier for a in others) == (idents[4], idents[5],)
+
+        """Mich 2026 requirements: max 5 duellists, no incos, 50% of highest scoring, no forcing
+        Only player 1 has enough points to qualify after the top player, but is inco.
+        """
+        duellists, excluded_incos, others = get_standings(5, False, "highest_qualifier", 50, False)
+        assert tuple(a.identifier for a in duellists) == (idents[0],)
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1],)
+        assert tuple(a.identifier for a in others) == tuple(idents[2:6])
+
+        """As above but with a 30% points requirement
+        Now players 2 and 3 do have enough points, but players 4 and 5 still fail it."""
+        duellists, excluded_incos, others = get_standings(5, False, "highest_qualifier", 30, False)
+        assert tuple(a.identifier for a in duellists) == (idents[0], idents[2], idents[3])
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1],)
+        assert tuple(a.identifier for a in others) == tuple(idents[4:6])
+
+        """Mich 2026 requirements except with soft forcing.
+        Player 2 now qualifies but all subsequent players are still ineligible"""
+        duellists, excluded_incos, others = get_standings(5, False, "highest_qualifier", 50, True)
+        assert tuple(a.identifier for a in duellists) == (idents[0], idents[2],)
+        assert tuple(a.identifier for a in excluded_incos) == (idents[1],)
+        assert tuple(a.identifier for a in others) == tuple(idents[3:6])
