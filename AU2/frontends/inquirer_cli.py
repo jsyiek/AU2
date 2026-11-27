@@ -36,6 +36,7 @@ from AU2.html_components.SimpleComponents.DatetimeEntry import DatetimeEntry
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
 from AU2.html_components.MetaComponents.Dependency import Dependency
+from AU2.html_components.MetaComponents.Branch import Branch
 from AU2.html_components.SimpleComponents.EmailSelector import EmailSelector
 from AU2.html_components.HiddenComponent import HiddenComponent
 from AU2.html_components.SimpleComponents.InputWithDropDown import InputWithDropDown
@@ -195,6 +196,38 @@ def render(html_component, dependency_context={}):
         if "skip" in out:
             del out["skip"]
         return out
+
+    elif isinstance(html_component, Branch):
+        iteration = -1
+        last_step = 1
+        subcomponents = ()
+        response = {}
+        # This is based on the Dependency code above
+        # TODO: refactor to use shared rendering of lists of components. Which is implemented in PR #164
+        #       (https://github.com/jsyiek/AU2/pull/164), but the other changes there are controversial.
+        while iteration < len(subcomponents):
+            if iteration == -1:
+                response = render(html_component.as_InputWithDropdown(), dependency_context)
+                branch = response[html_component.identifier]
+                subcomponents = html_component.components_map.get(branch, ())
+                iteration = 0
+                continue
+            try:
+                h = subcomponents[iteration]
+                if h.noInteraction and last_step == -1:
+                    iteration -= 1
+                    continue
+                value = render(h, dependency_context)
+                if value.get("skip", False) and last_step == -1:
+                    iteration -= 1
+                    continue
+                response.update(value)
+                iteration += 1
+                last_step = 1
+            except KeyboardInterrupt:
+                iteration -= 1
+                last_step = -1
+        return response
 
     elif isinstance(html_component, Searchable):
         answer = ""

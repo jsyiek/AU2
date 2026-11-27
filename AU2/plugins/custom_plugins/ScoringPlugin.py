@@ -1,3 +1,4 @@
+import datetime
 import os
 import pathlib
 
@@ -9,8 +10,10 @@ from AU2 import ROOT_DIR
 from AU2.database.AssassinsDatabase import ASSASSINS_DATABASE
 from AU2.database.EventsDatabase import EVENTS_DATABASE
 from AU2.database.GenericStateDatabase import GENERIC_STATE_DATABASE
+from AU2.database.model.Assassin import Assassin
 from AU2.database.model.Event import Event
 from AU2.html_components.HTMLComponent import HTMLComponent
+from AU2.html_components.MetaComponents.Branch import Branch
 from AU2.html_components.SimpleComponents.Label import Label
 from AU2.html_components.SimpleComponents.OptionalDatetimeEntry import OptionalDatetimeEntry
 from AU2.html_components.SimpleComponents.DefaultNamedSmallTextbox import DefaultNamedSmallTextbox
@@ -264,7 +267,9 @@ class ScoringPlugin(AbstractPlugin):
             "Download table-sort.js?": self.identifier + "_download_table_sort_js",
             "Max Duellists": self.identifier + "_max_duellists",
             "Allow Inco Duellists?": self.identifier + "_inco_duellists",
+            "Points Requirement Type": self.identifier + "_duel_pts_req_type",
             "% Points Requirement": self.identifier + "_pct_duel_points_req",
+            "Soft-force Duel?": self.identifier + "_ignore_pts_req_for_2nd_duellist",
         }
 
         self.plugin_state = {
@@ -281,7 +286,9 @@ class ScoringPlugin(AbstractPlugin):
             "Node Shape": {'id': self.identifier + "_node_shape", 'default': "box"},
             "Max Duellists": {'id': self.identifier + "_max_duellists", 'default': 6},
             "Allow Inco Duellists?": {'id': self.identifier + "_inco_duellists", 'default': False},
+            "Points Requirement Type": {'id': self.identifier + "_duel_pts_req_type", 'default': "lowest_qualifier"},
             "% Points Requirement": {'id': self.identifier + "_pct_duel_points_requirement", 'default': 50},
+            "Soft-force Duel?": {'id': self.identifier + "_ignore_pts_req_for_2nd_duellist", 'default': True},
         }
 
         self.assassin_plugin_state = {
@@ -543,6 +550,18 @@ class ScoringPlugin(AbstractPlugin):
         return [Label("[SCORING] Set open season start.")]
 
     def ask_set_duel_conditions(self) -> List[HTMLComponent]:
+        pts_reqs_settings = (
+            FloatEntry(
+                self.html_ids["% Points Requirement"],
+                "Minimum qualification %",
+                self.gsdb_get("% Points Requirement"),
+            ),
+            Checkbox(
+                self.html_ids["Soft-force Duel?"],
+                "Ignore points requirement for second duellist?",
+                self.gsdb_get("Soft-force Duel?"),
+            ),
+        )
         return [
             IntegerEntry(
                 self.html_ids["Max Duellists"],
@@ -554,46 +573,85 @@ class ScoringPlugin(AbstractPlugin):
                 "Allow inco duellists?",
                 self.gsdb_get("Allow Inco Duellists?"),
             ),
-            Label("Below you can set a minimum points requirement for the duel, as a percentage."),
-            Label("Specifically, players qualify for the duel in descending order of points, and this stops either when"
-                  " the number of duellists reaches the maximum (set above), or when a player has fewer than this "
-                  "percentage of the points of the lowest-scoring duellist so far. However, this rule is ignored for "
-                  "the second duellist."),
-            Label("For example, the default value is 50, which corresponds to the current rules requiring duellists to "
-                  "have at least HALF the points of the lowest scoring duellist above them. Then suppose at the end of "
-                  "open season we have the following standings:"),
-            Label("    Player A: 100 points, competent"),
-            Label("    Player B: 80 points, inco"),
-            Label("    Player C: 40 points, competent"),
-            Label("    Player D: 30 points, competent"),
-            Label("    Player E: 20 points, inco"),
-            Label("    Player F: 10 points, competent"),
-            Label("    ..."),
-            Label("If we have the default config of disallowing inco duellists, and a maximum of 6 duellists, then the "
-                  "duellists are players A, C, D."),
-            Label("Player B is disqualified for being inco. Players A and C qualify as the two highest-scoring non-inco"
-                  " players. Player D qualifies because 30 points >= half of 40 points (Player C's score). Player E is"
-                  " disqualified for being inco, and then Player F and any lower-scoring players does not qualify as 10"
-                  " < half of 30 (Player D's score). If Player E were not inco, however, then both Players E and F "
-                  "would qualify as duellists."),
-            FloatEntry(
-                self.html_ids["% Points Requirement"],
-                "Minimum qualification %",
-                self.gsdb_get("% Points Requirement"),
+            Branch(self.html_ids["Points Requirement Type"],
+                   title="Type of points requirement to use?",
+                   options=[
+                       ("% of lowest-qualifying duellist's points", "lowest_qualifier"),
+                       ("% of highest-qualifying duellis's points", "highest_qualifier"),
+                       ("No points requirement", "none")
+                   ],
+                   selected=self.gsdb_get("Points Requirement Type"),
+                   components_map={
+                       "lowest_qualifier": (
+                           # TODO: sort out what happens w explanation when not soft-forcing!
+                           Label("Below you can set a minimum points requirement for the duel, as a percentage."),
+                           Label(
+                               "Specifically, players qualify for the duel in descending order of points, and this stops either when"
+                               " the number of duellists reaches the maximum (set above), or when a player has fewer than this "
+                               "percentage of the points of the lowest-scoring duellist so far. However, this rule is ignored for "
+                               "the second duellist."),
+                           Label(
+                               "For example, the default value is 50, which corresponds to the current rules requiring duellists to "
+                               "have at least HALF the points of the lowest scoring duellist above them. Then suppose at the end of "
+                               "open season we have the following standings:"),
+                           Label("    Player A: 100 points, competent"),
+                           Label("    Player B: 80 points, inco"),
+                           Label("    Player C: 40 points, competent"),
+                           Label("    Player D: 30 points, competent"),
+                           Label("    Player E: 20 points, inco"),
+                           Label("    Player F: 10 points, competent"),
+                           Label("    ..."),
+                           Label(
+                               "If we have the default config of disallowing inco duellists, and a maximum of 6 duellists, then the "
+                               "duellists are players A, C, D."),
+                           Label(
+                               "Player B is disqualified for being inco. Players A and C qualify as the two highest-scoring non-inco"
+                               " players. Player D qualifies because 30 points >= half of 40 points (Player C's score). Player E is"
+                               " disqualified for being inco, and then Player F and any lower-scoring players does not qualify as 10"
+                               " < half of 30 (Player D's score). If Player E were not inco, however, then both Players E and F "
+                               "would qualify as duellists."),
+                           *pts_reqs_settings
+                        ),
+                       "highest_qualifier": (
+                           Label("Below you can set a minimum points requirement for the duel, as a percentage of the "
+                                 "highest-scoring duellist's points."),
+                           *pts_reqs_settings
+                        ),
+                   }
             ),
         ]
 
     def answer_set_duel_conditions(self, html_response) -> List[HTMLComponent]:
         max_duellists = html_response[self.html_ids["Max Duellists"]]
         allow_inco = html_response[self.html_ids["Allow Inco Duellists?"]]
-        pct_pts_req = html_response[self.html_ids["% Points Requirement"]]
+        pts_req_type = html_response[self.html_ids["Points Requirement Type"]]
         self.gsdb_set("Max Duellists", max_duellists)
         self.gsdb_set("Allow Inco Duellists?", allow_inco)
-        self.gsdb_set("% Points Requirement", pct_pts_req)
+        self.gsdb_set("Points Requirement Type", pts_req_type)
+        if self.html_ids["% Points Requirement"] in html_response:
+            pct_pts_req = html_response[self.html_ids["% Points Requirement"]]
+            self.gsdb_set("% Points Requirement", pct_pts_req)
+        soft_force_duel = False  # if not set don't mention in explanation below
+        if self.html_ids["Soft-force Duel?"] in html_response:
+            soft_force_duel = html_response[self.html_ids["Soft-force Duel?"]]
+            self.gsdb_set("Soft-force Duel?", soft_force_duel)
+
+        pts_req_explanation = (
+            f" with score >={pct_pts_req}% of the lowest scoring duellist above them" if pts_req_type == "lowest_qualifier"
+            else f" with score >={pct_pts_req}% of the top-scoring duellist" if pts_req_type == "highest_qualifier"
+            else ""
+        )
+
+        soft_force_duel_explanation = (
+            f", or the the two top-scoring {'' if allow_inco else 'non-inco '}players if no-one satisfies the points "
+            "requirement" if soft_force_duel
+            else ""
+        )
+
         return [
             Label(f"[SCORING] Set duel eligibility conditions: {max_duellists} "
-                  f"top-scoring {'' if allow_inco else 'non-inco '}players with score >={pct_pts_req}% of the lowest "
-                  f"scoring duellist above them.")
+                  f"top-scoring {'' if allow_inco else 'non-inco '}players{pts_req_explanation}"
+                  f"{soft_force_duel_explanation}.")
         ]
 
     def ask_set_formula(self):
@@ -655,6 +713,51 @@ Syntax:
         except Exception:
             return False
 
+    def get_standings(self, live_assassins: List[Assassin],
+                      score_manager: ScoreManager, competency_manager: CompetencyManager,
+                      openseason_end: datetime.datetime) -> (List[Assassin], List[Assassin], List[Assassin]):
+        """
+        Method to sort players into duellists, those ineligible for the duel due to incompetency, and others, for the
+        final standings. (This is standalone for the purpose of unit testing).
+
+        Args:
+            live_assassins (List[Assassin]): assassins to be sorted, assumed to all be live.
+            score_manager (ScoreManager): ScoreManager to use to determine players' scores
+            competency_manager (CompetencyManager): CompetencyManager to use to determine players' competency
+            openseason_end (datetime.datetime): end of open season, for determining competency
+
+        """
+        max_duellists = self.gsdb_get("Max Duellists")
+        allow_inco = self.gsdb_get("Allow Inco Duellists?")
+        points_requirement_type = self.gsdb_get("Points Requirement Type")
+        minimum_qualification_proportion = self.gsdb_get("% Points Requirement") / 100
+        soft_force_duel = self.gsdb_get("Soft-force Duel?")
+
+        duellists = []
+        excluded_incos = []
+        others = []
+        points_req = None
+        for a in live_assassins:
+            # with 'soft forcing' enabled we don't enforce the points requirement until we have two duellists
+            ignore_points_req = points_req is None or (soft_force_duel and len(duellists) < 2)
+            if len(duellists) < max_duellists and (ignore_points_req or score_manager.get_score(a) >= points_req):
+                if allow_inco or not competency_manager.is_inco_at(a, openseason_end):
+                    duellists.append(a)
+                    if (
+                            points_requirement_type == "lowest_qualifier"
+                            or (points_requirement_type == "highest_qualifier" and len(duellists) == 1)
+                    ):
+                        points_req = score_manager.get_score(a) * minimum_qualification_proportion
+                else:
+                    # list of players that would qualify but for their incompetency
+                    excluded_incos.append(a)
+            else:
+                # list of players who didn't qualify due to points (whether because too many others scored higher or
+                # they failed a minimum points requirement)
+                others.append(a)
+
+        return duellists, excluded_incos, others
+
     def _generate_openseason_page(self, navbar_entries: List[NavbarEntry]):
         # don't generate open season page if open season hasn't started!
         open_season_start = timestamp_to_dt(self.gsdb_get("Start"))
@@ -693,25 +796,11 @@ Syntax:
                                      if not ASSASSINS_DATABASE.get(ident).hidden),
                                     key=lambda a: (-score_manager.get_score(a), a.college.lower(), a.real_name.lower()))
 
-            max_duellists = self.gsdb_get("Max Duellists")
-            allow_inco = self.gsdb_get("Allow Inco Duellists?")
-            minimum_qualification_percent = self.gsdb_get("% Points Requirement") / 100
-
             if is_postgame:
                 # generate final standings
-                duellists = []
-                excluded_incos = []
-                others = []
-                points_req = 0
-                for a in live_assassins:
-                    if len(duellists) < max_duellists and (len(duellists) < 2 or score_manager.get_score(a) >= points_req):
-                        if allow_inco or not competency_manager.is_inco_at(a, openseason_end):
-                            duellists.append(a)
-                            points_req = score_manager.get_score(a) * minimum_qualification_percent
-                        else:
-                            excluded_incos.append(a)
-                    else:
-                        others.append(a)
+                duellists, excluded_incos, others = self.get_standings(
+                    live_assassins, score_manager, competency_manager, openseason_end
+                )
 
                 duellist_table_str = (
                     (
